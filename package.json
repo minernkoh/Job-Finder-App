@@ -1,9 +1,10 @@
 {
-  "name": "job-listing-tracker",
+  "name": "job-finder-app",
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter frontend dev",
+    "dev": "pnpm --filter next-app dev",
+    "dev:webpack": "pnpm --filter next-app exec next dev --webpack",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint"
   },

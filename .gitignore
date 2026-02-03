@@ -139,5 +139,4 @@ dist/
 out/
 *.tsbuildinfo
 next-env.d.ts
-.md_files/
 *.md
