@@ -6,7 +6,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Button, Input } from "@ui/components";
+import { Button, Input, Select } from "@ui/components";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useCallback } from "react";
 import Link from "next/link";
@@ -78,17 +78,17 @@ function JobsContent() {
             onChange={(e) => setSearchInput(e.target.value)}
             className="max-w-xs flex-1"
           />
-          <select
+          <Select
             value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-          >
-            {JOB_SEARCH_COUNTRIES.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setCountry(v)}
+            options={JOB_SEARCH_COUNTRIES.map((c) => ({
+              value: c.code,
+              label: c.label,
+            }))}
+            aria-label="Country"
+            fullWidth={false}
+            className="min-w-[8rem]"
+          />
           <Button type="submit">Search</Button>
         </form>
 

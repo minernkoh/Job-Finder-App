@@ -3,6 +3,9 @@
  */
 @import "tailwindcss";
 
+/* Scan UI package so button/card/select utilities (e.g. h-14, rounded-xl) are generated */
+@source "../../packages/ui/src/**/*.tsx";
+
 /* Modern dark mode (default) */
 :root {
   --background: #0a0a0a;

@@ -50,9 +50,12 @@ apiClient.interceptors.response.use(
     if (!originalRequest || err.response?.status !== 401) {
       return Promise.reject(err);
     }
-    // Avoid retry loop: if we already retried (e.g. refresh failed), redirect
+    // Do not redirect when the failing request was refresh (e.g. /admin should show its own form).
+    const isRefreshRequest =
+      originalRequest.url?.includes("auth/refresh") ?? false;
+    // Avoid retry loop: if we already retried (e.g. refresh failed), redirect unless it was refresh
     if ((originalRequest as { _retry?: boolean })._retry) {
-      onUnauthorized?.();
+      if (!isRefreshRequest) onUnauthorized?.();
       return Promise.reject(err);
     }
     try {
@@ -71,7 +74,7 @@ apiClient.interceptors.response.use(
     } catch {
       // Refresh failed
     }
-    onUnauthorized?.();
+    if (!isRefreshRequest) onUnauthorized?.();
     return Promise.reject(err);
   }
 );

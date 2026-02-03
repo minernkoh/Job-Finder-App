@@ -28,7 +28,7 @@ export function ListingCard({
   showTrendingBadge = false,
 }: ListingCardProps) {
   return (
-    <Card className="cursor-pointer transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
+    <Card interactive variant="default" className="cursor-pointer">
       <Link
         href={`/jobs/${listing.id}`}
         className="block"

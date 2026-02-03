@@ -121,7 +121,8 @@ function LoginForm() {
           )}
           <Button
             type="submit"
-            className="w-full"
+            size="lg"
+            className="w-full min-h-[3.5rem]"
             disabled={submitting || isLoading}
           >
             {submitting ? "Logging in…" : "Login"}
@@ -182,7 +183,8 @@ function LoginForm() {
           )}
           <Button
             type="submit"
-            className="w-full"
+            size="lg"
+            className="w-full min-h-[3.5rem]"
             disabled={submitting || isLoading}
           >
             {submitting ? "Creating account…" : "Register"}

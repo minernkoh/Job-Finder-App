@@ -17,14 +17,29 @@ export default function Home() {
           Find and browse jobs with AI summaries. Log in or register to get
           started.
         </p>
-        <div className="flex flex-wrap justify-center gap-4">
-          <Button asChild variant="default" className="rounded-xl">
+        <div className="flex flex-wrap justify-center gap-5">
+          <Button
+            asChild
+            variant="default"
+            size="lg"
+            className="rounded-xl min-h-[3.5rem] px-8"
+          >
             <Link href="/login">Login</Link>
           </Button>
-          <Button asChild variant="outline" className="rounded-xl">
+          <Button
+            asChild
+            variant="outline"
+            size="lg"
+            className="rounded-xl min-h-[3.5rem] px-8"
+          >
             <Link href="/login?tab=signup">Register</Link>
           </Button>
-          <Button asChild variant="secondary" className="rounded-xl">
+          <Button
+            asChild
+            variant="secondary"
+            size="lg"
+            className="rounded-xl min-h-[3.5rem] px-8"
+          >
             <Link href="/jobs">Jobs</Link>
           </Button>
         </div>
