@@ -12,6 +12,9 @@ const envSchema = z.object({
     .min(32, "JWT_REFRESH_SECRET must be at least 32 characters"),
   JWT_ACCESS_TOKEN_EXPIRES_IN: z.string().default("15m"),
   JWT_REFRESH_TOKEN_EXPIRES_IN: z.string().default("7d"),
+  ADZUNA_APP_ID: z.string().optional(),
+  ADZUNA_APP_KEY: z.string().optional(),
+  JOB_SEARCH_CACHE_TTL: z.coerce.number().default(3600),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -23,6 +26,9 @@ function validateEnv(): Env {
     JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET,
     JWT_ACCESS_TOKEN_EXPIRES_IN: process.env.JWT_ACCESS_TOKEN_EXPIRES_IN,
     JWT_REFRESH_TOKEN_EXPIRES_IN: process.env.JWT_REFRESH_TOKEN_EXPIRES_IN,
+    ADZUNA_APP_ID: process.env.ADZUNA_APP_ID,
+    ADZUNA_APP_KEY: process.env.ADZUNA_APP_KEY,
+    JOB_SEARCH_CACHE_TTL: process.env.JOB_SEARCH_CACHE_TTL,
   });
   if (!parsed.success) {
     throw new Error(

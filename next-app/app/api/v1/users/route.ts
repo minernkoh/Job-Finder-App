@@ -5,18 +5,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
-import { getPayloadFromRequest } from "@/lib/auth/request";
+import { toErrorResponse } from "@/lib/api/errors";
+import { requireAuth } from "@/lib/auth/request";
 
 /** Returns all users; requires admin role. */
 export async function GET(request: NextRequest) {
   try {
-    const payload = await getPayloadFromRequest(request);
-    if (!payload) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const payload = auth;
     if (payload.role !== "admin") {
       return NextResponse.json(
         { success: false, message: "Forbidden" },
@@ -37,10 +34,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data });
   } catch (e) {
-    console.error("Get users error:", e);
-    return NextResponse.json(
-      { success: false, message: "Failed to list users" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to list users");
   }
 }

@@ -6,7 +6,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { UserUpdateSchema } from "@schemas";
-import { getPayloadFromRequest } from "@/lib/auth/request";
+import { toErrorResponse } from "@/lib/api/errors";
+import { requireAuth } from "@/lib/auth/request";
 import mongoose from "mongoose";
 
 /** Returns user if requester is the user or admin; otherwise 403. */
@@ -15,13 +16,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const payload = await getPayloadFromRequest(request);
-    if (!payload) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const payload = auth;
 
     const { id } = await params;
     const isOwn = payload.sub === id;
@@ -61,11 +58,7 @@ export async function GET(
       },
     });
   } catch (e) {
-    console.error("Get user error:", e);
-    return NextResponse.json(
-      { success: false, message: "Failed to get user" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to get user");
   }
 }
 
@@ -75,13 +68,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const payload = await getPayloadFromRequest(request);
-    if (!payload) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const payload = auth;
 
     const { id } = await params;
     const isOwn = payload.sub === id;
@@ -151,10 +140,6 @@ export async function PATCH(
       },
     });
   } catch (e) {
-    console.error("Patch user error:", e);
-    return NextResponse.json(
-      { success: false, message: "Failed to update user" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to update user");
   }
 }

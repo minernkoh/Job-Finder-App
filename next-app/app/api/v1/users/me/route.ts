@@ -5,18 +5,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
-import { getPayloadFromRequest } from "@/lib/auth/request";
+import { toErrorResponse } from "@/lib/api/errors";
+import { requireAuth } from "@/lib/auth/request";
 
 /** Returns the current user from the access token. */
 export async function GET(request: NextRequest) {
   try {
-    const payload = await getPayloadFromRequest(request);
-    if (!payload) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const payload = auth;
 
     await connectDB();
     const user = await User.findById(payload.sub).lean();
@@ -34,10 +31,6 @@ export async function GET(request: NextRequest) {
       role: user.role,
     });
   } catch (e) {
-    console.error("Get me error:", e);
-    return NextResponse.json(
-      { success: false, message: "Failed to get user" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to get user");
   }
 }

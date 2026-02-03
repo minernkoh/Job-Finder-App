@@ -21,3 +21,17 @@ export const ListingSchema = z.object({
 });
 
 export type Listing = z.infer<typeof ListingSchema>;
+
+/** API response shape for a single listing (id, title, company, etc.). */
+export const ListingResultSchema = z.object({
+  id: z.string(),
+  title: z.string().min(1),
+  company: z.string().min(1),
+  location: z.string().optional(),
+  description: z.string().optional(),
+  source: z.literal("adzuna"),
+  sourceUrl: z.string().url().optional(),
+  country: z.string(),
+});
+
+export type ListingResult = z.infer<typeof ListingResultSchema>;
