@@ -135,7 +135,11 @@ export async function searchListings(
   if (cached && cached.expiresAt > new Date()) {
     const docs = await Listing.find({ _id: { $in: cached.listingIds } }).lean();
     const listings = docs.map(docToListingResult);
-    return { listings, totalCount: listings.length };
+    const totalCount =
+      typeof (cached as { totalCount?: number }).totalCount === "number"
+        ? (cached as { totalCount: number }).totalCount
+        : listings.length;
+    return { listings, totalCount };
   }
 
   // Cache miss: fetch from Adzuna
@@ -176,7 +180,7 @@ export async function searchListings(
 
   await SearchCache.findOneAndUpdate(
     { cacheKey },
-    { $set: { cacheKey, listingIds, expiresAt } },
+    { $set: { cacheKey, listingIds, totalCount: resp.count, expiresAt } },
     { upsert: true }
   );
 

@@ -1,0 +1,292 @@
+/**
+ * Auth modal: user log in / sign up in a modal when URL has ?auth=login or ?auth=signup. Close clears params; success navigates then clears params.
+ */
+
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { createPortal } from "react-dom";
+import { ArrowRightIcon, XIcon } from "@phosphor-icons/react";
+import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button, Card, CardContent, Input, Label } from "@ui/components";
+
+const eyebrowClass = "text-xs uppercase tracking-widest text-muted-foreground";
+
+/** Builds pathname + search string without auth and redirect params. */
+function stripAuthParams(pathname: string, searchParams: URLSearchParams): string {
+  const next = new URLSearchParams(searchParams);
+  next.delete("auth");
+  next.delete("redirect");
+  const q = next.toString();
+  return q ? `${pathname}?${q}` : pathname;
+}
+
+/** Modal content: tabs and login/signup forms; used when auth=login or auth=signup. */
+function AuthModalContent({
+  initialTab,
+  redirectTo,
+  onClose,
+  onSuccess,
+}: {
+  initialTab: AuthTab;
+  redirectTo: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [tab, setTab] = useState<AuthTab>(initialTab);
+  const { login, register, isLoading } = useAuth();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const passwordStrength =
+    password.length === 0
+      ? 0
+      : password.length < 8
+        ? 1
+        : /[A-Z]/.test(password) && /[0-9]/.test(password)
+          ? 3
+          : 2;
+
+  const handleLogin = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError(null);
+      setSubmitting(true);
+      try {
+        await login(email, password);
+        onSuccess();
+      } catch (err: unknown) {
+        const message =
+          err && typeof err === "object" && "response" in err
+            ? ((err as { response?: { data?: { error?: string } } }).response
+                ?.data?.error ?? "Login failed")
+            : "Login failed";
+        setError(message);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [email, password, login, onSuccess]
+  );
+
+  const handleSignup = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError(null);
+      setSubmitting(true);
+      try {
+        await register(name, email, password);
+        onSuccess();
+      } catch (err: unknown) {
+        const message =
+          err && typeof err === "object" && "response" in err
+            ? ((err as { response?: { data?: { error?: string } } }).response
+                ?.data?.error ?? "Registration failed")
+            : "Registration failed";
+        setError(message);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [name, email, password, register, onSuccess]
+  );
+
+  return (
+    <Card variant="elevated" className="relative w-full max-w-sm">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label="Close"
+      >
+        <XIcon className="size-5" />
+      </button>
+      <CardContent className="space-y-6 p-8">
+        <div className="space-y-1 text-center pr-8">
+          <p className={eyebrowClass}>
+            {tab === "login" ? "Welcome back" : "Create account"}
+          </p>
+          <h2
+            id="auth-modal-title"
+            className="text-2xl font-semibold tracking-tight text-foreground"
+          >
+            Account
+          </h2>
+        </div>
+        <AuthTabs value={tab} onChange={setTab} />
+        {tab === "login" ? (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="modal-login-email">Email</Label>
+              <Input
+                id="modal-login-email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                disabled={submitting || isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="modal-login-password">Password</Label>
+              <Input
+                id="modal-login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                disabled={submitting || isLoading}
+              />
+            </div>
+            {error && (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            )}
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full min-h-[3.5rem]"
+              disabled={submitting || isLoading}
+            >
+              {submitting ? "Logging in…" : "Login"}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleSignup} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="modal-register-name">Name</Label>
+              <Input
+                id="modal-register-name"
+                type="text"
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                autoComplete="name"
+                disabled={submitting || isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="modal-register-email">Email</Label>
+              <Input
+                id="modal-register-email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                disabled={submitting || isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="modal-register-password">Password</Label>
+              <Input
+                id="modal-register-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                disabled={submitting || isLoading}
+              />
+              {password.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Strength:{" "}
+                  {passwordStrength === 1 && "Weak (min 8 characters)"}
+                  {passwordStrength === 2 &&
+                    "Medium (add uppercase and number)"}
+                  {passwordStrength === 3 && "Strong"}
+                </p>
+              )}
+            </div>
+            {error && (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            )}
+            <Button
+              type="submit"
+              variant="cta"
+              size="lg"
+              className="w-full min-h-[3.5rem]"
+              disabled={submitting || isLoading}
+              iconRight={
+                !submitting ? (
+                  <ArrowRightIcon weight="bold" />
+                ) : undefined
+              }
+            >
+              {submitting ? "Creating account…" : "Register"}
+            </Button>
+          </form>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Reads URL auth param and renders modal when auth=login or auth=signup. Must be inside AuthProvider and under Suspense if used in layout. */
+export function AuthModal() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const auth = searchParams.get("auth");
+  const redirectParam = searchParams.get("redirect");
+  const redirectTo = redirectParam ?? pathname ?? "/";
+
+  const closeModal = useCallback(() => {
+    const next = stripAuthParams(pathname ?? "/", searchParams);
+    router.replace(next);
+  }, [pathname, router, searchParams]);
+
+  const onSuccess = useCallback(() => {
+    router.replace(redirectTo);
+  }, [router, redirectTo]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeModal();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeModal]);
+
+  if (auth !== "login" && auth !== "signup") return null;
+
+  const initialTab: AuthTab = auth === "signup" ? "signup" : "login";
+
+  const overlay = (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeModal();
+      }}
+    >
+      <div onClick={(e) => e.stopPropagation()}>
+        <AuthModalContent
+          initialTab={initialTab}
+          redirectTo={redirectTo}
+          onClose={closeModal}
+          onSuccess={onSuccess}
+        />
+      </div>
+    </div>
+  );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(overlay, document.body);
+}

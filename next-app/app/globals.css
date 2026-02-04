@@ -15,10 +15,14 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --shadow-blue: 0 0.625rem 0.9375rem -0.1875rem rgba(59, 130, 246, 0.2);
-  /* Primary button glow - dark mode */
-  --shadow-glow-primary: 0 0.5rem 1.5rem hsla(217, 91%, 60%, 0.35);
-  --shadow-glow-primary-hover: 0 0.625rem 2rem hsla(217, 91%, 60%, 0.45);
-  --gradient-dark: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+  --gradient-dark: linear-gradient(160deg, #0c0c10 0%, #0a0a0f 40%, #060612 100%);
+  --gradient-orb-top: radial-gradient(ellipse 90% 60% at 80% -10%, rgba(59, 130, 246, 0.22) 0%, transparent 55%);
+  --gradient-orb-bottom: radial-gradient(ellipse 70% 50% at 15% 105%, rgba(59, 130, 246, 0.15) 0%, transparent 55%);
+  --gradient-orb-center: radial-gradient(ellipse 80% 80% at 50% 50%, rgba(59, 130, 246, 0.06) 0%, transparent 70%);
+  --gradient-orb-top-left: radial-gradient(ellipse 60% 50% at 0% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 55%);
+  --gradient-orb-bottom-right: radial-gradient(ellipse 55% 45% at 100% 95%, rgba(59, 130, 246, 0.14) 0%, transparent 55%);
+  --gradient-orb-violet: radial-gradient(ellipse 65% 55% at 100% 35%, rgba(139, 92, 246, 0.14) 0%, transparent 55%);
+  --gradient-orb-sky: radial-gradient(ellipse 60% 50% at 25% 85%, rgba(56, 189, 248, 0.12) 0%, transparent 55%);
   --accent-blue: rgba(59, 130, 246, 0.15);
   /* shadcn/ui semantic colors (HSL values for Tailwind) */
   --background-hsl: 0 0% 4%;
@@ -51,8 +55,6 @@
   --radius-xl: var(--radius-xl);
   --radius-2xl: var(--radius-2xl);
   --shadow-blue: var(--shadow-blue);
-  --shadow-glow-primary: var(--shadow-glow-primary);
-  --shadow-glow-primary-hover: var(--shadow-glow-primary-hover);
   /* shadcn/ui theme mapping for Tailwind utilities */
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
@@ -74,7 +76,16 @@
 }
 
 body {
-  background: var(--gradient-dark);
+  background:
+    var(--gradient-orb-top),
+    var(--gradient-orb-top-left),
+    var(--gradient-orb-violet),
+    var(--gradient-orb-sky),
+    var(--gradient-orb-bottom-right),
+    var(--gradient-orb-bottom),
+    var(--gradient-orb-center),
+    var(--gradient-dark);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
   min-height: 100vh;

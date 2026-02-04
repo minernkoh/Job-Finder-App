@@ -6,6 +6,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
@@ -22,6 +23,7 @@ import { fetchListing, recordListingView } from "@/lib/api/listings";
 import { createSummary } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
 import { useSavedListings } from "@/hooks/useSavedListings";
+import { UserMenu } from "@/components/user-menu";
 import { listingKeys } from "@/lib/query-keys";
 import { useEffect, useMemo, useState } from "react";
 import DOMPurify from "isomorphic-dompurify";
@@ -169,23 +171,12 @@ function JobDetailsContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen p-4">
       <header className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 border-b border-border py-4">
-        <Link
-          href="/jobs"
-          className="text-xl font-semibold tracking-tight text-foreground"
-        >
-          JobFinder
-        </Link>
+        <Logo />
         <nav className="flex items-center gap-3">
           {user && (
             <>
-              <Link
-                href="/jobs"
-                className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
-              >
-                Browse
-              </Link>
               <Link
                 href="/my-jobs"
                 className="text-sm text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
@@ -195,12 +186,7 @@ function JobDetailsContent() {
             </>
           )}
           {user ? (
-            <>
-              <span className="text-sm text-muted-foreground">{user.name}</span>
-              <Button variant="outline" size="sm" onClick={() => logout()}>
-                Logout
-              </Button>
-            </>
+            <UserMenu user={user} onLogout={logout} />
           ) : (
             <Button
               asChild
@@ -209,7 +195,7 @@ function JobDetailsContent() {
               className="rounded-xl px-4 text-sm"
               iconRight={<ArrowRightIcon weight="bold" />}
             >
-              <Link href="/login">Sign In</Link>
+              <Link href="/?auth=login">Sign In</Link>
             </Button>
           )}
         </nav>
@@ -280,34 +266,8 @@ function JobDetailsContent() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr,minmax(280px,360px)] lg:items-start">
-          <div className="space-y-4">
-            {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
-              <section className="space-y-2">
-                <h2 className={cn(eyebrowClass, "mb-2")}>Description</h2>
-                {sanitizedDescription.length > 0 && (
-                  <Card variant="elevated" className="text-sm">
-                    <CardContent
-                      className="p-4 text-foreground [&_a]:text-primary [&_a]:underline [&_a]:hover:opacity-80 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-0.5 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_b]:font-semibold"
-                      dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
-                    />
-                  </Card>
-                )}
-                {listing.sourceUrl && (
-                  <a
-                    href={listing.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block text-sm text-primary hover:underline"
-                  >
-                    View original posting
-                  </a>
-                )}
-              </section>
-            )}
-          </div>
-
-          <section className="space-y-3 lg:sticky lg:top-4">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[3fr_1fr] lg:items-start">
+          <section className="space-y-3">
             <h2 className={eyebrowClass}>AI Summary</h2>
             {summary ? (
               <SummaryPanel summary={summary} />
@@ -333,7 +293,7 @@ function JobDetailsContent() {
             ) : (
               <p className="text-sm text-muted-foreground">
                 <Link
-                  href={`/login?redirect=${encodeURIComponent(`/jobs/${id}`)}`}
+                  href={`/?auth=login&redirect=${encodeURIComponent(`/jobs/${id}`)}`}
                   className="text-primary underline-offset-4 hover:underline"
                 >
                   Log in to get AI summaries
@@ -341,6 +301,30 @@ function JobDetailsContent() {
               </p>
             )}
           </section>
+
+          {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
+            <section className="space-y-2 lg:sticky lg:top-4">
+              <h2 className={cn(eyebrowClass, "mb-2")}>Description</h2>
+              {sanitizedDescription.length > 0 && (
+                <Card variant="elevated" className="text-sm">
+                  <CardContent
+                    className="p-4 text-foreground [&_a]:text-primary [&_a]:underline [&_a]:hover:opacity-80 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-0.5 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_b]:font-semibold"
+                    dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
+                  />
+                </Card>
+              )}
+              {listing.sourceUrl && (
+                <a
+                  href={listing.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-sm text-primary hover:underline"
+                >
+                  View original posting
+                </a>
+              )}
+            </section>
+          )}
         </div>
       </main>
     </div>

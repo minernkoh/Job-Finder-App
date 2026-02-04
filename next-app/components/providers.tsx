@@ -5,10 +5,11 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { AuthModal } from "@/components/auth-modal";
 import { AuthProvider } from "@/contexts/AuthContext";
 
-/** Renders children inside QueryClientProvider and AuthProvider. */
+/** Renders children inside QueryClientProvider and AuthProvider; mounts auth modal when URL has ?auth=login or ?auth=signup. */
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -22,7 +23,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        <Suspense fallback={null}>
+          <AuthModal />
+        </Suspense>
+        {children}
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

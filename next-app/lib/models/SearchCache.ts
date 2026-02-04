@@ -8,6 +8,7 @@ export interface ISearchCacheDocument {
   _id: mongoose.Types.ObjectId;
   cacheKey: string;
   listingIds: mongoose.Types.ObjectId[];
+  totalCount: number;
   expiresAt: Date;
   createdAt: Date;
 }
@@ -16,6 +17,7 @@ const SearchCacheSchema = new Schema<ISearchCacheDocument>(
   {
     cacheKey: { type: String, required: true, unique: true },
     listingIds: [{ type: Schema.Types.ObjectId, ref: "Listing" }],
+    totalCount: { type: Number, required: true, default: 0 },
     expiresAt: { type: Date, required: true },
   },
   { timestamps: true }

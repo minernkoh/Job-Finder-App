@@ -6,7 +6,11 @@
 
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeftIcon, ArrowRightIcon, SparkleIcon } from "@phosphor-icons/react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react";
 import { Button, Card, CardContent, Label } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -94,7 +98,7 @@ function SummarizeContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen p-4">
       <header className="mx-auto flex max-w-2xl items-center border-b border-border py-4">
         <Link
           href="/jobs"
@@ -105,7 +109,12 @@ function SummarizeContent() {
         </Link>
       </header>
 
-      <main className="mx-auto max-w-2xl space-y-8 py-8">
+      <main
+        className={cn(
+          "mx-auto space-y-8 py-8",
+          summary ? "max-w-5xl" : "max-w-2xl"
+        )}
+      >
         <h1 className="text-2xl font-semibold text-foreground tracking-tight">
           Summarize with AI
         </h1>
@@ -114,18 +123,44 @@ function SummarizeContent() {
         </p>
 
         {summary ? (
-          <div className="space-y-3">
-            <h2 className={eyebrowClass}>Summary</h2>
-            <SummaryPanel summary={summary} />
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSummary(null);
-                setInput("");
-              }}
-            >
-              Summarize another
-            </Button>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_1fr] lg:gap-8">
+            <div className="space-y-3">
+              <h2 className={eyebrowClass}>AI Summary</h2>
+              <SummaryPanel summary={summary} />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSummary(null);
+                  setInput("");
+                }}
+              >
+                Summarize another
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <h2 className={eyebrowClass}>Description</h2>
+              <Card variant="elevated" className="text-sm">
+                <CardContent className="p-4">
+                  {/^https?:\/\//i.test(input) ? (
+                    <p className="text-foreground text-sm">
+                      Source:{" "}
+                      <a
+                        href={input}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline hover:opacity-80"
+                      >
+                        {input}
+                      </a>
+                    </p>
+                  ) : (
+                    <p className="text-foreground whitespace-pre-wrap text-sm">
+                      {input}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">

@@ -6,6 +6,7 @@
 
 import {
   ArrowRightIcon,
+  BriefcaseIcon,
   MagnifyingGlassIcon,
   SlidersIcon,
   BookmarkIcon,
@@ -30,6 +31,9 @@ import {
   type ListingsFilters,
 } from "@/lib/api/listings";
 import { ListingCard } from "@/components/listing-card";
+import { Logo } from "@/components/logo";
+import { TrendingListings } from "@/components/trending-listings";
+import { UserMenu } from "@/components/user-menu";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { JOB_SEARCH_COUNTRIES } from "@/lib/constants/countries";
 import { listingsKeys } from "@/lib/query-keys";
@@ -40,12 +44,25 @@ const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "date", label: "Date" },
 ];
 
+/** Quick-search pill labels; clicking one runs a search with that keyword. */
+const QUICK_SEARCH_PILLS: string[] = [
+  "Software Engineer",
+  "Marketing",
+  "Data Analyst",
+  "Remote",
+  "Product Manager",
+];
+
+/** Scroll distance in px after which the header switches to sticky condensed mode. */
+const SCROLL_THRESHOLD = 64;
+
 /** Inner content: header, search card, trending, and listings grid. */
 function JobsContent() {
   const { user, logout } = useAuth();
   const [keyword, setKeyword] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [country, setCountry] = useState("sg");
+  const [locationInput, setLocationInput] = useState("");
   const [page, setPage] = useState(1);
   const [fullTime, setFullTime] = useState(false);
   const [permanent, setPermanent] = useState(false);
@@ -53,17 +70,20 @@ function JobsContent() {
   const [sortBy, setSortBy] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const filters: ListingsFilters = useMemo(() => {
     const f: ListingsFilters = {};
+    const where = locationInput.trim() || undefined;
+    if (where) f.where = where;
     if (fullTime) f.fullTime = true;
     if (permanent) f.permanent = true;
     const min = parseInt(salaryMin, 10);
     if (!Number.isNaN(min) && min > 0) f.salaryMin = min;
     if (sortBy) f.sortBy = sortBy;
     return f;
-  }, [fullTime, permanent, salaryMin, sortBy]);
+  }, [locationInput, fullTime, permanent, salaryMin, sortBy]);
 
   const resetPage = useCallback(() => setPage(1), []);
 
@@ -83,6 +103,16 @@ function JobsContent() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  /** Toggle sticky header mode when scroll passes threshold. */
+  useEffect(() => {
+    const onScroll = () => {
+      setScrolled(window.scrollY > SCROLL_THRESHOLD);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const { data, isLoading, isError, error } = useQuery({
@@ -118,33 +148,75 @@ function JobsContent() {
   const totalCount = data?.totalCount ?? 0;
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <header className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-4 border-b border-border py-4">
-        <h1 className="text-xl font-semibold text-foreground">JobFinder</h1>
-        <nav className="flex items-center gap-3">
-          {user && (
-            <>
-              <Link
-                href="/jobs"
-                className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
+    <div className="min-h-screen p-4">
+      <header
+        className={
+          "sticky top-0 z-50 mx-auto flex flex-wrap items-center gap-4 border-b border-border py-4 transition-all duration-200 " +
+          (scrolled
+            ? "max-w-4xl rounded-b-xl border-t-0 bg-background/80 px-4 backdrop-blur-md"
+            : "max-w-4xl justify-between")
+        }
+      >
+        <Logo className="shrink-0" />
+        {scrolled && (
+          <form
+            onSubmit={handleSearch}
+            className="flex min-w-0 flex-1 items-center sm:min-w-[12rem]"
+            aria-label="Search jobs (condensed)"
+          >
+            <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+              <div className="relative flex min-w-0 flex-1">
+                <MagnifyingGlassIcon
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <Input
+                  ref={scrolled ? searchInputRef : undefined}
+                  type="search"
+                  placeholder="Job title, skills or company"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="h-9 min-w-0 flex-1 rounded-none border-0 border-r-0 bg-transparent pl-10 pr-9 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                  aria-label="Search jobs"
+                />
+                <span
+                  className="pointer-events-none absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground"
+                  aria-hidden
+                >
+                  /
+                </span>
+              </div>
+              <Button
+                type="submit"
+                size="xs"
+                className="h-9 shrink-0 rounded-l-none rounded-r-xl border-0 px-4"
+                aria-label="Search"
               >
-                Browse
-              </Link>
-              <Link
-                href="/my-jobs"
-                className="text-sm text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
-              >
-                My Jobs
-              </Link>
-            </>
+                Search
+              </Button>
+            </div>
+          </form>
+        )}
+        <nav className="flex shrink-0 items-center gap-3">
+          {user && !scrolled && (
+            <Link
+              href="/my-jobs"
+              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              My Jobs
+            </Link>
           )}
           {user ? (
-            <>
-              <span className="text-sm text-muted-foreground">{user.name}</span>
-              <Button variant="outline" size="sm" onClick={() => logout()}>
-                Logout
-              </Button>
-            </>
+            <UserMenu user={user} onLogout={logout} />
+          ) : scrolled ? (
+            <Button
+              asChild
+              variant="outline"
+              size="xs"
+              className="rounded-xl border-white bg-transparent px-4 text-sm text-white hover:bg-white/10 focus-visible:ring-white/50"
+            >
+              <Link href="/?auth=login">Sign In</Link>
+            </Button>
           ) : (
             <Button
               asChild
@@ -152,7 +224,7 @@ function JobsContent() {
               size="xs"
               className="rounded-xl px-4 text-sm"
             >
-              <Link href="/login">Sign In</Link>
+              <Link href="/?auth=login">Sign In</Link>
             </Button>
           )}
         </nav>
@@ -172,7 +244,7 @@ function JobsContent() {
                     aria-hidden
                   />
                   <Input
-                    ref={searchInputRef}
+                    ref={scrolled ? undefined : searchInputRef}
                     id="search-what"
                     placeholder="Job title, skills or company"
                     value={searchInput}
@@ -198,7 +270,43 @@ function JobsContent() {
               </div>
             </div>
           </form>
+          <div className="flex flex-wrap gap-2 pt-2">
+            {QUICK_SEARCH_PILLS.map((label) => (
+              <Button
+                key={label}
+                type="button"
+                variant="outline"
+                size="xs"
+                className="rounded-full"
+                aria-label={`Search for ${label}`}
+                onClick={() => {
+                  setSearchInput(label);
+                  setKeyword(label);
+                  setPage(1);
+                  setHasSearched(true);
+                }}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
         </section>
+
+        {!hasSearched && (
+          <section
+            aria-label="Empty state"
+            className="mx-auto flex max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center"
+          >
+            <MagnifyingGlassIcon
+              className="size-12 text-muted-foreground"
+              aria-hidden
+            />
+            <p className="text-muted-foreground">
+              Search for jobs above to get started. Enter a job title, skills, or
+              company to find listings.
+            </p>
+          </section>
+        )}
 
         {!hasSearched && !user && (
           <section
@@ -255,10 +363,10 @@ function JobsContent() {
               <Button
                 asChild
                 variant="cta"
-                size="lg"
+                size="default"
                 iconRight={<ArrowRightIcon weight="bold" />}
               >
-                <Link href="/login?redirect=/jobs">Get Started Free</Link>
+                <Link href="/?auth=signup&redirect=/jobs">Get Started</Link>
               </Button>
             </div>
           </section>
@@ -348,6 +456,26 @@ function JobsContent() {
                       className="mt-1 min-w-[8rem]"
                     />
                   </div>
+                  <div>
+                    <Label
+                      htmlFor="filter-location"
+                      className="text-xs text-muted-foreground"
+                    >
+                      Location
+                    </Label>
+                    <Input
+                      id="filter-location"
+                      type="text"
+                      placeholder="e.g. Singapore, Central"
+                      value={locationInput}
+                      onChange={(e) => {
+                        setLocationInput(e.target.value);
+                        resetPage();
+                      }}
+                      className="mt-1 w-40"
+                      aria-label="Location"
+                    />
+                  </div>
                   <label className="flex cursor-pointer items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -398,9 +526,22 @@ function JobsContent() {
                 </div>
               )}
               {listings.length === 0 ? (
-                <p className="text-muted-foreground">
-                  No listings match your search.
-                </p>
+                <div
+                  className="flex flex-col items-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center"
+                  role="status"
+                  aria-label="No results"
+                >
+                  <BriefcaseIcon
+                    className="size-12 text-muted-foreground"
+                    aria-hidden
+                  />
+                  <p className="text-muted-foreground">
+                    No listings match your search.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Try different keywords or filters.
+                  </p>
+                </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   {listings.map((listing) => (
@@ -443,6 +584,7 @@ function JobsContent() {
             </section>
           </>
         )}
+        <TrendingListings />
       </main>
     </div>
   );

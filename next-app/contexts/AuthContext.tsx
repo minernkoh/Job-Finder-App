@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               window.location.pathname + window.location.search
             )
           : "";
-      router.push(redirect ? `/login?redirect=${redirect}` : "/login");
+      router.push(redirect ? `/?auth=login&redirect=${redirect}` : "/?auth=login");
     });
   }, [router]);
 
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await apiClient.post("/api/v1/auth/logout").catch(() => {});
     setToken(null);
     setUser(null);
-    router.push("/login");
+    router.push("/");
   }, [router]);
 
   const value = useMemo<AuthContextValue>(

@@ -232,7 +232,7 @@ export default function AdminPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex min-h-screen items-center justify-center">
           <p className="text-muted-foreground">Loading…</p>
         </div>
       }

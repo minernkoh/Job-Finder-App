@@ -6,10 +6,11 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Button } from "@ui/components";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { savedListingToListingResult } from "@/lib/api/saved";
 import { ListingCard } from "@/components/listing-card";
+import { UserMenu } from "@/components/user-menu";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { TrendingListings } from "@/components/trending-listings";
 
@@ -19,20 +20,14 @@ function MyJobsContent() {
   const { savedListings, isLoadingSaved, unsaveMutation } = useSavedListings();
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen p-4">
       <header className="mx-auto flex max-w-4xl items-center justify-between border-b border-border py-4">
-        <h1 className="text-xl font-semibold text-foreground">My Jobs</h1>
+        <div className="flex items-center gap-2">
+          <Logo />
+          <span className="text-muted-foreground">My Jobs</span>
+        </div>
         <nav className="flex items-center gap-3">
-          <Link
-            href="/jobs"
-            className="text-sm text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
-          >
-            Browse
-          </Link>
-          <span className="text-sm text-muted-foreground">{user?.name}</span>
-          <Button variant="outline" size="sm" onClick={() => logout()}>
-            Logout
-          </Button>
+          {user && <UserMenu user={user} onLogout={logout} />}
         </nav>
       </header>
 

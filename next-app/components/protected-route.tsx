@@ -1,5 +1,5 @@
 /**
- * Wraps pages that require login. If the user is not logged in, redirects to /login and saves the current URL so they can be sent back after logging in.
+ * Wraps pages that require login. If the user is not logged in, redirects to home with the auth modal open and saves the current URL so they can be sent back after logging in.
  */
 
 "use client";
@@ -17,7 +17,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
     if (!user) {
       const redirect = encodeURIComponent(pathname ?? "/jobs");
-      window.location.href = `/login?redirect=${redirect}`;
+      window.location.href = `/?auth=login&redirect=${redirect}`;
     }
   }, [user, isLoading, pathname]);
 

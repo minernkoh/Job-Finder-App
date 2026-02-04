@@ -17,6 +17,16 @@ import { getListingById } from "./listings.service";
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
+const ADZUNA_FETCH_TIMEOUT_MS = 10_000;
+
+/** Strips HTML tags and normalizes whitespace; caps at 30k chars for prompt limit. */
+function extractTextFromHtml(html: string): string {
+  const text = html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.slice(0, 30000);
+}
 
 /** Returns SHA-256 hex hash of input text for cache key. */
 function hashInputText(text: string): string {
@@ -35,16 +45,16 @@ function getGeminiModel() {
 
 /** Generates a structured summary from job description text using Gemini with retries. */
 export async function generateSummaryWithRetry(
-  inputText: string
+  inputText: string,
+  options?: { fromAdzunaPage?: boolean }
 ): Promise<AISummary> {
   const model = getGeminiModel();
-  let lastError: unknown;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const { object } = await generateObject({
-        model,
-        schema: AISummarySchema,
-        prompt: `You are a job summary assistant for the Singapore job market. Summarize the following job description into a structured summary.
+  const fromAdzunaPage = options?.fromAdzunaPage === true;
+  const intro =
+    fromAdzunaPage
+      ? "You are scanning the job description of the Adzuna job posting below. The content may include some page layout or navigation; focus on the main job description and summarize it into a structured summary."
+      : "You are a job summary assistant for the Singapore job market. Summarize the following job description into a structured summary.";
+  const prompt = `${intro}
 
 Rules:
 - Provide a short tldr (2-3 sentences).
@@ -55,7 +65,15 @@ Rules:
 - Output must match the schema exactly (tldr required; other fields optional).
 
 Job description:
-${inputText.slice(0, 30000)}`,
+${inputText.slice(0, 30000)}`;
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const { object } = await generateObject({
+        model,
+        schema: AISummarySchema,
+        prompt,
       });
       return object as AISummary;
     } catch (err) {
@@ -71,33 +89,57 @@ ${inputText.slice(0, 30000)}`,
     : new Error("Summary generation failed. Please try again.");
 }
 
-/** Resolves create-summary input to a single text string. */
+/** Resolves create-summary input to text and whether it came from fetching the Adzuna job page. */
 async function resolveInputText(input: {
   text?: string;
   url?: string;
   listingId?: string;
-}): Promise<string> {
-  if (input.text?.trim()) return input.text.trim();
+}): Promise<{ text: string; fromAdzunaPage?: boolean }> {
+  if (input.text?.trim()) return { text: input.text.trim() };
+
   if (input.listingId) {
     const listing = await getListingById(input.listingId);
     if (!listing) throw new Error("Listing not found");
-    const parts = [listing.title, listing.company, listing.description].filter(
-      Boolean
-    );
-    return parts.join("\n\n") || listing.title;
+    const fallbackParts = [listing.title, listing.company, listing.description].filter(Boolean);
+    const fallback = fallbackParts.join("\n\n") || listing.title;
+
+    if (!listing.sourceUrl?.trim()) {
+      return { text: fallback, fromAdzunaPage: false };
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ADZUNA_FETCH_TIMEOUT_MS);
+      const res = await fetch(listing.sourceUrl, {
+        headers: { "User-Agent": "JobFinderBot/1.0" },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) {
+        return { text: fallback, fromAdzunaPage: false };
+      }
+      const html = await res.text();
+      const extracted = extractTextFromHtml(html).trim();
+      return {
+        text: extracted || fallback,
+        fromAdzunaPage: !!extracted,
+      };
+    } catch (err) {
+      console.error("Adzuna sourceUrl fetch failed, using fallback:", err instanceof Error ? err.message : String(err));
+      return { text: fallback, fromAdzunaPage: false };
+    }
   }
+
   if (input.url) {
     const res = await fetch(input.url, {
       headers: { "User-Agent": "JobFinderBot/1.0" },
     });
     if (!res.ok) throw new Error("Could not fetch URL");
     const html = await res.text();
-    const text = html
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    return text.slice(0, 30000) || "No text content found.";
+    const text = extractTextFromHtml(html) || "No text content found.";
+    return { text };
   }
+
   throw new Error("At least one of listingId, text, or url is required");
 }
 
@@ -132,8 +174,8 @@ export async function getOrCreateSummary(
   userId: string,
   input: { text?: string; url?: string; listingId?: string }
 ): Promise<AISummary & { id: string }> {
-  const inputText = await resolveInputText(input);
-  const inputTextHash = hashInputText(inputText);
+  const { text, fromAdzunaPage } = await resolveInputText(input);
+  const inputTextHash = hashInputText(text);
   const env = getEnv();
   const ttlSeconds = env.AI_SUMMARY_CACHE_TTL ?? 604800;
   const since = new Date(Date.now() - ttlSeconds * 1000);
@@ -152,7 +194,7 @@ export async function getOrCreateSummary(
     return docToSummary(existing as IAISummaryDocument);
   }
 
-  const generated = await generateSummaryWithRetry(inputText);
+  const generated = await generateSummaryWithRetry(text, { fromAdzunaPage });
   const parsed = AISummarySchema.safeParse(generated);
   const safe = parsed.success
     ? parsed.data
