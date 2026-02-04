@@ -17,6 +17,8 @@ export interface IListingDocument {
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
+  salaryMin?: number;
+  salaryMax?: number;
 }
 
 const ListingSchema = new Schema<IListingDocument>(
@@ -30,6 +32,8 @@ const ListingSchema = new Schema<IListingDocument>(
     sourceId: { type: String, required: true },
     country: { type: String, required: true, default: "sg" },
     expiresAt: { type: Date, required: true },
+    salaryMin: { type: Number },
+    salaryMax: { type: Number },
   },
   { timestamps: true }
 );

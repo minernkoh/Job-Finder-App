@@ -1,10 +1,21 @@
 /**
- * GET /api/v1/listings: search job listings with keyword and country. Returns paginated results from Adzuna (cached).
+ * GET /api/v1/listings: search job listings with keyword, country, and Adzuna-aligned filters. Returns paginated results from Adzuna (cached).
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse } from "@/lib/api/errors";
-import { searchListings } from "@/lib/services/listings.service";
+import {
+  searchListings,
+  type ListingsFilters,
+} from "@/lib/services/listings.service";
+
+const SORT_BY_ALLOWLIST = ["salary", "date"] as const;
+
+function parseBool(value: string | null): boolean {
+  if (value == null) return false;
+  const v = value.toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,11 +26,37 @@ export async function GET(request: NextRequest) {
       parseInt(searchParams.get("page") ?? "1", 10) || 1
     );
     const keyword = searchParams.get("keyword")?.trim() ?? undefined;
+    const where = searchParams.get("where")?.trim() ?? undefined;
+    const category = searchParams.get("category")?.trim() ?? undefined;
+    const fullTime = parseBool(searchParams.get("full_time"));
+    const permanent = parseBool(searchParams.get("permanent"));
+    const salaryMinRaw = searchParams.get("salary_min");
+    const salaryMin =
+      salaryMinRaw != null
+        ? Math.max(0, parseInt(salaryMinRaw, 10) || 0)
+        : undefined;
+    const sortByRaw = searchParams.get("sort_by")?.trim();
+    const sortBy =
+      sortByRaw &&
+      SORT_BY_ALLOWLIST.includes(
+        sortByRaw as (typeof SORT_BY_ALLOWLIST)[number]
+      )
+        ? sortByRaw
+        : undefined;
+
+    const filters: ListingsFilters = {};
+    if (where) filters.where = where;
+    if (category) filters.category = category;
+    if (fullTime) filters.fullTime = true;
+    if (permanent) filters.permanent = true;
+    if (salaryMin != null && salaryMin > 0) filters.salaryMin = salaryMin;
+    if (sortBy) filters.sortBy = sortBy;
 
     const { listings, totalCount } = await searchListings(
       country,
       page,
-      keyword
+      keyword,
+      Object.keys(filters).length > 0 ? filters : undefined
     );
 
     return NextResponse.json({

@@ -1,12 +1,13 @@
 /**
- * Listing card: shows job title, company, location. Clickable, supports save button and view tracking.
+ * Listing card: shows job title, company, location, and salary when available. Clickable, supports save button and view tracking.
  */
 
 "use client";
 
 import Link from "next/link";
-import { Bookmark, BookmarkSimple } from "@phosphor-icons/react";
+import { BookmarkIcon, BookmarkSimpleIcon } from "@phosphor-icons/react";
 import { Button, Card, CardContent, CardHeader } from "@ui/components";
+import { formatSalaryRange } from "@/lib/format";
 import type { ListingResult } from "@schemas";
 
 interface ListingCardProps {
@@ -63,20 +64,30 @@ export function ListingCard({
                 aria-label={isSaved ? "Unsave" : "Save"}
               >
                 {isSaved ? (
-                  <Bookmark weight="fill" className="text-primary" />
+                  <BookmarkIcon weight="fill" className="text-primary" />
                 ) : (
-                  <BookmarkSimple className="text-muted-foreground" />
+                  <BookmarkSimpleIcon className="text-muted-foreground" />
                 )}
               </Button>
             )}
           </div>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="pt-0 space-y-1">
           {listing.location && (
             <p className="truncate text-sm text-muted-foreground">
               {listing.location}
             </p>
           )}
+          {(() => {
+            const salary = formatSalaryRange(
+              listing.salaryMin,
+              listing.salaryMax,
+              listing.country
+            );
+            return salary ? (
+              <p className="text-sm font-medium text-foreground">{salary}</p>
+            ) : null;
+          })()}
           {listing.country && listing.country !== "sg" && (
             <span className="mt-1 inline-block rounded bg-muted px-1.5 py-0.5 text-xs">
               {listing.country.toUpperCase()}

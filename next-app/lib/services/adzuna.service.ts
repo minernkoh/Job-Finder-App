@@ -11,6 +11,10 @@ export interface AdzunaJob {
   location: { display_name?: string };
   description?: string;
   redirect_url?: string;
+  /** Minimum salary from Adzuna (numeric, local currency). Optional; not all jobs include salary. */
+  salary_min?: number;
+  /** Maximum salary from Adzuna (numeric, local currency). Optional; not all jobs include salary. */
+  salary_max?: number;
 }
 
 export interface AdzunaSearchResponse {
@@ -51,13 +55,25 @@ export function validateCountry(country: string): AdzunaCountry {
     : "sg";
 }
 
+/** Options for Adzuna job search; all optional and map to API query params. */
+export interface AdzunaSearchOptions {
+  what?: string;
+  resultsPerPage?: number;
+  where?: string;
+  category?: string;
+  fullTime?: boolean;
+  permanent?: boolean;
+  salaryMin?: number;
+  sortBy?: string;
+}
+
 /** Fetches job search results from Adzuna API. */
 export async function fetchAdzunaSearch(
   appId: string,
   appKey: string,
   country: AdzunaCountry,
   page: number,
-  options?: { what?: string; resultsPerPage?: number }
+  options?: AdzunaSearchOptions
 ): Promise<AdzunaSearchResponse> {
   const params = new URLSearchParams({
     app_id: appId,
@@ -65,6 +81,14 @@ export async function fetchAdzunaSearch(
     results_per_page: String(options?.resultsPerPage ?? 20),
   });
   if (options?.what?.trim()) params.set("what", options.what.trim());
+  if (options?.where?.trim()) params.set("where", options.where.trim());
+  if (options?.category?.trim())
+    params.set("category", options.category.trim());
+  if (options?.fullTime === true) params.set("full_time", "1");
+  if (options?.permanent === true) params.set("permanent", "1");
+  if (options?.salaryMin != null && options.salaryMin > 0)
+    params.set("salary_min", String(options.salaryMin));
+  if (options?.sortBy?.trim()) params.set("sort_by", options.sortBy.trim());
   const url = `${ADZUNA_BASE}/${country}/search/${page}?${params.toString()}`;
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) {
@@ -73,4 +97,32 @@ export async function fetchAdzunaSearch(
   }
   const data = (await res.json()) as AdzunaSearchResponse;
   return data;
+}
+
+/** Category item returned by Adzuna categories endpoint. */
+export interface AdzunaCategory {
+  label: string;
+  tag: string;
+}
+
+/** Fetches job categories for a country from Adzuna API. Used to populate category filter dropdown. */
+export async function fetchAdzunaCategories(
+  appId: string,
+  appKey: string,
+  country: AdzunaCountry
+): Promise<AdzunaCategory[]> {
+  const params = new URLSearchParams({ app_id: appId, app_key: appKey });
+  const url = `${ADZUNA_BASE}/${country}/categories?${params.toString()}`;
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Adzuna categories error ${res.status}: ${text.slice(0, 200)}`
+    );
+  }
+  const data = (await res.json()) as {
+    results?: { label: string; tag: string }[];
+  };
+  const results = data?.results ?? [];
+  return results.map((r) => ({ label: r.label ?? "", tag: r.tag ?? "" }));
 }

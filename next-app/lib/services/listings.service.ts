@@ -19,13 +19,35 @@ import {
 const SEARCH_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const LISTING_DETAIL_TTL_MS = 5 * 60 * 60 * 1000; // 5 hours for individual listing
 
+/** Filter options for job search; aligned with Adzuna API params. */
+export interface ListingsFilters {
+  where?: string;
+  category?: string;
+  fullTime?: boolean;
+  permanent?: boolean;
+  salaryMin?: number;
+  sortBy?: string;
+}
+
 /** Builds cache key from search params for deduplication. */
 function buildCacheKey(
   country: string,
   page: number,
-  keyword?: string
+  keyword?: string,
+  filters?: ListingsFilters
 ): string {
-  const raw = `country=${country}&page=${page}&what=${keyword ?? ""}`;
+  const f = filters ?? {};
+  const raw = [
+    `country=${country}`,
+    `page=${page}`,
+    `what=${keyword ?? ""}`,
+    `where=${f.where ?? ""}`,
+    `category=${f.category ?? ""}`,
+    `fullTime=${f.fullTime ?? false}`,
+    `permanent=${f.permanent ?? false}`,
+    `salaryMin=${f.salaryMin ?? ""}`,
+    `sortBy=${f.sortBy ?? ""}`,
+  ].join("&");
   return createHash("sha256").update(raw).digest("hex").slice(0, 32);
 }
 
@@ -38,6 +60,8 @@ function docToListingResult(doc: {
   description?: string;
   sourceUrl?: string;
   country: string;
+  salaryMin?: number;
+  salaryMax?: number;
 }): ListingResult {
   return {
     id: String(doc._id),
@@ -48,6 +72,8 @@ function docToListingResult(doc: {
     source: "adzuna",
     sourceUrl: doc.sourceUrl,
     country: doc.country,
+    salaryMin: doc.salaryMin,
+    salaryMax: doc.salaryMax,
   };
 }
 
@@ -66,6 +92,8 @@ function jobToListingResult(
     source: "adzuna",
     sourceUrl: job.redirect_url,
     country,
+    salaryMin: job.salary_min,
+    salaryMax: job.salary_max,
   };
 }
 
@@ -85,6 +113,8 @@ function normalizeAdzunaJob(
     sourceId: String(job.id),
     country,
     expiresAt,
+    salaryMin: job.salary_min,
+    salaryMax: job.salary_max,
   };
 }
 
@@ -92,12 +122,13 @@ function normalizeAdzunaJob(
 export async function searchListings(
   country: string,
   page: number,
-  keyword?: string
+  keyword?: string,
+  filters?: ListingsFilters
 ): Promise<{ listings: ListingResult[]; totalCount: number }> {
   await connectDB();
   const env = getEnv();
   const cc = validateCountry(country) as AdzunaCountry;
-  const cacheKey = buildCacheKey(cc, page, keyword);
+  const cacheKey = buildCacheKey(cc, page, keyword, filters);
 
   // Check SearchCache
   const cached = await SearchCache.findOne({ cacheKey }).lean();
@@ -123,6 +154,12 @@ export async function searchListings(
     {
       what: keyword,
       resultsPerPage: 20,
+      where: filters?.where,
+      category: filters?.category,
+      fullTime: filters?.fullTime,
+      permanent: filters?.permanent,
+      salaryMin: filters?.salaryMin,
+      sortBy: filters?.sortBy,
     }
   );
 

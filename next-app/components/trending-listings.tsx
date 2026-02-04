@@ -24,10 +24,10 @@ export function TrendingListings() {
 
   return (
     <section>
-      <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+      <h2 className="mb-3 text-xs uppercase tracking-widest text-muted-foreground">
         Trending
       </h2>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="scrollbar-hide flex gap-3 overflow-x-auto pt-2 pb-2">
         {listings.map((listing) => (
           <div key={listing.id} className="min-w-[280px] max-w-[320px] flex-1">
             <ListingCard

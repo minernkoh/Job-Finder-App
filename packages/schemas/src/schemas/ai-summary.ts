@@ -32,3 +32,20 @@ export const AISummarySchema = z.object({
 });
 
 export type AISummary = z.infer<typeof AISummarySchema>;
+
+/** POST body for create summary: at least one of listingId, text, or url required. */
+export const CreateSummaryBodySchema = z
+  .object({
+    listingId: z.string().min(1).optional(),
+    text: z.string().min(1).optional(),
+    url: z.string().url().optional(),
+  })
+  .refine(
+    (data) =>
+      (data.listingId?.length ?? 0) > 0 ||
+      (data.text?.length ?? 0) > 0 ||
+      (data.url?.length ?? 0) > 0,
+    { message: "At least one of listingId, text, or url is required" }
+  );
+
+export type CreateSummaryBody = z.infer<typeof CreateSummaryBodySchema>;

@@ -1,5 +1,6 @@
 /**
  * Global styles: Tailwind base and theme variables for dark mode (background, text, radius, shadows). Used by all pages and components.
+ * Section label (eyebrow) convention: text-xs uppercase tracking-widest text-muted-foreground
  */
 @import "tailwindcss";
 
@@ -14,6 +15,9 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --shadow-blue: 0 0.625rem 0.9375rem -0.1875rem rgba(59, 130, 246, 0.2);
+  /* Primary button glow - dark mode */
+  --shadow-glow-primary: 0 0.5rem 1.5rem hsla(217, 91%, 60%, 0.35);
+  --shadow-glow-primary-hover: 0 0.625rem 2rem hsla(217, 91%, 60%, 0.45);
   --gradient-dark: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
   --accent-blue: rgba(59, 130, 246, 0.15);
   /* shadcn/ui semantic colors (HSL values for Tailwind) */
@@ -47,6 +51,8 @@
   --radius-xl: var(--radius-xl);
   --radius-2xl: var(--radius-2xl);
   --shadow-blue: var(--shadow-blue);
+  --shadow-glow-primary: var(--shadow-glow-primary);
+  --shadow-glow-primary-hover: var(--shadow-glow-primary-hover);
   /* shadcn/ui theme mapping for Tailwind utilities */
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
@@ -72,4 +78,29 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
   min-height: 100vh;
+}
+
+/* Gradient text: primary to lighter blue, works on dark background */
+.text-gradient-hero {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)) 0%,
+    #93c5fd 45%,
+    #c7d2fe 55%,
+    hsl(var(--primary)) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Hide scrollbar while keeping scroll behavior (horizontal lists, etc.) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

@@ -137,8 +137,9 @@ function Select({
     const rect = el.getBoundingClientRect();
     const margin = 8;
     const desiredMaxHeight = 288;
+    const minPanelWidth = 160;
     const width = Math.min(
-      rect.width,
+      Math.max(rect.width, minPanelWidth),
       Math.max(0, window.innerWidth - margin * 2)
     );
     const maxLeft = Math.max(margin, window.innerWidth - width - margin);
@@ -206,7 +207,7 @@ function Select({
 
   const isPlaceholderSelected = !value;
   const triggerClasses = cn(
-    "flex h-9 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    "flex h-9 items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     fullWidth && "w-full",
     disabled && "cursor-not-allowed opacity-50",
     isPlaceholderSelected ? "text-muted-foreground" : "text-foreground",
@@ -220,7 +221,7 @@ function Select({
             ref={panelRef}
             style={panelStyle}
             className={cn(
-              "overflow-hidden rounded-xl border border-border bg-card shadow-lg",
+              "overflow-hidden rounded-lg border border-border bg-card shadow-sm",
               panelClassName
             )}
             role="listbox"
@@ -245,11 +246,11 @@ function Select({
                     role="option"
                     aria-selected={isSelected}
                     className={cn(
-                      "flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition-colors",
+                      "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors",
                       disabled
                         ? "cursor-not-allowed text-muted-foreground/60"
-                        : "text-foreground hover:bg-accent hover:text-accent-foreground",
-                      isSelected && "bg-accent/50 font-medium"
+                        : "text-foreground hover:bg-muted",
+                      isSelected && "bg-muted font-medium"
                     )}
                   >
                     <span className="truncate">{opt.label}</span>

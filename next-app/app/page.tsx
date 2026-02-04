@@ -1,49 +1,10 @@
 /**
- * Home page: landing with links to Login, Register, and Jobs. No login required.
+ * Home route: redirects to the job search page so users can search instantly without a landing gate.
  */
 
-import Link from "next/link";
-import { Button } from "@ui/components";
+import { redirect } from "next/navigation";
 
-/** Renders the home page with title and links to login, register, and jobs. */
+/** Sends visitors to the job search page. */
 export default function Home() {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center font-sans">
-      <main className="flex w-full max-w-3xl flex-col items-center gap-8 px-6 py-16 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Job Finder App
-        </h1>
-        <p className="max-w-md text-lg leading-8 text-muted-foreground">
-          Find and browse jobs with AI summaries. Log in or register to get
-          started.
-        </p>
-        <div className="flex flex-wrap justify-center gap-5">
-          <Button
-            asChild
-            variant="default"
-            size="lg"
-            className="rounded-xl min-h-[3.5rem] px-8"
-          >
-            <Link href="/login">Login</Link>
-          </Button>
-          <Button
-            asChild
-            variant="outline"
-            size="lg"
-            className="rounded-xl min-h-[3.5rem] px-8"
-          >
-            <Link href="/login?tab=signup">Register</Link>
-          </Button>
-          <Button
-            asChild
-            variant="secondary"
-            size="lg"
-            className="rounded-xl min-h-[3.5rem] px-8"
-          >
-            <Link href="/jobs">Jobs</Link>
-          </Button>
-        </div>
-      </main>
-    </div>
-  );
+  redirect("/jobs");
 }

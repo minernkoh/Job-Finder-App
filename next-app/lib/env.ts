@@ -15,6 +15,10 @@ const envSchema = z.object({
   ADZUNA_APP_ID: z.string().optional(),
   ADZUNA_APP_KEY: z.string().optional(),
   JOB_SEARCH_CACHE_TTL: z.coerce.number().default(3600),
+  /** Optional so app starts without it; summary endpoints return 503 if unset. */
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  /** Cache TTL for AI summaries by inputTextHash (seconds). Default 7 days. */
+  AI_SUMMARY_CACHE_TTL: z.coerce.number().default(604800),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -29,6 +33,8 @@ function validateEnv(): Env {
     ADZUNA_APP_ID: process.env.ADZUNA_APP_ID,
     ADZUNA_APP_KEY: process.env.ADZUNA_APP_KEY,
     JOB_SEARCH_CACHE_TTL: process.env.JOB_SEARCH_CACHE_TTL,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY?.trim() || undefined,
+    AI_SUMMARY_CACHE_TTL: process.env.AI_SUMMARY_CACHE_TTL,
   });
   if (!parsed.success) {
     throw new Error(

@@ -4,8 +4,10 @@
 
 "use client";
 
+import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { ArrowLeftIcon, ArrowRightIcon } from "@phosphor-icons/react";
 import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
@@ -85,7 +87,19 @@ function LoginForm() {
   }
 
   return (
-    <AuthCard title="Account">
+    <AuthCard
+      title="Account"
+      eyebrow={tab === "login" ? "Welcome back" : "Create account"}
+      backLink={
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeftIcon size={16} />
+          Back to home
+        </Link>
+      }
+    >
       <AuthTabs value={tab} onChange={handleTabChange} />
       {tab === "login" ? (
         <form onSubmit={handleLogin} className="space-y-4">
@@ -183,9 +197,15 @@ function LoginForm() {
           )}
           <Button
             type="submit"
+            variant="cta"
             size="lg"
             className="w-full min-h-[3.5rem]"
             disabled={submitting || isLoading}
+            iconRight={
+              !submitting ? (
+                <ArrowRightIcon weight="bold" />
+              ) : undefined
+            }
           >
             {submitting ? "Creating account…" : "Register"}
           </Button>

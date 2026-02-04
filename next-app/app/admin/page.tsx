@@ -5,6 +5,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
@@ -210,8 +211,14 @@ function AdminForm() {
           )}
           <Button
             type="submit"
+            variant="cta"
             className="w-full"
             disabled={submitting || isLoading}
+            iconRight={
+              !submitting ? (
+                <ArrowRightIcon weight="bold" />
+              ) : undefined
+            }
           >
             {submitting ? "Creating account…" : "Sign up"}
           </Button>

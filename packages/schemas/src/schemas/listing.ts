@@ -32,6 +32,10 @@ export const ListingResultSchema = z.object({
   source: z.literal("adzuna"),
   sourceUrl: z.string().url().optional(),
   country: z.string(),
+  /** Minimum salary when available from Adzuna (numeric, local currency). */
+  salaryMin: z.number().optional(),
+  /** Maximum salary when available from Adzuna (numeric, local currency). */
+  salaryMax: z.number().optional(),
 });
 
 export type ListingResult = z.infer<typeof ListingResultSchema>;
