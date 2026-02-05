@@ -36,6 +36,8 @@ export const ListingResultSchema = z.object({
   salaryMin: z.number().optional(),
   /** Maximum salary when available from Adzuna (numeric, local currency). */
   salaryMax: z.number().optional(),
+  /** When the job was posted (from Adzuna created). Optional; not all jobs include it. */
+  postedAt: z.coerce.date().optional(),
 });
 
 export type ListingResult = z.infer<typeof ListingResultSchema>;

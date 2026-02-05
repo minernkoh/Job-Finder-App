@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { BookmarkIcon, BookmarkSimpleIcon } from "@phosphor-icons/react";
 import { Button, Card, CardContent, CardHeader } from "@ui/components";
-import { formatSalaryRange } from "@/lib/format";
+import { formatPostedDate, formatSalaryRange } from "@/lib/format";
 import type { ListingResult } from "@schemas";
 
 interface ListingCardProps {
@@ -93,6 +93,14 @@ export function ListingCard({
               {listing.country.toUpperCase()}
             </span>
           )}
+          {(() => {
+            const posted = formatPostedDate(listing.postedAt);
+            return posted ? (
+              <p className="text-xs text-muted-foreground">
+                Posted {posted}
+              </p>
+            ) : null;
+          })()}
         </CardContent>
       </Link>
     </Card>

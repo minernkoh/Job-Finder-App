@@ -11,6 +11,8 @@ export interface AdzunaJob {
   location: { display_name?: string };
   description?: string;
   redirect_url?: string;
+  /** ISO date string when the job was posted. Optional; not all jobs include it. */
+  created?: string;
   /** Minimum salary from Adzuna (numeric, local currency). Optional; not all jobs include salary. */
   salary_min?: number;
   /** Maximum salary from Adzuna (numeric, local currency). Optional; not all jobs include salary. */

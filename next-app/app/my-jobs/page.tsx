@@ -4,6 +4,7 @@
 
 "use client";
 
+import { Suspense } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/protected-route";
 import Link from "next/link";
@@ -81,8 +82,10 @@ function MyJobsContent() {
 /** My Jobs page: protected; shows trending and saved listings. */
 export default function MyJobsPage() {
   return (
-    <ProtectedRoute>
-      <MyJobsContent />
-    </ProtectedRoute>
+    <Suspense fallback={null}>
+      <ProtectedRoute>
+        <MyJobsContent />
+      </ProtectedRoute>
+    </Suspense>
   );
 }

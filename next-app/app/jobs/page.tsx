@@ -23,13 +23,14 @@ import {
   Select,
 } from "@ui/components";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import {
   fetchListings,
   recordListingView,
   type ListingsFilters,
 } from "@/lib/api/listings";
+import { AuthModalLink } from "@/components/auth-modal-link";
 import { ListingCard } from "@/components/listing-card";
 import { Logo } from "@/components/logo";
 import { TrendingListings } from "@/components/trending-listings";
@@ -37,6 +38,7 @@ import { UserMenu } from "@/components/user-menu";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { JOB_SEARCH_COUNTRIES } from "@/lib/constants/countries";
 import { listingsKeys } from "@/lib/query-keys";
+import { cn } from "@ui/components/lib/utils";
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Relevance" },
@@ -44,13 +46,25 @@ const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "date", label: "Date" },
 ];
 
-/** Quick-search pill labels; clicking one runs a search with that keyword. */
-const QUICK_SEARCH_PILLS: string[] = [
+/** Suggested job roles for the search dropdown; filtered by what the user types. */
+const SUGGESTED_ROLES: string[] = [
   "Software Engineer",
-  "Marketing",
+  "Senior Software Engineer",
+  "Frontend Developer",
+  "Backend Developer",
+  "Full Stack Developer",
   "Data Analyst",
-  "Remote",
+  "Data Scientist",
   "Product Manager",
+  "Project Manager",
+  "Marketing",
+  "Marketing Manager",
+  "Remote",
+  "DevOps",
+  "UX Designer",
+  "UI Designer",
+  "QA Engineer",
+  "Business Analyst",
 ];
 
 /** Scroll distance in px after which the header switches to sticky condensed mode. */
@@ -68,24 +82,72 @@ function JobsContent() {
   const [permanent, setPermanent] = useState(false);
   const [salaryMin, setSalaryMin] = useState("");
   const [sortBy, setSortBy] = useState("");
+  const [appliedCountry, setAppliedCountry] = useState("sg");
+  const [appliedLocation, setAppliedLocation] = useState("");
+  const [appliedFullTime, setAppliedFullTime] = useState(false);
+  const [appliedPermanent, setAppliedPermanent] = useState(false);
+  const [appliedSalaryMin, setAppliedSalaryMin] = useState("");
+  const [appliedSortBy, setAppliedSortBy] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
 
   const filters: ListingsFilters = useMemo(() => {
     const f: ListingsFilters = {};
-    const where = locationInput.trim() || undefined;
+    const where = appliedLocation.trim() || undefined;
     if (where) f.where = where;
-    if (fullTime) f.fullTime = true;
-    if (permanent) f.permanent = true;
-    const min = parseInt(salaryMin, 10);
+    if (appliedFullTime) f.fullTime = true;
+    if (appliedPermanent) f.permanent = true;
+    const min = parseInt(appliedSalaryMin, 10);
     if (!Number.isNaN(min) && min > 0) f.salaryMin = min;
-    if (sortBy) f.sortBy = sortBy;
+    if (appliedSortBy) f.sortBy = appliedSortBy;
     return f;
-  }, [locationInput, fullTime, permanent, salaryMin, sortBy]);
+  }, [appliedLocation, appliedFullTime, appliedPermanent, appliedSalaryMin, appliedSortBy]);
 
-  const resetPage = useCallback(() => setPage(1), []);
+  const filteredSuggestions = useMemo(() => {
+    const q = searchInput.trim().toLowerCase();
+    if (!q) return SUGGESTED_ROLES.slice(0, 10);
+    return SUGGESTED_ROLES.filter((role) =>
+      role.toLowerCase().includes(q)
+    ).slice(0, 12);
+  }, [searchInput]);
+
+  /** Copy draft filters to applied and refetch (query key change). */
+  const handleApplyFilters = useCallback(() => {
+    setAppliedCountry(country);
+    setAppliedLocation(locationInput.trim());
+    setAppliedFullTime(fullTime);
+    setAppliedPermanent(permanent);
+    setAppliedSalaryMin(salaryMin);
+    setAppliedSortBy(sortBy);
+    setPage(1);
+  }, [country, locationInput, fullTime, permanent, salaryMin, sortBy]);
+
+  /** Reset draft and applied filters to defaults and refetch. */
+  const handleResetFilters = useCallback(() => {
+    setCountry("sg");
+    setLocationInput("");
+    setFullTime(false);
+    setPermanent(false);
+    setSalaryMin("");
+    setSortBy("");
+    setAppliedCountry("sg");
+    setAppliedLocation("");
+    setAppliedFullTime(false);
+    setAppliedPermanent(false);
+    setAppliedSalaryMin("");
+    setAppliedSortBy("");
+    setPage(1);
+  }, []);
+
+  /** Reset highlighted index when input or filtered list changes. */
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [searchInput, filteredSuggestions.length]);
 
   /** Focus search when user presses '/' (unless they're typing in an input). */
   useEffect(() => {
@@ -115,9 +177,24 @@ function JobsContent() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  /** Close suggestions dropdown when clicking outside the search wrapper. */
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (
+        searchDropdownRef.current &&
+        !searchDropdownRef.current.contains(e.target as Node)
+      ) {
+        setSuggestionsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [suggestionsOpen]);
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: listingsKeys(
-      country,
+      appliedCountry,
       page,
       keyword || undefined,
       Object.keys(filters).length > 0 ? filters : null
@@ -126,7 +203,7 @@ function JobsContent() {
       fetchListings(
         page,
         keyword || undefined,
-        country,
+        appliedCountry,
         Object.keys(filters).length > 0 ? filters : undefined
       ),
     enabled: hasSearched,
@@ -142,6 +219,51 @@ function JobsContent() {
       setHasSearched(true);
     },
     [searchInput]
+  );
+
+  const selectSuggestion = useCallback((role: string) => {
+    setSearchInput(role);
+    setKeyword(role);
+    setPage(1);
+    setHasSearched(true);
+    setSuggestionsOpen(false);
+  }, []);
+
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!suggestionsOpen || filteredSuggestions.length === 0) {
+        if (e.key === "Escape") setSuggestionsOpen(false);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSuggestionsOpen(false);
+        searchInputRef.current?.blur();
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightedIndex((i) =>
+          Math.min(i + 1, filteredSuggestions.length - 1)
+        );
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightedIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        selectSuggestion(filteredSuggestions[highlightedIndex]);
+      }
+    },
+    [
+      suggestionsOpen,
+      filteredSuggestions,
+      highlightedIndex,
+      selectSuggestion,
+    ]
   );
 
   const listings = data?.listings ?? [];
@@ -188,6 +310,7 @@ function JobsContent() {
               </div>
               <Button
                 type="submit"
+                variant="default"
                 size="xs"
                 className="h-9 shrink-0 rounded-l-none rounded-r-xl border-0 px-4"
                 aria-label="Search"
@@ -211,11 +334,11 @@ function JobsContent() {
           ) : scrolled ? (
             <Button
               asChild
-              variant="outline"
+              variant="header"
               size="xs"
-              className="rounded-xl border-white bg-transparent px-4 text-sm text-white hover:bg-white/10 focus-visible:ring-white/50"
+              className="rounded-xl px-4 text-sm"
             >
-              <Link href="/?auth=login">Sign In</Link>
+              <AuthModalLink auth="login">Sign In</AuthModalLink>
             </Button>
           ) : (
             <Button
@@ -224,7 +347,7 @@ function JobsContent() {
               size="xs"
               className="rounded-xl px-4 text-sm"
             >
-              <Link href="/?auth=login">Sign In</Link>
+              <AuthModalLink auth="login">Sign In</AuthModalLink>
             </Button>
           )}
         </nav>
@@ -236,7 +359,7 @@ function JobsContent() {
           aria-label="Perform a job search"
         >
           <form onSubmit={handleSearch} className="space-y-4">
-            <div className="flex">
+            <div ref={searchDropdownRef} className="relative flex flex-col">
               <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
                 <div className="relative flex min-w-0 flex-1">
                   <MagnifyingGlassIcon
@@ -249,8 +372,15 @@ function JobsContent() {
                     placeholder="Job title, skills or company"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
+                    onFocus={() => setSuggestionsOpen(true)}
+                    onBlur={() =>
+                      setTimeout(() => setSuggestionsOpen(false), 150)
+                    }
+                    onKeyDown={handleSearchKeyDown}
                     className="h-9 min-w-0 flex-1 rounded-none border-0 border-r-0 bg-transparent pl-10 pr-9 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
                     aria-label="Search jobs"
+                    aria-expanded={suggestionsOpen}
+                    aria-controls="job-suggestions-listbox"
                   />
                   <span
                     className="pointer-events-none absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground"
@@ -261,6 +391,7 @@ function JobsContent() {
                 </div>
                 <Button
                   type="submit"
+                  variant="default"
                   size="xs"
                   className="h-9 shrink-0 rounded-l-none rounded-r-xl border-0 px-4"
                   aria-label="Search"
@@ -268,31 +399,35 @@ function JobsContent() {
                   Search
                 </Button>
               </div>
+              {suggestionsOpen && filteredSuggestions.length > 0 && (
+                <div
+                  id="job-suggestions-listbox"
+                  role="listbox"
+                  aria-label="Suggested roles"
+                  className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-lg scrollbar-hide"
+                >
+                  {filteredSuggestions.map((role, i) => (
+                    <button
+                      key={role}
+                      type="button"
+                      role="option"
+                      aria-selected={highlightedIndex === i}
+                      className={cn(
+                        "w-full px-3 py-2 text-left text-sm rounded-lg",
+                        highlightedIndex === i ? "bg-muted" : "hover:bg-muted"
+                      )}
+                      onClick={() => selectSuggestion(role)}
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </form>
-          <div className="flex flex-wrap gap-2 pt-2">
-            {QUICK_SEARCH_PILLS.map((label) => (
-              <Button
-                key={label}
-                type="button"
-                variant="outline"
-                size="xs"
-                className="rounded-full"
-                aria-label={`Search for ${label}`}
-                onClick={() => {
-                  setSearchInput(label);
-                  setKeyword(label);
-                  setPage(1);
-                  setHasSearched(true);
-                }}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
         </section>
 
-        {!hasSearched && (
+        {!hasSearched && user && (
           <section
             aria-label="Empty state"
             className="mx-auto flex max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center"
@@ -302,8 +437,8 @@ function JobsContent() {
               aria-hidden
             />
             <p className="text-muted-foreground">
-              Search for jobs above to get started. Enter a job title, skills, or
-              company to find listings.
+              Search for jobs above to get started. Enter a job title, skills,
+              or company to find listings.
             </p>
           </section>
         )}
@@ -366,7 +501,9 @@ function JobsContent() {
                 size="default"
                 iconRight={<ArrowRightIcon weight="bold" />}
               >
-                <Link href="/?auth=signup&redirect=/jobs">Get Started</Link>
+                <AuthModalLink auth="signup" redirect="/jobs">
+                  Get Started
+                </AuthModalLink>
               </Button>
             </div>
           </section>
@@ -414,10 +551,7 @@ function JobsContent() {
                     <Select
                       id="results-sort"
                       value={sortBy}
-                      onChange={(v) => {
-                        setSortBy(v);
-                        resetPage();
-                      }}
+                      onChange={(v) => setSortBy(v)}
                       options={SORT_OPTIONS}
                       aria-label="Sort results"
                       fullWidth={false}
@@ -443,10 +577,7 @@ function JobsContent() {
                     <Select
                       id="search-country"
                       value={country}
-                      onChange={(v) => {
-                        setCountry(v);
-                        resetPage();
-                      }}
+                      onChange={(v) => setCountry(v)}
                       options={JOB_SEARCH_COUNTRIES.map((c) => ({
                         value: c.code,
                         label: c.label,
@@ -468,10 +599,7 @@ function JobsContent() {
                       type="text"
                       placeholder="e.g. Singapore, Central"
                       value={locationInput}
-                      onChange={(e) => {
-                        setLocationInput(e.target.value);
-                        resetPage();
-                      }}
+                      onChange={(e) => setLocationInput(e.target.value)}
                       className="mt-1 w-40"
                       aria-label="Location"
                     />
@@ -480,10 +608,7 @@ function JobsContent() {
                     <input
                       type="checkbox"
                       checked={fullTime}
-                      onChange={(e) => {
-                        setFullTime(e.target.checked);
-                        resetPage();
-                      }}
+                      onChange={(e) => setFullTime(e.target.checked)}
                       className="h-4 w-4 rounded border-border"
                       aria-label="Full-time only"
                     />
@@ -493,10 +618,7 @@ function JobsContent() {
                     <input
                       type="checkbox"
                       checked={permanent}
-                      onChange={(e) => {
-                        setPermanent(e.target.checked);
-                        resetPage();
-                      }}
+                      onChange={(e) => setPermanent(e.target.checked)}
                       className="h-4 w-4 rounded border-border"
                       aria-label="Permanent only"
                     />
@@ -515,13 +637,30 @@ function JobsContent() {
                       min={0}
                       placeholder="e.g. 50000"
                       value={salaryMin}
-                      onChange={(e) => {
-                        setSalaryMin(e.target.value);
-                        resetPage();
-                      }}
+                      onChange={(e) => setSalaryMin(e.target.value)}
                       className="mt-1 w-28"
                       aria-label="Minimum salary"
                     />
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResetFilters}
+                      aria-label="Reset filters"
+                    >
+                      Reset
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      onClick={handleApplyFilters}
+                      aria-label="Apply filters"
+                    >
+                      Apply
+                    </Button>
                   </div>
                 </div>
               )}
@@ -592,5 +731,9 @@ function JobsContent() {
 
 /** Jobs page: browse listings without login; Log in for save and AI summaries. */
 export default function JobsPage() {
-  return <JobsContent />;
+  return (
+    <Suspense fallback={null}>
+      <JobsContent />
+    </Suspense>
+  );
 }

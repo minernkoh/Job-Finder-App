@@ -4,8 +4,9 @@
 
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { ArrowRightIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,12 +31,14 @@ function getErrorMessage(err: unknown, fallback: string): string {
 
 /** Admin sign up and log in form: two tabs; sign up uses admin secret; login only allows admin role. */
 function AdminForm() {
+  const router = useRouter();
   const [tab, setTab] = useState<AuthTab>("login");
   const { setToken, setUser, login, isLoading } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [adminSecret, setAdminSecret] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -95,6 +98,8 @@ function AdminForm() {
   return (
     <AuthCard
       title="Admin"
+      hideTitle
+      onClose={() => router.push("/jobs")}
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Admin access only.
@@ -120,15 +125,30 @@ function AdminForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="admin-login-password">Password</Label>
-            <Input
-              id="admin-login-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              disabled={submitting || isLoading}
-            />
+            <div className="relative">
+              <Input
+                id="admin-login-password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                disabled={submitting || isLoading}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeSlashIcon className="size-5" weight="regular" />
+                ) : (
+                  <EyeIcon className="size-5" weight="regular" />
+                )}
+              </button>
+            </div>
           </div>
           {error && (
             <p className="text-sm text-destructive" role="alert">
@@ -137,6 +157,7 @@ function AdminForm() {
           )}
           <Button
             type="submit"
+            size="lg"
             className="w-full"
             disabled={submitting || isLoading}
           >
@@ -173,16 +194,31 @@ function AdminForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="admin-signup-password">Password</Label>
-            <Input
-              id="admin-signup-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              autoComplete="new-password"
-              disabled={submitting || isLoading}
-            />
+            <div className="relative">
+              <Input
+                id="admin-signup-password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                disabled={submitting || isLoading}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeSlashIcon className="size-5" weight="regular" />
+                ) : (
+                  <EyeIcon className="size-5" weight="regular" />
+                )}
+              </button>
+            </div>
             {password.length > 0 && (
               <p className="text-xs text-muted-foreground">
                 Strength: {passwordStrength === 1 && "Weak (min 8 characters)"}
@@ -212,6 +248,7 @@ function AdminForm() {
           <Button
             type="submit"
             variant="cta"
+            size="lg"
             className="w-full"
             disabled={submitting || isLoading}
             iconRight={

@@ -17,6 +17,8 @@ export interface IListingDocument {
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
+  /** When the job was posted (from Adzuna created). Optional; existing cached docs may not have it. */
+  postedAt?: Date;
   salaryMin?: number;
   salaryMax?: number;
 }
@@ -32,6 +34,7 @@ const ListingSchema = new Schema<IListingDocument>(
     sourceId: { type: String, required: true },
     country: { type: String, required: true, default: "sg" },
     expiresAt: { type: Date, required: true },
+    postedAt: { type: Date },
     salaryMin: { type: Number },
     salaryMax: { type: Number },
   },

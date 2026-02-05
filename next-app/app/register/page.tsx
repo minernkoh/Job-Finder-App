@@ -1,5 +1,5 @@
 /**
- * Register page: redirects to home with signup modal open (?auth=signup). Preserves ?redirect= if present.
+ * Register page: redirects to jobs page with signup modal open (?auth=signup). Preserves ?redirect= if present.
  */
 
 import { redirect } from "next/navigation";
@@ -8,7 +8,7 @@ interface RegisterPageProps {
   searchParams?: Promise<{ redirect?: string }> | { redirect?: string };
 }
 
-/** Redirects to the homepage with the signup modal open; preserves redirect query for post-register redirect. */
+/** Redirects to the jobs page with the signup modal open; preserves redirect query for post-register redirect. */
 export default async function RegisterPage({
   searchParams,
 }: RegisterPageProps) {
@@ -16,5 +16,5 @@ export default async function RegisterPage({
   const redirectTo = params.redirect
     ? `&redirect=${encodeURIComponent(params.redirect)}`
     : "";
-  redirect(`/?auth=signup${redirectTo}`);
+  redirect(`/jobs?auth=signup${redirectTo}`);
 }

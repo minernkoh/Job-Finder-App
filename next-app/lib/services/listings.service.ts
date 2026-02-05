@@ -29,6 +29,13 @@ export interface ListingsFilters {
   sortBy?: string;
 }
 
+/** Parses Adzuna created ISO string to Date; returns undefined if missing or invalid. */
+function parsePostedAt(created: string | undefined): Date | undefined {
+  if (!created?.trim()) return undefined;
+  const d = new Date(created);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
 /** Builds cache key from search params for deduplication. */
 function buildCacheKey(
   country: string,
@@ -60,6 +67,7 @@ function docToListingResult(doc: {
   description?: string;
   sourceUrl?: string;
   country: string;
+  postedAt?: Date;
   salaryMin?: number;
   salaryMax?: number;
 }): ListingResult {
@@ -72,6 +80,7 @@ function docToListingResult(doc: {
     source: "adzuna",
     sourceUrl: doc.sourceUrl,
     country: doc.country,
+    postedAt: doc.postedAt,
     salaryMin: doc.salaryMin,
     salaryMax: doc.salaryMax,
   };
@@ -92,6 +101,7 @@ function jobToListingResult(
     source: "adzuna",
     sourceUrl: job.redirect_url,
     country,
+    postedAt: parsePostedAt(job.created),
     salaryMin: job.salary_min,
     salaryMax: job.salary_max,
   };
@@ -103,6 +113,7 @@ function normalizeAdzunaJob(
   country: string,
   expiresAt: Date
 ): Omit<IListingDocument, "_id" | "createdAt" | "updatedAt"> {
+  const postedAt = parsePostedAt(job.created);
   return {
     title: job.title,
     company: job.company?.display_name ?? "Unknown",
@@ -113,6 +124,7 @@ function normalizeAdzunaJob(
     sourceId: String(job.id),
     country,
     expiresAt,
+    ...(postedAt && { postedAt }),
     salaryMin: job.salary_min,
     salaryMax: job.salary_max,
   };

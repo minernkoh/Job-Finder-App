@@ -16,7 +16,7 @@ import { cn } from "@ui/components/lib/utils";
 import { ProtectedRoute } from "@/components/protected-route";
 import { createSummary } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 
 const eyebrowClass = "text-xs uppercase tracking-widest text-muted-foreground";
 
@@ -205,8 +205,10 @@ function SummarizeContent() {
 /** Summarize page: protected. */
 export default function SummarizePage() {
   return (
-    <ProtectedRoute>
-      <SummarizeContent />
-    </ProtectedRoute>
+    <Suspense fallback={null}>
+      <ProtectedRoute>
+        <SummarizeContent />
+      </ProtectedRoute>
+    </Suspense>
   );
 }

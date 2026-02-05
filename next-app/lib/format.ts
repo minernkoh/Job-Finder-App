@@ -47,3 +47,26 @@ export function formatSalaryRange(
   if (max != null) return `Up to ${fmt(max)}`;
   return null;
 }
+
+/** Formats a job posted date for display: relative for recent, absolute for older. Returns null if no valid date. */
+export function formatPostedDate(
+  date: Date | string | undefined
+): string | null {
+  if (date == null) return null;
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  const ms = now.getTime() - d.getTime();
+  const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+  if (days < 0) return "Today";
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 14) return "1 week ago";
+  if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+  return d.toLocaleDateString("en-SG", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}

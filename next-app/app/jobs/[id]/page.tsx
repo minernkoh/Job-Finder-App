@@ -6,11 +6,11 @@
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { AuthModalLink } from "@/components/auth-modal-link";
 import { Logo } from "@/components/logo";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
-  ArrowRightIcon,
   BookmarkIcon,
   BookmarkSimpleIcon,
   SparkleIcon,
@@ -18,7 +18,7 @@ import {
 import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatSalaryRange } from "@/lib/format";
+import { formatPostedDate, formatSalaryRange } from "@/lib/format";
 import { fetchListing, recordListingView } from "@/lib/api/listings";
 import { createSummary } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
@@ -190,12 +190,11 @@ function JobDetailsContent() {
           ) : (
             <Button
               asChild
-              variant="cta"
+              variant="default"
               size="xs"
               className="rounded-xl px-4 text-sm"
-              iconRight={<ArrowRightIcon weight="bold" />}
             >
-              <Link href="/?auth=login">Sign In</Link>
+              <AuthModalLink auth="login">Sign In</AuthModalLink>
             </Button>
           )}
         </nav>
@@ -264,9 +263,48 @@ function JobDetailsContent() {
               {listing.country.toUpperCase()}
             </span>
           )}
+          {(() => {
+            const posted = formatPostedDate(listing.postedAt);
+            return posted ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Posted {posted}
+              </p>
+            ) : null;
+          })()}
         </div>
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[3fr_1fr] lg:items-start">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-start">
+          {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
+            <section className="space-y-2 lg:sticky lg:top-4">
+              <h2 className={cn(eyebrowClass, "mb-2")}>Description</h2>
+              <Card variant="elevated" className="text-sm">
+                {sanitizedDescription.length > 0 && (
+                  <CardContent
+                    className="p-4 text-foreground [&_a]:text-primary [&_a]:underline [&_a]:hover:opacity-80 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-0.5 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_b]:font-semibold"
+                    dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
+                  />
+                )}
+                {listing.sourceUrl && (
+                  <div
+                    className={cn(
+                      "px-4 pb-4",
+                      sanitizedDescription.length > 0 && "border-t border-border pt-4"
+                    )}
+                  >
+                    <a
+                      href={listing.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block text-sm text-primary hover:underline"
+                    >
+                      View original posting
+                    </a>
+                  </div>
+                )}
+              </Card>
+            </section>
+          )}
+
           <section className="space-y-3">
             <h2 className={eyebrowClass}>AI Summary</h2>
             {summary ? (
@@ -291,40 +329,16 @@ function JobDetailsContent() {
                 )}
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                <Link
-                  href={`/?auth=login&redirect=${encodeURIComponent(`/jobs/${id}`)}`}
-                  className="text-primary underline-offset-4 hover:underline"
+              <Button asChild variant="default" size="sm">
+                <AuthModalLink
+                  auth="login"
+                  redirect={id ? `/jobs/${id}` : undefined}
                 >
                   Log in to get AI summaries
-                </Link>
-              </p>
+                </AuthModalLink>
+              </Button>
             )}
           </section>
-
-          {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
-            <section className="space-y-2 lg:sticky lg:top-4">
-              <h2 className={cn(eyebrowClass, "mb-2")}>Description</h2>
-              {sanitizedDescription.length > 0 && (
-                <Card variant="elevated" className="text-sm">
-                  <CardContent
-                    className="p-4 text-foreground [&_a]:text-primary [&_a]:underline [&_a]:hover:opacity-80 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-0.5 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_b]:font-semibold"
-                    dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
-                  />
-                </Card>
-              )}
-              {listing.sourceUrl && (
-                <a
-                  href={listing.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block text-sm text-primary hover:underline"
-                >
-                  View original posting
-                </a>
-              )}
-            </section>
-          )}
         </div>
       </main>
     </div>
