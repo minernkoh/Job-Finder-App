@@ -6,9 +6,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { UserUpdateSchema } from "@schemas";
-import { toErrorResponse } from "@/lib/api/errors";
+import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
 import { requireAuth } from "@/lib/auth/request";
-import mongoose from "mongoose";
+import { isValidObjectId } from "@/lib/objectid";
 
 /** Returns user if requester is the user or admin; otherwise 403. */
 export async function GET(
@@ -30,7 +30,7 @@ export async function GET(
       );
     }
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid user id" },
         { status: 400 }
@@ -82,7 +82,7 @@ export async function PATCH(
       );
     }
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid user id" },
         { status: 400 }
@@ -91,16 +91,7 @@ export async function PATCH(
 
     const body = await request.json();
     const parsed = UserUpdateSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid input",
-          errors: parsed.error.flatten(),
-        },
-        { status: 400 }
-      );
-    }
+    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");
 
     await connectDB();
     const user = await User.findById(id);

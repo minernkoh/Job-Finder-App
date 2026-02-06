@@ -18,5 +18,5 @@ export default async function Home({ searchParams }: HomePageProps) {
     q.set(key, Array.isArray(value) ? value[0] : value);
   }
   const query = q.toString();
-  redirect(query ? `/jobs?${query}` : "/jobs");
+  redirect(query ? `/browse?${query}` : "/browse");
 }

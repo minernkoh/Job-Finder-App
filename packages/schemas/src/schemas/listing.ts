@@ -41,3 +41,10 @@ export const ListingResultSchema = z.object({
 });
 
 export type ListingResult = z.infer<typeof ListingResultSchema>;
+
+/** Query params for admin GET listings list (pagination). */
+export const AdminListingsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+});
+export type AdminListingsQuery = z.infer<typeof AdminListingsQuerySchema>;

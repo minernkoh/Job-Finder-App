@@ -14,5 +14,5 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const redirectTo = params.redirect
     ? `&redirect=${encodeURIComponent(params.redirect)}`
     : "";
-  redirect(`/jobs?auth=login${redirectTo}`);
+  redirect(`/browse?auth=login${redirectTo}`);
 }

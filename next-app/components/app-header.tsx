@@ -1,10 +1,11 @@
 /**
- * Shared app header: logo left; optional back link and title; nav right (Jobs, My Jobs, Sign in / UserMenu). Ensures consistency across Jobs, My Jobs, Compare, and Job detail pages.
+ * Shared app header: logo left; optional back link and title; nav right (Browse Jobs, Profile, Sign in / UserMenu). Ensures consistency across Browse, Profile, Compare, and Job detail pages.
  */
 
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Button } from "@ui/components";
 import { Logo } from "@/components/logo";
 import { UserMenu } from "@/components/user-menu";
@@ -14,11 +15,11 @@ import { cn } from "@ui/components/lib/utils";
 import type { AuthUser } from "@/contexts/AuthContext";
 
 export interface AppHeaderProps {
-  /** Optional back link (e.g. /jobs with label "Back to jobs"). */
+  /** Optional back link (e.g. /browse with label "Back to browse"). */
   backHref?: string;
   /** Label for the back link. */
   backLabel?: string;
-  /** Optional page title shown next to logo (e.g. "My Jobs", "Compare jobs"). */
+  /** Optional page title shown next to logo (e.g. "Profile", "Compare jobs"). */
   title?: string;
   /** Current user; when null, show Sign in. */
   user: AuthUser | null;
@@ -28,7 +29,7 @@ export interface AppHeaderProps {
   className?: string;
 }
 
-/** Renders the app nav bar: logo (and optional back + title) left; Jobs, My Jobs, Sign in / UserMenu right. */
+/** Renders the app nav bar: logo (and optional back + title) left; Browse Jobs, Profile, Sign in / UserMenu right. Active nav link is highlighted. */
 export function AppHeader({
   backHref,
   backLabel,
@@ -37,6 +38,16 @@ export function AppHeader({
   onLogout,
   className,
 }: AppHeaderProps) {
+  const pathname = usePathname() ?? "";
+  const isBrowse = pathname === "/browse" || pathname.startsWith("/browse/");
+  const isProfile = pathname === "/profile" || pathname.startsWith("/profile/");
+
+  const navLinkClass = (active: boolean) =>
+    cn(
+      "text-sm underline-offset-4 hover:underline",
+      active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
+    );
+
   return (
     <header
       className={cn(
@@ -69,18 +80,12 @@ export function AppHeader({
           )}
         </div>
         <nav className="flex shrink-0 items-center gap-3">
-          <Link
-            href="/jobs"
-            className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-          >
-            Jobs
+          <Link href="/browse" className={navLinkClass(isBrowse)}>
+            Browse Jobs
           </Link>
           {user && (
-            <Link
-              href="/my-jobs"
-              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              My Jobs
+            <Link href="/profile" className={navLinkClass(isProfile)}>
+              Profile
             </Link>
           )}
           {user ? (

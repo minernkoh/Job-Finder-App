@@ -21,7 +21,7 @@ interface ListingCardProps {
   onUnsave?: () => void;
   onView?: () => void;
   showTrendingBadge?: boolean;
-  /** Override link href (e.g. /jobs?job=id for split layout). */
+  /** Override link href (e.g. /browse?job=id for split layout). */
   href?: string;
   /** Add this listing to the compare set (max 3). */
   onAddToCompare?: () => void;
@@ -44,7 +44,7 @@ export function ListingCard({
   isInCompareSet = false,
   compareSetSize = 0,
 }: ListingCardProps) {
-  const cardHref = href ?? `/jobs/${listing.id}`;
+  const cardHref = href ?? `/browse/${listing.id}`;
   const compareSetFull = compareSetSize >= 3;
   const canAddToCompare =
     onAddToCompare && (isInCompareSet || !compareSetFull);

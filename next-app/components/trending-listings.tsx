@@ -1,5 +1,5 @@
 /**
- * Trending listings: fetches and displays top trending job listings. Shown at top of /jobs page.
+ * Trending listings: fetches and displays top trending job listings. Shown at top of /browse page.
  */
 
 "use client";

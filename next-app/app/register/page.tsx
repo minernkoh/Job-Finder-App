@@ -16,5 +16,5 @@ export default async function RegisterPage({
   const redirectTo = params.redirect
     ? `&redirect=${encodeURIComponent(params.redirect)}`
     : "";
-  redirect(`/jobs?auth=signup${redirectTo}`);
+  redirect(`/browse?auth=signup${redirectTo}`);
 }

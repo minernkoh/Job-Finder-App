@@ -107,6 +107,26 @@ body {
   color: transparent;
 }
 
+/* Skip link: visible on focus for keyboard/screen reader users */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  z-index: 9999;
+  padding: 0.75rem 1rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--radius-lg);
+  transition: left 0.15s ease, top 0.15s ease;
+}
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
 /* Hide scrollbar while keeping scroll behavior (horizontal lists, etc.) */
 .scrollbar-hide {
   -ms-overflow-style: none;

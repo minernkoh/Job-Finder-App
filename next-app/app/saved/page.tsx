@@ -1,10 +1,10 @@
 /**
- * Legacy /saved route: redirects to /my-jobs so bookmarks and links keep working.
+ * Legacy /saved route: redirects to /profile so bookmarks and links keep working.
  */
 
 import { redirect } from "next/navigation";
 
-/** Redirects /saved to /my-jobs. */
+/** Redirects /saved to /profile. */
 export default function SavedPage() {
-  redirect("/my-jobs");
+  redirect("/profile");
 }

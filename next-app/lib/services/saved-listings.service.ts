@@ -5,6 +5,7 @@
 import type { SavedListingResult, SaveListingBody } from "@schemas";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
+import { parseObjectId } from "@/lib/objectid";
 import { SavedListing } from "@/lib/models/SavedListing";
 import { getListingById } from "./listings.service";
 
@@ -63,10 +64,11 @@ export async function unsaveListing(
   listingId: string
 ): Promise<boolean> {
   await connectDB();
-  if (!mongoose.Types.ObjectId.isValid(listingId)) return false;
+  const lid = parseObjectId(listingId);
+  if (!lid) return false;
   const result = await SavedListing.deleteOne({
     userId: new mongoose.Types.ObjectId(userId),
-    listingId: new mongoose.Types.ObjectId(listingId),
+    listingId: lid,
   });
   return (result.deletedCount ?? 0) > 0;
 }
@@ -77,10 +79,11 @@ export async function isListingSaved(
   listingId: string
 ): Promise<boolean> {
   await connectDB();
-  if (!mongoose.Types.ObjectId.isValid(listingId)) return false;
+  const lid = parseObjectId(listingId);
+  if (!lid) return false;
   const doc = await SavedListing.findOne({
     userId: new mongoose.Types.ObjectId(userId),
-    listingId: new mongoose.Types.ObjectId(listingId),
+    listingId: lid,
   }).lean();
   return !!doc;
 }

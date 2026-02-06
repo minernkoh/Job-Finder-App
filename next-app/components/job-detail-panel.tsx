@@ -63,13 +63,30 @@ function SummaryPanel({ summary }: { summary: SummaryWithId }) {
             {summary.salarySgd}
           </p>
         )}
-        {summary.skillsFutureKeywords &&
-          summary.skillsFutureKeywords.length > 0 && (
+        {summary.jdMatch && (
+          <div className="space-y-1">
             <p className="text-foreground">
-              <span className={cn(eyebrowClass)}>SkillsFuture: </span>
-              {summary.skillsFutureKeywords.join(", ")}
+              <span className={eyebrowClass}>Match to your skills: </span>
+              {typeof summary.jdMatch.matchScore === "number" && (
+                <span className="font-medium">{summary.jdMatch.matchScore}%</span>
+              )}
             </p>
-          )}
+            {summary.jdMatch.matchedSkills &&
+              summary.jdMatch.matchedSkills.length > 0 && (
+                <p className="text-foreground text-xs">
+                  <span className={eyebrowClass}>Matched: </span>
+                  {summary.jdMatch.matchedSkills.join(", ")}
+                </p>
+              )}
+            {summary.jdMatch.missingSkills &&
+              summary.jdMatch.missingSkills.length > 0 && (
+                <p className="text-muted-foreground text-xs">
+                  <span className={eyebrowClass}>Missing: </span>
+                  {summary.jdMatch.missingSkills.join(", ")}
+                </p>
+              )}
+          </div>
+        )}
         {summary.caveats && summary.caveats.length > 0 && (
           <p className="text-muted-foreground text-xs">
             <span className={eyebrowClass}>Caveats: </span>
@@ -86,7 +103,7 @@ export interface JobDetailPanelProps {
   listingId: string;
   /** Ordered list of listing IDs for prev/next navigation; when provided with basePath, shows prev/next and arrow keys. */
   listingIdsForNav?: string[];
-  /** Base path for ?job= URLs (e.g. /jobs or /my-jobs). When set with listingIdsForNav, prev/next update this path. */
+  /** Base path for ?job= URLs (e.g. /browse or /profile). When set with listingIdsForNav, prev/next update this path. */
   basePath?: string;
   /** Whether to show a compact toolbar (e.g. in split panel) vs full header. */
   compact?: boolean;
@@ -183,10 +200,10 @@ export function JobDetailPanel({
   const navigateToJob = useCallback(
     (id: string) => {
       if (!basePath) return;
-      if (basePath === "/jobs") {
+      if (basePath === "/browse") {
         const next = new URLSearchParams(searchParams?.toString() ?? "");
         next.set("job", id);
-        router.replace(`/jobs?${next.toString()}`);
+        router.replace(`/browse?${next.toString()}`);
       } else {
         router.replace(`${basePath}?job=${id}`);
       }
@@ -226,10 +243,10 @@ export function JobDetailPanel({
       <div className="p-4 sm:p-6">
         <p className="text-destructive">Listing not found.</p>
         <Link
-          href="/jobs"
+          href="/browse"
           className="mt-4 inline-block text-primary hover:underline"
         >
-          Back to jobs
+          Back to browse
         </Link>
       </div>
     );
@@ -242,7 +259,7 @@ export function JobDetailPanel({
           {/* Group: Back, Save, Add to compare */}
           {basePath && (
             <Link
-              href={basePath === "/jobs" ? "/jobs" : basePath}
+              href={basePath === "/browse" ? "/browse" : basePath}
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeftIcon size={16} />
@@ -291,7 +308,7 @@ export function JobDetailPanel({
           {/* Group: Open links */}
           <span className="inline-flex items-center gap-2 border-l border-border pl-3">
             <Link
-              href={`/jobs/${listingId}`}
+              href={`/browse/${listingId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-muted-foreground hover:text-foreground"
@@ -299,7 +316,7 @@ export function JobDetailPanel({
               Open in new tab
             </Link>
             <Link
-              href={`/jobs/${listingId}`}
+              href={`/browse/${listingId}`}
               className="text-sm text-primary hover:underline"
             >
               Open full page
@@ -433,7 +450,7 @@ export function JobDetailPanel({
               <Button asChild variant="default" size="sm">
                 <AuthModalLink
                   auth="login"
-                  redirect={listingId ? `/jobs/${listingId}` : undefined}
+                  redirect={listingId ? `/browse/${listingId}` : undefined}
                 >
                   Log in to get AI summaries
                 </AuthModalLink>

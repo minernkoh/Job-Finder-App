@@ -19,6 +19,7 @@ import {
   type IAISummaryDocument,
 } from "@/lib/models/AISummary";
 import { getListingById } from "./listings.service";
+import { getProfileByUserId } from "./resume.service";
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
@@ -48,25 +49,33 @@ function getGeminiModel() {
   return google("gemini-2.5-flash");
 }
 
-/** Generates a structured summary from job description text using Gemini with retries. */
+/** Generates a structured summary from job description text using Gemini with retries. Optionally includes jdMatch when userSkills are provided. */
 export async function generateSummaryWithRetry(
   inputText: string,
-  options?: { fromAdzunaPage?: boolean }
+  options?: { fromAdzunaPage?: boolean; userSkills?: string[] }
 ): Promise<AISummary> {
   const model = getGeminiModel();
   const fromAdzunaPage = options?.fromAdzunaPage === true;
+  const userSkills = options?.userSkills ?? [];
+  const hasUserSkills = userSkills.length > 0;
   const intro =
     fromAdzunaPage
       ? "You are scanning the job description of the Adzuna job posting below. The content may include some page layout or navigation; focus on the main job description and summarize it into a structured summary."
       : "You are a job summary assistant for the Singapore job market. Summarize the following job description into a structured summary.";
+  const jdMatchRules = hasUserSkills
+    ? `
+- The candidate's skills are: ${userSkills.join(", ")}. Compare the job description to these skills and output "jdMatch" with:
+  - matchScore: number 0-100 (how well the job matches the candidate's skills).
+  - matchedSkills: array of skills from the candidate list that appear relevant to the job.
+  - missingSkills: array of skills the job requires or prefers that are not in the candidate list (or empty if well matched).`
+    : "";
   const prompt = `${intro}
 
 Rules:
 - Provide a short tldr (2-3 sentences).
 - Extract key responsibilities, requirements, and nice-to-haves as arrays of strings.
 - If salary in SGD is mentioned, put it in salarySgd (e.g. "SGD 5,000 - 7,000").
-- If SkillsFuture-related keywords appear (e.g. skills, training, certifications), list them in skillsFutureKeywords.
-- Add caveats for missing or unclear information.
+- Add caveats for missing or unclear information.${jdMatchRules}
 - Output must match the schema exactly (tldr required; other fields optional).
 
 Job description:
@@ -157,7 +166,6 @@ function docToSummary(doc: IAISummaryDocument): AISummary & { id: string } {
     requirements: doc.requirements,
     niceToHaves: doc.niceToHaves,
     salarySgd: doc.salarySgd,
-    skillsFutureKeywords: doc.skillsFutureKeywords,
     jdMatch: doc.jdMatch,
     caveats: doc.caveats,
     inputTextHash: doc.inputTextHash,
@@ -199,7 +207,13 @@ export async function getOrCreateSummary(
     return docToSummary(existing as IAISummaryDocument);
   }
 
-  const generated = await generateSummaryWithRetry(text, { fromAdzunaPage });
+  const profile = await getProfileByUserId(userId);
+  const userSkills =
+    profile && profile.skills.length > 0 ? profile.skills : undefined;
+  const generated = await generateSummaryWithRetry(text, {
+    fromAdzunaPage,
+    userSkills,
+  });
   const parsed = AISummarySchema.safeParse(generated);
   const safe = parsed.success
     ? parsed.data
@@ -216,9 +230,6 @@ export async function getOrCreateSummary(
       : undefined,
     niceToHaves: Array.isArray(safe.niceToHaves) ? safe.niceToHaves : undefined,
     salarySgd: typeof safe.salarySgd === "string" ? safe.salarySgd : undefined,
-    skillsFutureKeywords: Array.isArray(safe.skillsFutureKeywords)
-      ? safe.skillsFutureKeywords
-      : undefined,
     jdMatch:
       safe.jdMatch &&
       typeof safe.jdMatch === "object" &&

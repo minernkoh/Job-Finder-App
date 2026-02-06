@@ -1,39 +1,16 @@
 /**
- * Job details page: full-page view with shared header and JobDetailPanel. Direct and shared links use this route.
+ * Legacy /jobs/[id] route: redirects to /browse/[id] so shared links keep working.
  */
 
-"use client";
+import { redirect } from "next/navigation";
 
-import { useParams, useRouter } from "next/navigation";
-import { AppHeader } from "@/components/app-header";
-import { JobDetailPanel } from "@/components/job-detail-panel";
-import { useAuth } from "@/contexts/AuthContext";
-import { CONTENT_MAX_W, PAGE_PX } from "@/lib/layout";
-import { cn } from "@ui/components/lib/utils";
+interface JobDetailRedirectProps {
+  params: Promise<{ id: string }>;
+}
 
-/** Full job details page: single header (logo, back, nav) plus JobDetailPanel. */
-export default function JobDetailsPage() {
-  const params = useParams();
-  const router = useRouter();
-  const id = (params?.id as string) ?? "";
-  const { user, logout } = useAuth();
-
-  if (!id) {
-    router.push("/jobs");
-    return null;
-  }
-
-  return (
-    <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
-      <AppHeader
-        backHref="/jobs"
-        backLabel="Back to jobs"
-        user={user}
-        onLogout={logout}
-      />
-      <main className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W)}>
-        <JobDetailPanel listingId={id} />
-      </main>
-    </div>
-  );
+/** Redirects /jobs/:id to /browse/:id. */
+export default async function JobDetailRedirectPage({ params }: JobDetailRedirectProps) {
+  const { id } = await params;
+  if (!id) redirect("/browse");
+  redirect(`/browse/${id}`);
 }

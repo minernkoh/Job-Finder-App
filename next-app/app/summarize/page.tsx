@@ -53,13 +53,6 @@ function SummaryPanel({ summary }: { summary: SummaryWithId }) {
             {summary.salarySgd}
           </p>
         )}
-        {summary.skillsFutureKeywords &&
-          summary.skillsFutureKeywords.length > 0 && (
-            <p className="text-foreground">
-              <span className={cn(eyebrowClass)}>SkillsFuture: </span>
-              {summary.skillsFutureKeywords.join(", ")}
-            </p>
-          )}
         {summary.caveats && summary.caveats.length > 0 && (
           <p className="text-muted-foreground text-xs">
             <span className={eyebrowClass}>Caveats: </span>
@@ -98,20 +91,21 @@ function SummarizeContent() {
   }
 
   return (
-    <div className="min-h-screen p-4">
-      <header className="mx-auto flex max-w-2xl items-center border-b border-border py-4">
+    <div className={cn("min-h-screen flex flex-col", "px-4 sm:px-6")}>
+      <header className="mx-auto flex w-full max-w-2xl items-center border-b border-border py-4">
         <Link
-          href="/jobs"
+          href="/browse"
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeftIcon size={16} />
-          Back to jobs
+          Back to browse
         </Link>
       </header>
 
       <main
+        id="main-content"
         className={cn(
-          "mx-auto space-y-8 py-8",
+          "mx-auto w-full flex-1 space-y-8 py-8",
           summary ? "max-w-5xl" : "max-w-2xl"
         )}
       >
@@ -194,7 +188,11 @@ function SummarizeContent() {
             >
               {mutation.isPending ? "Summarizing…" : "Summarize with AI"}
             </Button>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            )}
           </form>
         )}
       </main>

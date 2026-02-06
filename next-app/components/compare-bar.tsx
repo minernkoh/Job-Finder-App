@@ -18,7 +18,7 @@ export function CompareBar() {
   if (compareSet.length < 2) return null;
 
   const idsQuery = compareSet.join(",");
-  const viewHref = `/jobs/compare?ids=${encodeURIComponent(idsQuery)}`;
+  const viewHref = `/browse/compare?ids=${encodeURIComponent(idsQuery)}`;
 
   return (
     <div
@@ -27,11 +27,20 @@ export function CompareBar() {
       <div
         className={`mx-auto flex w-full flex-wrap items-center justify-between gap-3 ${CONTENT_MAX_W}`}
       >
-        <div className="flex items-center gap-2 text-sm text-foreground">
-          <ArrowsLeftRightIcon size={18} className="text-primary" />
-          <span>
-            {compareSet.length} job{compareSet.length !== 1 ? "s" : ""} selected
-          </span>
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <ArrowsLeftRightIcon size={18} className="text-primary" />
+            <span>
+              {compareSet.length} job{compareSet.length !== 1 ? "s" : ""} selected
+            </span>
+          </div>
+          {compareSet.length === 2 && (
+            <span className="text-xs text-muted-foreground">
+              Add one more job to compare all three side by side.
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
           {compareSet.map((id) => (
             <button
               key={id}

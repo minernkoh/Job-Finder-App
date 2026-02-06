@@ -13,7 +13,6 @@ export interface IAISummaryDocument {
   requirements?: string[];
   niceToHaves?: string[];
   salarySgd?: string;
-  skillsFutureKeywords?: string[];
   jdMatch?: {
     matchScore?: number;
     matchedSkills?: string[];
@@ -33,7 +32,6 @@ const AISummarySchema = new Schema<IAISummaryDocument>(
     requirements: [{ type: String }],
     niceToHaves: [{ type: String }],
     salarySgd: { type: String },
-    skillsFutureKeywords: [{ type: String }],
     jdMatch: {
       matchScore: Number,
       matchedSkills: [String],

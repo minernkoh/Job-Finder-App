@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { AdminRegisterSchema } from "@schemas";
+import { validationErrorResponse } from "@/lib/api/errors";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
@@ -14,16 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const parsed = AdminRegisterSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid input",
-          errors: parsed.error.flatten(),
-        },
-        { status: 400 }
-      );
-    }
+    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");
 
     const secret = process.env.ADMIN_REGISTER_SECRET;
     if (!secret || secret.length === 0) {

@@ -1,5 +1,5 @@
 /**
- * AI summary schema: TL;DR, responsibilities, requirements, SG signals (salary, SkillsFuture), and optional JD–skillset match.
+ * AI summary schema: TL;DR, responsibilities, requirements, SG signals (salary), and optional JD–skillset match.
  */
 
 import { z } from "zod";
@@ -20,8 +20,6 @@ export const AISummarySchema = z.object({
   niceToHaves: z.array(z.string()).optional(),
   /** SG signal: salary in SGD extracted by AI from description */
   salarySgd: z.string().optional(),
-  /** SG signal: SkillsFuture keywords */
-  skillsFutureKeywords: z.array(z.string()).optional(),
   /** JD–user skillset match (optional) */
   jdMatch: JDMatchSchema,
   caveats: z.array(z.string()).optional(),
@@ -70,3 +68,12 @@ export const CompareSummaryBodySchema = z.object({
 });
 
 export type CompareSummaryBody = z.infer<typeof CompareSummaryBodySchema>;
+
+/** Query params for admin GET summaries list (pagination and optional user filter). */
+export const AdminSummariesQuerySchema = z.object({
+  userId: z.string().optional(),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  sort: z.enum(["createdAt", "-createdAt"]).default("-createdAt"),
+});
+export type AdminSummariesQuery = z.infer<typeof AdminSummariesQuerySchema>;

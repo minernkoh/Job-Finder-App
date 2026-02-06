@@ -23,6 +23,11 @@ const UserSchema = new Schema<IUserDocument>(
       enum: ["admin", "user"] as UserRole[],
       default: "user",
     },
+    status: {
+      type: String,
+      enum: ["active", "suspended"],
+      default: "active",
+    },
   },
   { timestamps: true }
 );

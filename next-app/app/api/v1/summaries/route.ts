@@ -5,7 +5,7 @@
 import { CreateSummaryBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/request";
-import { toErrorResponse } from "@/lib/api/errors";
+import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
 import { getOrCreateSummary } from "@/lib/services/summaries.service";
 import { getEnv } from "@/lib/env";
 
@@ -25,16 +25,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const parsed = CreateSummaryBodySchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid body",
-          errors: parsed.error.flatten(),
-        },
-        { status: 400 }
-      );
-    }
+    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
 
     const summary = await getOrCreateSummary(payload.sub, parsed.data);
     return NextResponse.json({ success: true, data: summary });

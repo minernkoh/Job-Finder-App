@@ -8,12 +8,13 @@ import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import {
   ArrowRightIcon,
+  BookmarkIcon,
   EyeIcon,
   EyeSlashIcon,
   ArrowClockwiseIcon,
-  ChartBarIcon,
   FileTextIcon,
   UsersIcon,
+  UsersThreeIcon,
 } from "@phosphor-icons/react";
 import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
@@ -32,12 +33,28 @@ import {
 interface DashboardData {
   metrics: {
     totalUsers: number;
-    totalListings: number;
     totalSummaries: number;
-    totalSavedListings: number;
     summariesLast7Days: number;
     usersLast7Days: number;
-    topSkillsFutureKeywords?: string[];
+    viewsLast7Days: number;
+    savesLast7Days: number;
+    activeUsersLast7Days?: number;
+  };
+  wordCloud?: Array<{ word: string; count: number }>;
+  aiSummaryMetrics?: {
+    total: number;
+    last7Days: number;
+    withSalarySgd: number;
+    withJdMatch: number;
+    withKeyResponsibilities: number;
+    withRequirements: number;
+  };
+  jdMatchMetrics?: {
+    countWithMatch: number;
+    countWithoutMatch: number;
+    avgScore?: number;
+    medianScore?: number;
+    scoreBuckets?: Array<{ min: number; max: number; count: number }>;
   };
   summary: string;
 }
@@ -117,7 +134,7 @@ function AdminDashboard() {
 
   const m = data?.metrics;
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6 lg:p-8">
+    <div className="min-h-0">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold text-foreground">Admin dashboard</h1>
@@ -136,7 +153,7 @@ function AdminDashboard() {
           </Button>
         </div>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -151,17 +168,6 @@ function AdminDashboard() {
                   +{m.usersLast7Days} in last 7 days
                 </p>
               )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Listings
-              </CardTitle>
-              <ChartBarIcon className="size-4 text-muted-foreground" weight="regular" />
-            </CardHeader>
-            <CardContent>
-              <span className="text-2xl font-bold">{m?.totalListings ?? "—"}</span>
             </CardContent>
           </Card>
           <Card>
@@ -183,11 +189,37 @@ function AdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Saved listings
+                Listing views (7d)
               </CardTitle>
+              <EyeIcon className="size-4 text-muted-foreground" weight="regular" />
             </CardHeader>
             <CardContent>
-              <span className="text-2xl font-bold">{m?.totalSavedListings ?? "—"}</span>
+              <span className="text-2xl font-bold">{m?.viewsLast7Days ?? "—"}</span>
+              <p className="text-xs text-muted-foreground">views in last 7 days</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Saves (7d)
+              </CardTitle>
+              <BookmarkIcon className="size-4 text-muted-foreground" weight="regular" />
+            </CardHeader>
+            <CardContent>
+              <span className="text-2xl font-bold">{m?.savesLast7Days ?? "—"}</span>
+              <p className="text-xs text-muted-foreground">saves in last 7 days</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Active users (7d)
+              </CardTitle>
+              <UsersThreeIcon className="size-4 text-muted-foreground" weight="regular" />
+            </CardHeader>
+            <CardContent>
+              <span className="text-2xl font-bold">{m?.activeUsersLast7Days ?? "—"}</span>
+              <p className="text-xs text-muted-foreground">summary or save in last 7 days</p>
             </CardContent>
           </Card>
         </section>
@@ -203,21 +235,57 @@ function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {m?.topSkillsFutureKeywords && m.topSkillsFutureKeywords.length > 0 && (
+        {data?.wordCloud && data.wordCloud.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-medium">Top SkillsFuture keywords</CardTitle>
+              <CardTitle>Word cloud (skills/keywords)</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                {m.topSkillsFutureKeywords.join(", ")}
-              </p>
+              <div className="flex flex-wrap gap-2">
+                {data.wordCloud.slice(0, 30).map((t) => (
+                  <span
+                    key={t.word}
+                    className="rounded-md bg-muted px-2 py-0.5 text-sm text-foreground"
+                  >
+                    {t.word} ({t.count})
+                  </span>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}
 
+        {(data?.aiSummaryMetrics || data?.jdMatchMetrics) && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {data.aiSummaryMetrics && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>AI summary metrics</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm">
+                  <p>Total: {data.aiSummaryMetrics.total} · Last 7d: {data.aiSummaryMetrics.last7Days}</p>
+                  <p className="text-muted-foreground">With salary: {data.aiSummaryMetrics.withSalarySgd} · With JD match: {data.aiSummaryMetrics.withJdMatch}</p>
+                </CardContent>
+              </Card>
+            )}
+            {data.jdMatchMetrics && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>JD match</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm">
+                  <p>With match: {data.jdMatchMetrics.countWithMatch} · Without: {data.jdMatchMetrics.countWithoutMatch}</p>
+                  {data.jdMatchMetrics.avgScore != null && (
+                    <p className="text-muted-foreground">Avg score: {data.jdMatchMetrics.avgScore.toFixed(1)}</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
         <div className="flex justify-end">
-          <Button variant="ghost" onClick={() => router.push("/jobs")}>
+          <Button variant="ghost" onClick={() => router.push("/browse")}>
             Go to jobs
           </Button>
         </div>
@@ -296,7 +364,7 @@ function AdminForm() {
     <AuthCard
       title="Admin"
       hideTitle
-      onClose={() => router.push("/jobs")}
+      onClose={() => router.push("/browse")}
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Admin access only.

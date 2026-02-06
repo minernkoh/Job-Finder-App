@@ -7,6 +7,9 @@ import { z } from "zod";
 export const UserRole = z.enum(["admin", "user"]);
 export type UserRole = z.infer<typeof UserRole>;
 
+export const UserStatus = z.enum(["active", "suspended"]);
+export type UserStatus = z.infer<typeof UserStatus>;
+
 export const UserSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email"),
@@ -15,6 +18,7 @@ export const UserSchema = z.object({
     .min(8, "Password must be at least 8 characters")
     .optional(), // optional when reading (hashed)
   role: UserRole.default("user"),
+  status: UserStatus.default("active"),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 });
@@ -50,5 +54,28 @@ export const UserUpdateSchema = z.object({
     .string()
     .min(8, "Password must be at least 8 characters")
     .optional(),
+  status: UserStatus.optional(),
 });
 export type UserUpdate = z.infer<typeof UserUpdateSchema>;
+
+/** For admin PATCH user role (promote/demote). */
+export const AdminUserRoleBodySchema = z.object({
+  role: UserRole,
+});
+export type AdminUserRoleBody = z.infer<typeof AdminUserRoleBodySchema>;
+
+/** For admin PATCH user status (suspend/activate). */
+export const AdminUserStatusBodySchema = z.object({
+  status: UserStatus,
+});
+export type AdminUserStatusBody = z.infer<typeof AdminUserStatusBodySchema>;
+
+/** Query params for admin GET users list (pagination and filters). */
+export const AdminUsersQuerySchema = z.object({
+  search: z.string().optional(),
+  role: UserRole.optional(),
+  status: UserStatus.optional(),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+});
+export type AdminUsersQuery = z.infer<typeof AdminUsersQuerySchema>;

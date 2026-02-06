@@ -4,17 +4,25 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
-import { ArrowRightIcon, EyeIcon, EyeSlashIcon, XIcon } from "@phosphor-icons/react";
+import {
+  ArrowRightIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import { authCloseButtonClass } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Card, CardContent, Input, Label } from "@ui/components";
 
 /** Builds pathname + search string without auth and redirect params. */
-function stripAuthParams(pathname: string, searchParams: URLSearchParams): string {
+function stripAuthParams(
+  pathname: string,
+  searchParams: URLSearchParams
+): string {
   const next = new URLSearchParams(searchParams);
   next.delete("auth");
   next.delete("redirect");
@@ -28,11 +36,14 @@ function AuthModalContent({
   redirectTo,
   onClose,
   onSuccess,
+  onSignupSuccess,
 }: {
   initialTab: AuthTab;
   redirectTo: string;
   onClose: () => void;
   onSuccess: () => void;
+  /** Called after signup; redirects to onboarding with return URL. */
+  onSignupSuccess: () => void;
 }) {
   const [tab, setTab] = useState<AuthTab>(initialTab);
   const { login, register, isLoading } = useAuth();
@@ -61,11 +72,10 @@ function AuthModalContent({
         await login(email, password);
         onSuccess();
       } catch (err: unknown) {
-        const message =
-          err && typeof err === "object" && "response" in err
-            ? ((err as { response?: { data?: { error?: string } } }).response
-                ?.data?.error ?? "Login failed")
-            : "Login failed";
+        const data = err && typeof err === "object" && "response" in err
+            ? (err as { response?: { data?: { message?: string; error?: string } } }).response?.data
+            : undefined;
+        const message = data?.message ?? data?.error ?? "Login failed";
         setError(message);
       } finally {
         setSubmitting(false);
@@ -81,23 +91,68 @@ function AuthModalContent({
       setSubmitting(true);
       try {
         await register(name, email, password);
-        onSuccess();
+        onSignupSuccess();
       } catch (err: unknown) {
-        const message =
-          err && typeof err === "object" && "response" in err
-            ? ((err as { response?: { data?: { error?: string } } }).response
-                ?.data?.error ?? "Registration failed")
-            : "Registration failed";
+        const data = err && typeof err === "object" && "response" in err
+            ? (err as { response?: { data?: { message?: string; error?: string } } }).response?.data
+            : undefined;
+        const message = data?.message ?? data?.error ?? "Registration failed";
         setError(message);
       } finally {
         setSubmitting(false);
       }
     },
-    [name, email, password, register, onSuccess]
+    [name, email, password, register, onSignupSuccess]
   );
 
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const firstFocusable = el.querySelector<HTMLElement>(
+      'button[aria-label="Close"], button:not([disabled]), input:not([disabled]), [href]'
+    );
+    firstFocusable?.focus();
+  }, []);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const getFocusables = () =>
+      Array.from(
+        el.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((node) => node.tabIndex !== -1);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const focusables = getFocusables();
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    el.addEventListener("keydown", onKeyDown);
+    return () => el.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return (
-    <Card variant="elevated" className="relative w-full max-w-lg overflow-hidden">
+    <Card
+      ref={contentRef}
+      variant="elevated"
+      className="relative w-full max-w-lg overflow-hidden"
+    >
       {/* Header strip: close only; no gradient to match minimal auth card look. */}
       <div className="relative min-h-[3rem] border-b border-border rounded-t-2xl flex items-center justify-end pr-2 py-2">
         <button
@@ -245,9 +300,7 @@ function AuthModalContent({
               className="w-full"
               disabled={submitting || isLoading}
               iconRight={
-                !submitting ? (
-                  <ArrowRightIcon weight="bold" />
-                ) : undefined
+                !submitting ? <ArrowRightIcon weight="bold" /> : undefined
               }
             >
               {submitting ? "Creating account…" : "Register"}
@@ -275,6 +328,10 @@ export function AuthModal() {
 
   const onSuccess = useCallback(() => {
     router.replace(redirectTo);
+  }, [router, redirectTo]);
+
+  const onSignupSuccess = useCallback(() => {
+    router.replace(`/onboarding?redirect=${encodeURIComponent(redirectTo)}`);
   }, [router, redirectTo]);
 
   useEffect(() => {
@@ -305,6 +362,7 @@ export function AuthModal() {
           redirectTo={redirectTo}
           onClose={closeModal}
           onSuccess={onSuccess}
+          onSignupSuccess={onSignupSuccess}
         />
       </div>
     </div>

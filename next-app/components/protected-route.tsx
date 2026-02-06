@@ -21,7 +21,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       const next = new URLSearchParams(searchParams);
       next.set("auth", "login");
       const query = next.toString();
-      const url = query ? `${pathname ?? "/jobs"}?${query}` : `${pathname ?? "/jobs"}?auth=login`;
+      const url = query ? `${pathname ?? "/browse"}?${query}` : `${pathname ?? "/browse"}?auth=login`;
       router.replace(url);
     }
   }, [user, isLoading, pathname, router, searchParams]);

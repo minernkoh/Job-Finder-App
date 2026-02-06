@@ -1,9 +1,10 @@
 /**
- * UserMenu: circular avatar with user's first initial. On hover or focus, a dropdown appears with the Logout action.
+ * UserMenu: circular avatar with user's first initial. Click or focus opens dropdown with Logout; Escape closes. Accessible aria-expanded and keyboard support.
  */
 
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@ui/components";
 import type { AuthUser } from "@/contexts/AuthContext";
 
@@ -21,30 +22,63 @@ function getInitial(user: AuthUser): string {
   );
 }
 
-/** Renders a circular avatar showing the user's initial; hover reveals a dropdown with Logout. */
+/** Renders a circular avatar; click or focus opens dropdown with Logout. Escape closes; aria-expanded reflects open state. */
 export function UserMenu({ user, onLogout }: UserMenuProps) {
   const initial = getInitial(user);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, close]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) close();
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open, close]);
+
+  const handleLogout = useCallback(() => {
+    close();
+    onLogout();
+  }, [close, onLogout]);
 
   return (
-    <div className="relative group" role="group" aria-label="User menu">
+    <div ref={containerRef} className="relative" role="group" aria-label="User menu">
       <button
         type="button"
         className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground outline-none transition-colors hover:bg-muted/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-haspopup="true"
-        aria-expanded="false"
+        aria-expanded={open}
         aria-label={`User menu for ${user.name ?? user.email}`}
+        onClick={() => setOpen((o) => !o)}
       >
         {initial}
       </button>
       <div
-        className="pointer-events-none absolute right-0 top-full z-50 min-w-[120px] rounded-xl border border-border bg-card py-1 shadow-lg opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 [top:calc(100%-4px)]"
+        className={`absolute right-0 top-full z-50 min-w-[120px] rounded-xl border border-border bg-card py-1 shadow-lg [top:calc(100%+4px)] transition-opacity ${
+          open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+        }`}
         role="menu"
       >
         <Button
           variant="ghost"
           size="sm"
           className="w-full justify-start rounded-lg px-3 font-normal"
-          onClick={onLogout}
+          onClick={handleLogout}
           role="menuitem"
         >
           Logout
