@@ -1,8 +1,8 @@
 /**
- * API helpers for summaries: create (POST) and get by id. Used by job detail and summarize page.
+ * API helpers for summaries: create (POST), get by id, and compare (POST). Used by job detail, summarize, and compare pages.
  */
 
-import type { AISummary } from "@schemas";
+import type { AISummary, ComparisonSummary } from "@schemas";
 import { apiClient } from "./client";
 
 export type SummaryWithId = AISummary & { id: string };
@@ -53,4 +53,33 @@ export async function getSummary(id: string): Promise<SummaryWithId> {
   );
   if (!res.data.success || !res.data.data) throw new Error("Summary not found");
   return res.data.data;
+}
+
+export interface CreateComparisonResponse {
+  success: boolean;
+  data: ComparisonSummary;
+}
+
+/** Generates unified comparison summary for 2–3 listing IDs. Requires auth. */
+export async function createComparisonSummary(
+  listingIds: string[]
+): Promise<ComparisonSummary> {
+  try {
+    const res = await apiClient.post<CreateComparisonResponse>(
+      "/api/v1/summaries/compare",
+      { listingIds }
+    );
+    if (!res.data.success || !res.data.data)
+      throw new Error(
+        (res.data as { message?: string }).message ??
+          "Failed to create comparison"
+      );
+    return res.data.data;
+  } catch (err: unknown) {
+    const res = err as { response?: { data?: { message?: string } } };
+    const message =
+      res.response?.data?.message ??
+      (err instanceof Error ? err.message : "Failed to create comparison");
+    throw new Error(message);
+  }
 }

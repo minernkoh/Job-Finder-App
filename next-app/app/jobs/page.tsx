@@ -24,6 +24,7 @@ import {
 } from "@ui/components";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useCallback, useRef, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   fetchListings,
@@ -31,12 +32,15 @@ import {
   type ListingsFilters,
 } from "@/lib/api/listings";
 import { AuthModalLink } from "@/components/auth-modal-link";
+import { AppHeader } from "@/components/app-header";
+import { CompareBar } from "@/components/compare-bar";
+import { JobDetailPanel } from "@/components/job-detail-panel";
 import { ListingCard } from "@/components/listing-card";
-import { Logo } from "@/components/logo";
 import { TrendingListings } from "@/components/trending-listings";
-import { UserMenu } from "@/components/user-menu";
+import { useCompare } from "@/contexts/CompareContext";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { JOB_SEARCH_COUNTRIES } from "@/lib/constants/countries";
+import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { listingsKeys } from "@/lib/query-keys";
 import { cn } from "@ui/components/lib/utils";
 
@@ -67,12 +71,17 @@ const SUGGESTED_ROLES: string[] = [
   "Business Analyst",
 ];
 
-/** Scroll distance in px after which the header switches to sticky condensed mode. */
-const SCROLL_THRESHOLD = 64;
-
-/** Inner content: header, search card, trending, and listings grid. */
+/** Inner content: shared header, search below nav, compare bar, then split layout when results exist. */
 function JobsContent() {
+  const searchParams = useSearchParams();
   const { user, logout } = useAuth();
+  const {
+    compareSet,
+    addToCompare,
+    isInCompareSet,
+  } = useCompare();
+  const selectedJobId = searchParams?.get("job") ?? null;
+
   const [keyword, setKeyword] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [country, setCountry] = useState("sg");
@@ -90,7 +99,6 @@ function JobsContent() {
   const [appliedSortBy, setAppliedSortBy] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -165,16 +173,6 @@ function JobsContent() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  /** Toggle sticky header mode when scroll passes threshold. */
-  useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > SCROLL_THRESHOLD);
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   /** Close suggestions dropdown when clicking outside the search wrapper. */
@@ -269,97 +267,48 @@ function JobsContent() {
   const listings = data?.listings ?? [];
   const totalCount = data?.totalCount ?? 0;
 
-  return (
-    <div className="min-h-screen p-4">
-      <header
-        className={
-          "sticky top-0 z-50 mx-auto flex flex-wrap items-center gap-4 border-b border-border py-4 transition-all duration-200 " +
-          (scrolled
-            ? "max-w-4xl rounded-b-xl border-t-0 bg-background/80 px-4 backdrop-blur-md"
-            : "max-w-4xl justify-between")
-        }
-      >
-        <Logo className="shrink-0" />
-        {scrolled && (
-          <form
-            onSubmit={handleSearch}
-            className="flex min-w-0 flex-1 items-center sm:min-w-[12rem]"
-            aria-label="Search jobs (condensed)"
-          >
-            <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
-              <div className="relative flex min-w-0 flex-1">
-                <MagnifyingGlassIcon
-                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  ref={scrolled ? searchInputRef : undefined}
-                  type="search"
-                  placeholder="Job title, skills or company"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="h-9 min-w-0 flex-1 rounded-none border-0 border-r-0 bg-transparent pl-10 pr-9 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-                  aria-label="Search jobs"
-                />
-                <span
-                  className="pointer-events-none absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground"
-                  aria-hidden
-                >
-                  /
-                </span>
-              </div>
-              <Button
-                type="submit"
-                variant="default"
-                size="xs"
-                className="h-9 shrink-0 rounded-l-none rounded-r-xl border-0 px-4"
-                aria-label="Search"
-              >
-                Search
-              </Button>
-            </div>
-          </form>
-        )}
-        <nav className="flex shrink-0 items-center gap-3">
-          {user && !scrolled && (
-            <Link
-              href="/my-jobs"
-              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              My Jobs
-            </Link>
-          )}
-          {user ? (
-            <UserMenu user={user} onLogout={logout} />
-          ) : scrolled ? (
-            <Button
-              asChild
-              variant="header"
-              size="xs"
-              className="rounded-xl px-4 text-sm"
-            >
-              <AuthModalLink auth="login">Sign In</AuthModalLink>
-            </Button>
-          ) : (
-            <Button
-              asChild
-              variant="default"
-              size="xs"
-              className="rounded-xl px-4 text-sm"
-            >
-              <AuthModalLink auth="login">Sign In</AuthModalLink>
-            </Button>
-          )}
-        </nav>
-      </header>
+  /** Build /jobs?job=id&... from current search and filters for split-panel selection. */
+  const buildJobHref = useCallback(
+    (listingId: string) => {
+      const params = new URLSearchParams();
+      params.set("job", listingId);
+      if (keyword) params.set("keyword", keyword);
+      params.set("country", appliedCountry);
+      params.set("page", String(page));
+      if (appliedLocation) params.set("where", appliedLocation);
+      if (appliedFullTime) params.set("fullTime", "1");
+      if (appliedPermanent) params.set("permanent", "1");
+      if (appliedSalaryMin) params.set("salaryMin", appliedSalaryMin);
+      if (appliedSortBy) params.set("sortBy", appliedSortBy);
+      return `/jobs?${params.toString()}`;
+    },
+    [
+      keyword,
+      appliedCountry,
+      page,
+      appliedLocation,
+      appliedFullTime,
+      appliedPermanent,
+      appliedSalaryMin,
+      appliedSortBy,
+    ]
+  );
 
-      <main className="mx-auto max-w-4xl space-y-6 py-8">
-        <section
-          className="mx-auto max-w-2xl"
-          aria-label="Perform a job search"
-        >
+  const showSplitLayout = hasSearched && listings.length > 0;
+
+  return (
+    <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
+      <AppHeader user={user} onLogout={logout} />
+
+      {/* Search bar: full-width row below nav; search UI centered. */}
+      <section
+        className="w-full py-4"
+        aria-label="Perform a job search"
+        ref={searchDropdownRef}
+      >
+        <div className="mx-auto max-w-2xl">
           <form onSubmit={handleSearch} className="space-y-4">
-            <div ref={searchDropdownRef} className="relative flex flex-col">
+            <div className="relative flex flex-col">
               <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
                 <div className="relative flex min-w-0 flex-1">
                   <MagnifyingGlassIcon
@@ -367,7 +316,7 @@ function JobsContent() {
                     aria-hidden
                   />
                   <Input
-                    ref={scrolled ? undefined : searchInputRef}
+                    ref={searchInputRef}
                     id="search-what"
                     placeholder="Job title, skills or company"
                     value={searchInput}
@@ -425,12 +374,31 @@ function JobsContent() {
               )}
             </div>
           </form>
-        </section>
+        </div>
+      </section>
 
+      <CompareBar />
+
+      <main
+        className={cn(
+          "mx-auto flex-1 w-full py-8",
+          showSplitLayout
+            ? "flex flex-col lg:flex-row gap-0 min-h-0 w-full max-w-full"
+            : cn(CONTENT_MAX_W, SECTION_GAP)
+        )}
+      >
+        <div
+          className={cn(
+            "min-w-0 flex-1",
+            showSplitLayout &&
+              "lg:max-w-[40%] lg:flex lg:flex-col lg:overflow-hidden pr-4 lg:pr-6",
+            showSplitLayout && selectedJobId && "hidden lg:flex"
+          )}
+        >
         {!hasSearched && user && (
           <section
             aria-label="Empty state"
-            className="mx-auto flex max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center"
+            className="flex max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center mx-auto"
           >
             <MagnifyingGlassIcon
               className="size-12 text-muted-foreground"
@@ -510,9 +478,9 @@ function JobsContent() {
         )}
 
         {hasSearched && isLoading && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-32 animate-pulse rounded-xl bg-muted" />
+          <div className="flex flex-col gap-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
             ))}
           </div>
         )}
@@ -682,24 +650,33 @@ function JobsContent() {
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {listings.map((listing) => (
-                    <ListingCard
-                      key={listing.id}
-                      listing={listing}
-                      isSaved={savedIds.has(listing.id)}
-                      onView={() => recordListingView(listing.id)}
-                      onSave={
-                        user ? () => saveMutation.mutate(listing) : undefined
-                      }
-                      onUnsave={
-                        user
-                          ? () => unsaveMutation.mutate(listing.id)
-                          : undefined
-                      }
-                    />
-                  ))}
-                </div>
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Select up to 3 jobs to compare them side by side.
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    {listings.map((listing) => (
+                      <ListingCard
+                        key={listing.id}
+                        listing={listing}
+                        href={buildJobHref(listing.id)}
+                        isSaved={savedIds.has(listing.id)}
+                        onView={() => recordListingView(listing.id)}
+                        onSave={
+                          user ? () => saveMutation.mutate(listing) : undefined
+                        }
+                        onUnsave={
+                          user
+                            ? () => unsaveMutation.mutate(listing.id)
+                            : undefined
+                        }
+                        onAddToCompare={() => addToCompare(listing.id)}
+                        isInCompareSet={isInCompareSet(listing.id)}
+                        compareSetSize={compareSet.length}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
               {listings.length >= 20 && (
                 <div className="flex justify-center gap-2">
@@ -724,6 +701,27 @@ function JobsContent() {
           </>
         )}
         <TrendingListings />
+        </div>
+
+        {showSplitLayout && selectedJobId && (
+          <aside className="flex flex-1 flex-col min-w-0 border-l border-border bg-card pl-4 lg:pl-6">
+            <JobDetailPanel
+              listingId={selectedJobId}
+              listingIdsForNav={listings.map((l) => l.id)}
+              basePath="/jobs"
+              onAddToCompare={() => addToCompare(selectedJobId)}
+              isInCompareSet={isInCompareSet(selectedJobId)}
+              compareSetFull={compareSet.length >= 3}
+            />
+          </aside>
+        )}
+        {showSplitLayout && !selectedJobId && (
+          <aside className="hidden lg:flex flex-1 flex-col min-w-0 border-l border-border bg-card pl-4 lg:pl-6">
+            <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">
+              Select a job
+            </div>
+          </aside>
+        )}
       </main>
     </div>
   );

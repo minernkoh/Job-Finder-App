@@ -1,17 +1,46 @@
 /**
- * Admin page: separate sign up (admin) and log in. Not linked from the main app. Sign up requires admin secret; login accepts only admin users.
+ * Admin page: sign up (admin) and log in, or dashboard with metrics and AI summary when admin is logged in.
  */
 
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Suspense, useState } from "react";
-import { ArrowRightIcon, EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
+import { Suspense, useEffect, useState } from "react";
+import {
+  ArrowRightIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  ArrowClockwiseIcon,
+  ChartBarIcon,
+  FileTextIcon,
+  UsersIcon,
+} from "@phosphor-icons/react";
 import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api/client";
-import { Button, Input, Label } from "@ui/components";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+} from "@ui/components";
+
+interface DashboardData {
+  metrics: {
+    totalUsers: number;
+    totalListings: number;
+    totalSummaries: number;
+    totalSavedListings: number;
+    summariesLast7Days: number;
+    usersLast7Days: number;
+    topSkillsFutureKeywords?: string[];
+  };
+  summary: string;
+}
 
 interface AuthResponse {
   accessToken: string;
@@ -27,6 +56,174 @@ function getErrorMessage(err: unknown, fallback: string): string {
     return data?.error ?? data?.message ?? fallback;
   }
   return fallback;
+}
+
+/** Admin dashboard: metrics cards and AI summary; fetches on mount and supports refresh. */
+function AdminDashboard() {
+  const router = useRouter();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchDashboard = async (refresh = false) => {
+    const isRefresh = refresh;
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      const url = refresh ? "/api/v1/admin/dashboard?refresh=1" : "/api/v1/admin/dashboard";
+      const res = await apiClient.get<{ success: boolean; data: DashboardData }>(url);
+      if (res.data.success && res.data.data) {
+        setData(res.data.data);
+      } else {
+        setError("Failed to load dashboard");
+      }
+    } catch (err) {
+      setError(getErrorMessage(err, "Dashboard unavailable"));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
+
+  if (loading && !data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground">Loading dashboard…</p>
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-4">
+        <p className="text-destructive" role="alert">
+          {error}
+        </p>
+        <Button variant="outline" onClick={() => fetchDashboard()}>
+          Retry
+        </Button>
+        <Button variant="ghost" onClick={() => router.push("/admin")}>
+          Back to admin
+        </Button>
+      </div>
+    );
+  }
+
+  const m = data?.metrics;
+  return (
+    <div className="min-h-screen bg-background p-4 md:p-6 lg:p-8">
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-2xl font-semibold text-foreground">Admin dashboard</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchDashboard(true)}
+            disabled={refreshing}
+            iconRight={
+              refreshing ? undefined : (
+                <ArrowClockwiseIcon className="size-4" weight="regular" />
+              )
+            }
+          >
+            {refreshing ? "Refreshing…" : "Refresh summary"}
+          </Button>
+        </div>
+
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total users
+              </CardTitle>
+              <UsersIcon className="size-4 text-muted-foreground" weight="regular" />
+            </CardHeader>
+            <CardContent>
+              <span className="text-2xl font-bold">{m?.totalUsers ?? "—"}</span>
+              {m && m.usersLast7Days > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  +{m.usersLast7Days} in last 7 days
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Listings
+              </CardTitle>
+              <ChartBarIcon className="size-4 text-muted-foreground" weight="regular" />
+            </CardHeader>
+            <CardContent>
+              <span className="text-2xl font-bold">{m?.totalListings ?? "—"}</span>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                AI summaries
+              </CardTitle>
+              <FileTextIcon className="size-4 text-muted-foreground" weight="regular" />
+            </CardHeader>
+            <CardContent>
+              <span className="text-2xl font-bold">{m?.totalSummaries ?? "—"}</span>
+              {m && m.summariesLast7Days > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  +{m.summariesLast7Days} in last 7 days
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Saved listings
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <span className="text-2xl font-bold">{m?.totalSavedListings ?? "—"}</span>
+            </CardContent>
+          </Card>
+        </section>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Dashboard summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm leading-relaxed text-foreground">
+              {data?.summary ?? "—"}
+            </p>
+          </CardContent>
+        </Card>
+
+        {m?.topSkillsFutureKeywords && m.topSkillsFutureKeywords.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Top SkillsFuture keywords</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {m.topSkillsFutureKeywords.join(", ")}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="flex justify-end">
+          <Button variant="ghost" onClick={() => router.push("/jobs")}>
+            Go to jobs
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** Admin sign up and log in form: two tabs; sign up uses admin secret; login only allows admin role. */
@@ -63,7 +260,7 @@ function AdminForm() {
       );
       setToken(res.data.accessToken);
       setUser(res.data.user);
-      window.location.href = "/jobs";
+      window.location.href = "/admin";
     } catch (err) {
       setError(getErrorMessage(err, "Admin registration failed"));
     } finally {
@@ -87,7 +284,7 @@ function AdminForm() {
       }
       setToken(res.data.accessToken);
       setUser(res.data.user);
-      window.location.href = "/jobs";
+      window.location.href = "/admin";
     } catch (err) {
       setError(getErrorMessage(err, "Login failed"));
     } finally {
@@ -266,6 +463,30 @@ function AdminForm() {
 }
 
 export default function AdminPage() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground">Loading…</p>
+      </div>
+    );
+  }
+
+  if (user?.role === "admin") {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center">
+            <p className="text-muted-foreground">Loading…</p>
+          </div>
+        }
+      >
+        <AdminDashboard />
+      </Suspense>
+    );
+  }
+
   return (
     <Suspense
       fallback={

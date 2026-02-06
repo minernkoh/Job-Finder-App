@@ -49,3 +49,24 @@ export const CreateSummaryBodySchema = z
   );
 
 export type CreateSummaryBody = z.infer<typeof CreateSummaryBodySchema>;
+
+/** AI-generated comparison of 2–3 job listings: similarities, differences, summary, and optional recommendation. */
+export const ComparisonSummarySchema = z.object({
+  summary: z.string(),
+  /** Shared traits or common aspects across the listings. */
+  similarities: z.array(z.string()).optional(),
+  /** Key differences (e.g. seniority, focus, salary, location). */
+  differences: z.array(z.string()).optional(),
+  comparisonPoints: z.array(z.string()).optional(),
+  recommendedListingId: z.string().optional(),
+  recommendationReason: z.string().optional(),
+});
+
+export type ComparisonSummary = z.infer<typeof ComparisonSummarySchema>;
+
+/** POST body for compare summaries: exactly 2 or 3 listing IDs. */
+export const CompareSummaryBodySchema = z.object({
+  listingIds: z.array(z.string().min(1)).min(2).max(3),
+});
+
+export type CompareSummaryBody = z.infer<typeof CompareSummaryBodySchema>;

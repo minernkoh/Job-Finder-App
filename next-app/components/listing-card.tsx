@@ -1,11 +1,15 @@
 /**
- * Listing card: shows job title, company, location, and salary when available. Clickable, supports save button and view tracking.
+ * Listing card: shows job title, company, location, and salary when available. Clickable, supports save, view tracking, and optional compare.
  */
 
 "use client";
 
 import Link from "next/link";
-import { BookmarkIcon, BookmarkSimpleIcon } from "@phosphor-icons/react";
+import {
+  BookmarkIcon,
+  BookmarkSimpleIcon,
+  ArrowsLeftRightIcon,
+} from "@phosphor-icons/react";
 import { Button, Card, CardContent, CardHeader } from "@ui/components";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
 import type { ListingResult } from "@schemas";
@@ -17,9 +21,17 @@ interface ListingCardProps {
   onUnsave?: () => void;
   onView?: () => void;
   showTrendingBadge?: boolean;
+  /** Override link href (e.g. /jobs?job=id for split layout). */
+  href?: string;
+  /** Add this listing to the compare set (max 3). */
+  onAddToCompare?: () => void;
+  /** Whether this listing is already in the compare set. */
+  isInCompareSet?: boolean;
+  /** Current compare set size; when 3, adding is disabled unless isInCompareSet. */
+  compareSetSize?: number;
 }
 
-/** Renders a job listing card with title, company, location, and optional save button. */
+/** Renders a job listing card with title, company, location, and optional save and compare. */
 export function ListingCard({
   listing,
   isSaved = false,
@@ -27,11 +39,20 @@ export function ListingCard({
   onUnsave,
   onView,
   showTrendingBadge = false,
+  href,
+  onAddToCompare,
+  isInCompareSet = false,
+  compareSetSize = 0,
 }: ListingCardProps) {
+  const cardHref = href ?? `/jobs/${listing.id}`;
+  const compareSetFull = compareSetSize >= 3;
+  const canAddToCompare =
+    onAddToCompare && (isInCompareSet || !compareSetFull);
+
   return (
     <Card interactive variant="default" className="cursor-pointer">
       <Link
-        href={`/jobs/${listing.id}`}
+        href={cardHref}
         className="block"
         prefetch={false}
         onClick={() => onView?.()}
@@ -50,6 +71,30 @@ export function ListingCard({
               <span className="rounded bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
                 Trending
               </span>
+            )}
+            {onAddToCompare && (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="shrink-0"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (canAddToCompare) onAddToCompare();
+                }}
+                disabled={!isInCompareSet && compareSetFull}
+                title={
+                  compareSetFull && !isInCompareSet
+                    ? "You can compare up to 3 jobs. Remove one to add another."
+                    : "Add to compare"
+                }
+                aria-label="Add to compare"
+              >
+                <ArrowsLeftRightIcon
+                  size={16}
+                  className={isInCompareSet ? "text-primary" : "text-muted-foreground"}
+                />
+              </Button>
             )}
             {(onSave || onUnsave) && (
               <Button

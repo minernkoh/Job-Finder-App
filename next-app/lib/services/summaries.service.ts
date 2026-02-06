@@ -6,7 +6,12 @@ import { createHash } from "crypto";
 import mongoose from "mongoose";
 import { generateObject } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { AISummarySchema, type AISummary } from "@schemas";
+import {
+  AISummarySchema,
+  type AISummary,
+  ComparisonSummarySchema,
+  type ComparisonSummary,
+} from "@schemas";
 import { connectDB } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import {
@@ -275,4 +280,81 @@ export async function deleteSummary(
   if (!mongoose.Types.ObjectId.isValid(id)) return false;
   const result = await AISummaryModel.deleteOne({ _id: id, userId: uid });
   return result.deletedCount === 1;
+}
+
+/** Builds a short text block for one job for the comparison prompt (title, company, description snippet). */
+function jobBlock(
+  index: number,
+  title: string,
+  company: string,
+  description: string
+): string {
+  const snippet = description
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 4000);
+  return `--- Job ${index} ---
+Title: ${title}
+Company: ${company}
+Description:
+${snippet}`;
+}
+
+/** Generates a unified comparison summary for 2–3 listings using Gemini. */
+export async function generateComparisonSummary(
+  listingIds: string[]
+): Promise<ComparisonSummary> {
+  if (listingIds.length < 2 || listingIds.length > 3) {
+    throw new Error("Exactly 2 or 3 listing IDs are required");
+  }
+  const listings = await Promise.all(
+    listingIds.map((id) => getListingById(id))
+  );
+  for (let i = 0; i < listings.length; i++) {
+    if (!listings[i]) {
+      throw new Error("Listing not found");
+    }
+  }
+  const blocks = listings.map((l, i) =>
+    jobBlock(
+      i + 1,
+      l!.title,
+      l!.company,
+      l!.description ?? ""
+    )
+  );
+  const model = getGeminiModel();
+  const prompt = `You are a job comparison assistant for the Singapore job market. Compare the following ${listings.length} job listings and produce a unified comparison that summarizes similarities and differences.
+
+${blocks.join("\n\n")}
+
+Rules:
+- Write a single "summary" paragraph that synthesizes the comparison: what the roles have in common and how they differ (e.g. seniority, focus, salary, location, requirements).
+- Provide "similarities": an array of 3–6 short points describing what is similar across these listings (e.g. all require X, all mention Y, similar industry).
+- Provide "differences": an array of 3–6 short points describing key differences (e.g. seniority level, salary range, remote vs on-site, different tech stacks).
+- Optionally list 3–6 "comparisonPoints" (additional comparison points if needed).
+- If one listing is clearly a better fit for a typical candidate, set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation. Use the job order (Job 1, Job 2, Job 3) – the IDs are: ${listingIds.join(", ")}. recommendedListingId must be one of: ${listingIds.join(", ")}.
+- Output must match the schema exactly.`;
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const { object } = await generateObject({
+        model,
+        schema: ComparisonSummarySchema,
+        prompt,
+      });
+      return object as ComparisonSummary;
+    } catch (err) {
+      lastError = err;
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Comparison generation failed. Please try again.");
 }

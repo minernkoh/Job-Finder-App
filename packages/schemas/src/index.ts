@@ -6,3 +6,4 @@ export * from "./schemas/user";
 export * from "./schemas/listing";
 export * from "./schemas/ai-summary";
 export * from "./schemas/saved-listing";
+export * from "./schemas/admin-dashboard";
