@@ -152,7 +152,7 @@ function BrowseContent() {
     setAppliedSalaryMin("");
     setAppliedSortBy("");
     setPage(1);
-  }, []);
+  }, [updateSearchInput]);
 
   const updateSearchInput = useCallback((value: string) => {
     setSearchInput(value);
