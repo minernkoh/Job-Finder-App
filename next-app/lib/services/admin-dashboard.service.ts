@@ -226,7 +226,6 @@ export async function generateDashboardSummary(
 Metrics (JSON):
 ${JSON.stringify(metrics, null, 2)}`;
 
-  let lastError: unknown;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const { object } = await generateObject({
@@ -235,8 +234,7 @@ ${JSON.stringify(metrics, null, 2)}`;
         prompt,
       });
       return object.summary;
-    } catch (err) {
-      lastError = err;
+    } catch {
       if (attempt < MAX_RETRIES - 1) {
         const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
         await new Promise((r) => setTimeout(r, delay));

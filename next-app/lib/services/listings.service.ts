@@ -16,9 +16,6 @@ import {
   type AdzunaJob,
 } from "./adzuna.service";
 
-const SEARCH_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-const LISTING_DETAIL_TTL_MS = 5 * 60 * 60 * 1000; // 5 hours for individual listing
-
 /** Filter options for job search; aligned with Adzuna API params. */
 export interface ListingsFilters {
   where?: string;

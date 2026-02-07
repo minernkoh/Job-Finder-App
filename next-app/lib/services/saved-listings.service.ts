@@ -7,7 +7,6 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { parseObjectId } from "@/lib/objectid";
 import { SavedListing } from "@/lib/models/SavedListing";
-import { getListingById } from "./listings.service";
 
 /** Maps a SavedListing document to API SavedListingResult shape. */
 function docToSavedListingResult(doc: {

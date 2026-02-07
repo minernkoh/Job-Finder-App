@@ -4,7 +4,6 @@
 
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
-import { Listing } from "@/lib/models/Listing";
 import { ListingView } from "@/lib/models/ListingView";
 
 /** Records a view for a listing. Call when user clicks a listing or opens details. */
