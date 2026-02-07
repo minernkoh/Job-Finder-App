@@ -152,7 +152,7 @@ function BrowseContent() {
     setAppliedSalaryMin("");
     setAppliedSortBy("");
     setPage(1);
-  }, [updateSearchInput]);
+  }, []);
 
   const updateSearchInput = useCallback((value: string) => {
     setSearchInput(value);
@@ -250,7 +250,7 @@ function BrowseContent() {
     } catch {
       setResumeSearchMessage("Failed to load profile. Add a resume in Profile first.");
     }
-  }, []);
+  }, [updateSearchInput]);
 
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
