@@ -33,13 +33,11 @@ function stripAuthParams(
 /** Modal content: tabs and login/signup forms; used when auth=login or auth=signup. */
 function AuthModalContent({
   initialTab,
-  redirectTo,
   onClose,
   onSuccess,
   onSignupSuccess,
 }: {
   initialTab: AuthTab;
-  redirectTo: string;
   onClose: () => void;
   onSuccess: () => void;
   /** Called after signup; redirects to onboarding with return URL. */
@@ -359,7 +357,6 @@ export function AuthModal() {
       <div onClick={(e) => e.stopPropagation()}>
         <AuthModalContent
           initialTab={initialTab}
-          redirectTo={redirectTo}
           onClose={closeModal}
           onSuccess={onSuccess}
           onSignupSuccess={onSignupSuccess}

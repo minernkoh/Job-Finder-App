@@ -4,7 +4,7 @@
 
 "use client";
 
-import { Suspense, useState, useCallback } from "react";
+import { Suspense, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompare } from "@/contexts/CompareContext";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -68,7 +68,7 @@ function ProfileContent() {
     queryKey: ["profile"],
     queryFn: fetchProfile,
   });
-  const profileSkills = profile?.skills ?? [];
+  const profileSkills = useMemo(() => profile?.skills ?? [], [profile?.skills]);
   const skills = draftSkills ?? profileSkills;
 
   const updateSkills = useCallback(

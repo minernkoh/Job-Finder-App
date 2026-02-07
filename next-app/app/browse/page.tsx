@@ -152,12 +152,12 @@ function BrowseContent() {
     setAppliedSalaryMin("");
     setAppliedSortBy("");
     setPage(1);
-  }, [updateSearchInput]);
+  }, []);
 
   const updateSearchInput = useCallback((value: string) => {
     setSearchInput(value);
     setHighlightedIndex(0);
-  }, []);
+  }, [updateSearchInput]);
 
   /** Focus search when user presses '/' (unless they're typing in an input). */
   useEffect(() => {
