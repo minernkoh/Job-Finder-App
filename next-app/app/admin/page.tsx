@@ -298,7 +298,7 @@ function AdminDashboard() {
 function AdminForm() {
   const router = useRouter();
   const [tab, setTab] = useState<AuthTab>("login");
-  const { setToken, setUser, login, isLoading } = useAuth();
+  const { setToken, setUser, isLoading } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

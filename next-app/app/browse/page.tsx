@@ -26,7 +26,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useState, useCallback, useRef, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import {
   fetchListings,
   recordListingView,
@@ -153,12 +152,12 @@ function BrowseContent() {
     setAppliedSalaryMin("");
     setAppliedSortBy("");
     setPage(1);
-  }, []);
+  }, [updateSearchInput]);
 
-  /** Reset highlighted index when input or filtered list changes. */
-  useEffect(() => {
+  const updateSearchInput = useCallback((value: string) => {
+    setSearchInput(value);
     setHighlightedIndex(0);
-  }, [searchInput, filteredSuggestions.length]);
+  }, []);
 
   /** Focus search when user presses '/' (unless they're typing in an input). */
   useEffect(() => {
@@ -222,13 +221,16 @@ function BrowseContent() {
     [searchInput]
   );
 
-  const selectSuggestion = useCallback((role: string) => {
-    setSearchInput(role);
-    setKeyword(role);
-    setPage(1);
-    setHasSearched(true);
-    setSuggestionsOpen(false);
-  }, []);
+  const selectSuggestion = useCallback(
+    (role: string) => {
+      updateSearchInput(role);
+      setKeyword(role);
+      setPage(1);
+      setHasSearched(true);
+      setSuggestionsOpen(false);
+    },
+    [updateSearchInput]
+  );
 
   /** Fetches profile and runs search using skills as keyword; shows message if no profile. */
   const handleSearchWithResume = useCallback(async () => {
@@ -241,7 +243,7 @@ function BrowseContent() {
         return;
       }
       const keywordFromSkills = skills.slice(0, 10).join(" ");
-      setSearchInput(keywordFromSkills);
+      updateSearchInput(keywordFromSkills);
       setKeyword(keywordFromSkills);
       setPage(1);
       setHasSearched(true);
@@ -343,7 +345,7 @@ function BrowseContent() {
                     id="search-what"
                     placeholder="Job title, skills or company"
                     value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
+                    onChange={(e) => updateSearchInput(e.target.value)}
                     onFocus={() => setSuggestionsOpen(true)}
                     onBlur={() =>
                       setTimeout(() => setSuggestionsOpen(false), 150)

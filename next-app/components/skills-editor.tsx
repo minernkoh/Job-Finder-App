@@ -9,7 +9,6 @@ import { FileTextIcon, SparkleIcon, UploadIcon, XIcon } from "@phosphor-icons/re
 import { cn } from "@ui/components/lib/utils";
 
 export interface SkillsEditorResumeProps {
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
   selectedFile: File | null;
   setSelectedFile: (f: File | null) => void;
   setFileError: (e: string | null) => void;
@@ -88,6 +87,8 @@ export function SkillsEditor({
   saveError = null,
   saveButtonLabel = "Save profile",
 }: SkillsEditorProps) {
+  const fileInputId = `${idPrefix}-resume-file`;
+
   return (
     <Card variant="default" className="border-border">
       <CardContent className="p-4 space-y-3">
@@ -178,9 +179,11 @@ export function SkillsEditor({
         {showResumeBlock && resumeProps && (
           <>
             <div className="space-y-2">
-              <Label className="text-sm">Or upload a PDF or DOCX (max 5MB)</Label>
+              <Label htmlFor={fileInputId} className="text-sm">
+                Or upload a PDF or DOCX (max 5MB)
+              </Label>
               <input
-                ref={resumeProps.fileInputRef}
+                id={fileInputId}
                 type="file"
                 accept=".pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 className="sr-only"
@@ -199,10 +202,10 @@ export function SkillsEditor({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    resumeProps.fileInputRef.current?.click();
+                    document.getElementById(fileInputId)?.click();
                   }
                 }}
-                onClick={() => resumeProps.fileInputRef.current?.click()}
+                onClick={() => document.getElementById(fileInputId)?.click()}
                 className={cn(
                   "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-6 px-4 cursor-pointer transition-colors",
                   resumeProps.dragOver

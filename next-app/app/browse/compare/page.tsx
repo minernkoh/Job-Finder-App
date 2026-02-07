@@ -34,9 +34,10 @@ function CompareColumn({
     queryFn: () => fetchListing(listingId),
   });
 
+  const description = listing?.description ?? "";
   const sanitizedDescription = useMemo(() => {
-    if (!listing?.description?.trim()) return "";
-    return DOMPurify.sanitize(listing.description, {
+    if (!description.trim()) return "";
+    return DOMPurify.sanitize(description, {
       ALLOWED_TAGS: [
         "p",
         "br",
@@ -54,7 +55,7 @@ function CompareColumn({
       ],
       ADD_ATTR: ["href", "target", "rel"],
     }).trim();
-  }, [listing?.description]);
+  }, [description]);
 
   if (isLoading || !listing) {
     return (
