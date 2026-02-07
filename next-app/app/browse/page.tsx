@@ -157,7 +157,7 @@ function BrowseContent() {
   const updateSearchInput = useCallback((value: string) => {
     setSearchInput(value);
     setHighlightedIndex(0);
-  }, [updateSearchInput]);
+  }, []);
 
   /** Focus search when user presses '/' (unless they're typing in an input). */
   useEffect(() => {
@@ -175,7 +175,7 @@ function BrowseContent() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [updateSearchInput]);
 
   /** Close suggestions dropdown when clicking outside the search wrapper. */
   useEffect(() => {
