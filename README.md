@@ -1,6 +1,6 @@
 # Job Finder App
 
-AI-assisted job search built with Next.js. Users can browse listings, save jobs,
+AI-assisted job search built with Next.js. Users can browse listings at `/browse`, save jobs,
 compare roles, and generate AI summaries. Admins can view analytics.
 
 ## Tech stack

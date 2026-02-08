@@ -1,5 +1,5 @@
 /**
- * Shared app header: logo left; optional back link and title; nav right (Browse Jobs, Profile, Sign in / UserMenu). Ensures consistency across Browse, Profile, Compare, and Job detail pages.
+ * Shared app header: logo left; optional back link and title; nav right (Browse Jobs and Profile when signed in, Sign in / UserMenu). Browse Jobs is shown only when signed in. Ensures consistency across Browse, Profile, Compare, and Job detail pages.
  */
 
 "use client";
@@ -29,7 +29,7 @@ export interface AppHeaderProps {
   className?: string;
 }
 
-/** Renders the app nav bar: logo (and optional back + title) left; Browse Jobs, Profile, Sign in / UserMenu right. Active nav link is highlighted. */
+/** Renders the app nav bar: logo (and optional back + title) left; when signed in, Browse Jobs and Profile; Sign in or UserMenu right. Active nav link is highlighted. */
 export function AppHeader({
   backHref,
   backLabel,
@@ -80,9 +80,11 @@ export function AppHeader({
           )}
         </div>
         <nav className="flex shrink-0 items-center gap-3">
-          <Link href="/browse" className={navLinkClass(isBrowse)}>
-            Browse Jobs
-          </Link>
+          {user && (
+            <Link href="/browse" className={navLinkClass(isBrowse)}>
+              Browse Jobs
+            </Link>
+          )}
           {user && (
             <Link href="/profile" className={navLinkClass(isProfile)}>
               Profile

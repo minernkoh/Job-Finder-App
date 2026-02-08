@@ -11,6 +11,7 @@ import {
   ArrowsLeftRightIcon,
 } from "@phosphor-icons/react";
 import { Button, Card, CardContent, CardHeader } from "@ui/components";
+import { cn } from "@ui/components/lib/utils";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
 import type { ListingResult } from "@schemas";
 
@@ -29,6 +30,8 @@ interface ListingCardProps {
   isInCompareSet?: boolean;
   /** Current compare set size; when 3, adding is disabled unless isInCompareSet. */
   compareSetSize?: number;
+  /** Whether this listing is the one currently shown in the detail panel (for split layout). */
+  isSelected?: boolean;
 }
 
 /** Renders a job listing card with title, company, location, and optional save and compare. */
@@ -43,6 +46,7 @@ export function ListingCard({
   onAddToCompare,
   isInCompareSet = false,
   compareSetSize = 0,
+  isSelected = false,
 }: ListingCardProps) {
   const cardHref = href ?? `/browse/${listing.id}`;
   const compareSetFull = compareSetSize >= 3;
@@ -50,7 +54,14 @@ export function ListingCard({
     onAddToCompare && (isInCompareSet || !compareSetFull);
 
   return (
-    <Card interactive variant="default" className="cursor-pointer">
+    <Card
+      interactive
+      variant="default"
+      className={cn(
+        "cursor-pointer",
+        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+      )}
+    >
       <Link
         href={cardHref}
         className="block"
@@ -86,9 +97,11 @@ export function ListingCard({
                 title={
                   compareSetFull && !isInCompareSet
                     ? "You can compare up to 3 jobs. Remove one to add another."
-                    : "Add to compare"
+                    : isInCompareSet
+                      ? "Remove from comparison"
+                      : "Add to compare"
                 }
-                aria-label="Add to compare"
+                aria-label={isInCompareSet ? "Remove from comparison" : "Add to compare"}
               >
                 <ArrowsLeftRightIcon
                   size={16}

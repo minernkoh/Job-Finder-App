@@ -254,16 +254,7 @@ export function JobDetailPanel({
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Group: Back, Save, Add to compare */}
-          {basePath && (
-            <Link
-              href={basePath === "/browse" ? "/browse" : basePath}
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeftIcon size={16} />
-              Back
-            </Link>
-          )}
+          {/* Group: Save, Add to compare */}
           {user && (
             <Button
               variant="outline"
@@ -291,12 +282,14 @@ export function JobDetailPanel({
             <Button
               variant="outline"
               size="sm"
-              disabled={isInCompareSet || compareSetFull}
+              disabled={!isInCompareSet && compareSetFull}
               onClick={onAddToCompare}
               title={
-                compareSetFull
+                compareSetFull && !isInCompareSet
                   ? "You can compare up to 3 jobs. Remove one to add another."
-                  : "Add to compare"
+                  : isInCompareSet
+                    ? "Remove from comparison"
+                    : "Add to compare"
               }
             >
               <ArrowsLeftRightIcon size={16} className="mr-1" />
@@ -312,12 +305,6 @@ export function JobDetailPanel({
               className="text-sm text-muted-foreground hover:text-foreground"
             >
               Open in new tab
-            </Link>
-            <Link
-              href={`/browse/${listingId}`}
-              className="text-sm text-primary hover:underline"
-            >
-              Open full page
             </Link>
           </span>
         </div>
@@ -341,86 +328,51 @@ export function JobDetailPanel({
             >
               <ArrowRightIcon size={16} />
             </Button>
-            <span className="text-xs text-muted-foreground">
-              Use arrow keys to switch jobs
-            </span>
           </div>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-6 p-4 sm:p-6 sm:space-y-8">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">
-            {listing.title}
-          </h1>
-          <p className="mt-1 text-muted-foreground">{listing.company}</p>
-          {listing.location && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {listing.location}
-            </p>
-          )}
-          {(() => {
-            const salary = formatSalaryRange(
-              listing.salaryMin,
-              listing.salaryMax,
-              listing.country
-            );
-            return salary ? (
-              <p className="mt-1 text-sm font-medium text-foreground">
-                {salary}
+        <div className="flex flex-row flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-xl font-semibold text-foreground">
+              {listing.title}
+            </h1>
+            <p className="text-muted-foreground">{listing.company}</p>
+            {listing.location && (
+              <p className="text-sm text-muted-foreground">
+                {listing.location}
               </p>
-            ) : null;
-          })()}
-          {listing.country && listing.country !== "sg" && (
-            <span className="mt-2 inline-block rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              {listing.country.toUpperCase()}
-            </span>
-          )}
+            )}
+            {(() => {
+              const salary = formatSalaryRange(
+                listing.salaryMin,
+                listing.salaryMax,
+                listing.country
+              );
+              return salary ? (
+                <p className="text-sm font-medium text-foreground">
+                  {salary}
+                </p>
+              ) : null;
+            })()}
+            {listing.country && listing.country !== "sg" && (
+              <span className="mt-2 inline-block rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                {listing.country.toUpperCase()}
+              </span>
+            )}
+          </div>
           {(() => {
             const posted = formatPostedDate(listing.postedAt);
             return posted ? (
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="shrink-0 text-sm text-muted-foreground">
                 Posted {posted}
               </p>
             ) : null;
           })()}
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
-          {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
-            <section className="space-y-2">
-              <h2 className={cn(eyebrowClass, "mb-2")}>Description</h2>
-              <Card variant="elevated" className="text-sm">
-                {sanitizedDescription.length > 0 && (
-                  <CardContent
-                    className="p-4 text-foreground [&_a]:text-primary [&_a]:underline [&_a]:hover:opacity-80 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-0.5 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_b]:font-semibold"
-                    dangerouslySetInnerHTML={{
-                      __html: sanitizedDescription,
-                    }}
-                  />
-                )}
-                {listing.sourceUrl && (
-                  <div
-                    className={cn(
-                      "px-4 pb-4",
-                      sanitizedDescription.length > 0 &&
-                        "border-t border-border pt-4"
-                    )}
-                  >
-                    <a
-                      href={listing.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-block text-sm text-primary hover:underline"
-                    >
-                      View original posting
-                    </a>
-                  </div>
-                )}
-              </Card>
-            </section>
-          )}
-
+        <div className="flex flex-col gap-6">
           <section className="space-y-3">
             <h2 className={eyebrowClass}>AI Summary</h2>
             {summary ? (
@@ -455,6 +407,40 @@ export function JobDetailPanel({
               </Button>
             )}
           </section>
+
+          {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
+            <section className="space-y-2">
+              <h2 className={cn(eyebrowClass, "mb-2")}>Description</h2>
+              <Card variant="elevated" className="text-sm">
+                {sanitizedDescription.length > 0 && (
+                  <CardContent
+                    className="p-4 text-foreground [&_a]:text-primary [&_a]:underline [&_a]:hover:opacity-80 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-0.5 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_strong]:font-semibold [&_b]:font-semibold"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizedDescription,
+                    }}
+                  />
+                )}
+                {listing.sourceUrl && (
+                  <div
+                    className={cn(
+                      "px-4 pb-4",
+                      sanitizedDescription.length > 0 &&
+                        "border-t border-border pt-4"
+                    )}
+                  >
+                    <a
+                      href={listing.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block text-sm text-primary hover:underline"
+                    >
+                      View original posting
+                    </a>
+                  </div>
+                )}
+              </Card>
+            </section>
+          )}
         </div>
       </div>
     </div>

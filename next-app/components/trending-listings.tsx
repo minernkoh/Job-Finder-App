@@ -23,13 +23,13 @@ export function TrendingListings() {
   if (isLoading || listings.length === 0) return null;
 
   return (
-    <section>
+    <section className="mt-10 overflow-visible">
       <h2 className="mb-3 text-xs uppercase tracking-widest text-muted-foreground">
         Trending
       </h2>
-      <div className="scrollbar-hide flex gap-3 overflow-x-auto pt-2 pb-2">
+      <div className="scrollbar-hide flex gap-3 overflow-x-auto overflow-y-visible px-2 py-3">
         {listings.map((listing) => (
-          <div key={listing.id} className="min-w-[280px] max-w-[320px] flex-1">
+          <div key={listing.id} className="min-w-[280px] max-w-[320px] flex-1 shrink-0">
             <ListingCard
               listing={listing}
               showTrendingBadge

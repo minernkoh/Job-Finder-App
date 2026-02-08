@@ -9,10 +9,10 @@ import {
   BriefcaseIcon,
   FileTextIcon,
   MagnifyingGlassIcon,
+  ScalesIcon,
   SlidersIcon,
   BookmarkIcon,
   SparkleIcon,
-  StackIcon,
 } from "@phosphor-icons/react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -25,7 +25,7 @@ import {
 } from "@ui/components";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useCallback, useRef, useEffect, useMemo, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   fetchListings,
   recordListingView,
@@ -35,6 +35,8 @@ import { fetchProfile } from "@/lib/api/profile";
 import { AuthModalLink } from "@/components/auth-modal-link";
 import { AppHeader } from "@/components/app-header";
 import { CompareBar } from "@/components/compare-bar";
+import { Logo } from "@/components/logo";
+import { UserMenu } from "@/components/user-menu";
 import { JobDetailPanel } from "@/components/job-detail-panel";
 import { ListingCard } from "@/components/listing-card";
 import { TrendingListings } from "@/components/trending-listings";
@@ -74,11 +76,13 @@ const SUGGESTED_ROLES: string[] = [
 
 /** Inner content: shared header, search below nav, compare bar, then split layout when results exist. */
 function BrowseContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const {
     compareSet,
     addToCompare,
+    removeFromCompare,
     isInCompareSet,
   } = useCompare();
   const selectedJobId = searchParams?.get("job") ?? null;
@@ -103,8 +107,11 @@ function BrowseContent() {
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [resumeSearchMessage, setResumeSearchMessage] = useState<string | null>(null);
+  const [stickyBarVisible, setStickyBarVisible] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const stickySearchInputRef = useRef<HTMLInputElement>(null);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
+  const leftColumnScrollRef = useRef<HTMLDivElement>(null);
 
   const filters: ListingsFilters = useMemo(() => {
     const f: ListingsFilters = {};
@@ -159,7 +166,7 @@ function BrowseContent() {
     setHighlightedIndex(0);
   }, []);
 
-  /** Focus search when user presses '/' (unless they're typing in an input). */
+  /** Focus search when user presses '/' (unless they're typing in an input). Focus sticky bar input when sticky bar is visible. */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "/") return;
@@ -171,11 +178,15 @@ function BrowseContent() {
       )
         return;
       e.preventDefault();
-      searchInputRef.current?.focus();
+      if (hasSearched && stickyBarVisible) {
+        stickySearchInputRef.current?.focus();
+      } else {
+        searchInputRef.current?.focus();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [updateSearchInput]);
+  }, [hasSearched, stickyBarVisible]);
 
   /** Close suggestions dropdown when clicking outside the search wrapper. */
   useEffect(() => {
@@ -319,15 +330,108 @@ function BrowseContent() {
     ]
   );
 
+  /** When results load with no job in URL, select the first listing so it shows in the right panel. */
+  useEffect(() => {
+    if (!hasSearched || listings.length === 0 || selectedJobId) return;
+    router.replace(buildJobHref(listings[0].id));
+  }, [hasSearched, listings, selectedJobId, router, buildJobHref]);
+
   const showSplitLayout = hasSearched && listings.length > 0;
 
-  return (
-    <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
-      <AppHeader user={user} onLogout={logout} />
+  /** Show sticky nav (logo + search + auth) when user scrolls past the main search area. Use left column scroll in split layout, window scroll otherwise. */
+  useEffect(() => {
+    const threshold = 120;
+    const el = leftColumnScrollRef.current;
+    if (showSplitLayout && el) {
+      const onScroll = () => setStickyBarVisible(el.scrollTop > threshold);
+      onScroll();
+      el.addEventListener("scroll", onScroll, { passive: true });
+      return () => el.removeEventListener("scroll", onScroll);
+    }
+    const onScroll = () => setStickyBarVisible(window.scrollY > threshold);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [showSplitLayout]);
 
-      {/* Search bar: full-width row below nav; search UI centered. */}
+  return (
+    <>
+      {/* Original nav: hidden when sticky bar is visible (only after user has searched). */}
+      <div
+        className={cn(
+          "transition-all duration-200 ease-out",
+          hasSearched && stickyBarVisible
+            ? "max-h-0 overflow-hidden opacity-0"
+            : "max-h-[5rem]"
+        )}
+      >
+        <AppHeader user={user} onLogout={logout} />
+      </div>
+      {/* Sticky nav on scroll: only after search. Floating bar (logo, search, sign in) when user scrolls past the main search. */}
+      {hasSearched && (
+        <div
+          className={cn(
+            "fixed top-0 left-0 right-0 z-[60] px-4 pt-4 transition-transform duration-200 ease-out",
+            stickyBarVisible ? "translate-y-0" : "-translate-y-full pointer-events-none"
+          )}
+          aria-hidden={!stickyBarVisible}
+        >
+          <div className="mx-auto flex w-full max-w-3xl items-center gap-3 rounded-2xl border border-border/80 bg-background/80 px-4 py-2.5 shadow-lg backdrop-blur-md">
+            <Logo size="sm" className="shrink-0" />
+            <form
+              onSubmit={handleSearch}
+              className="flex min-w-0 flex-1 justify-center"
+              aria-label="Search jobs (sticky)"
+            >
+              <div className="flex w-full max-w-xl min-w-0 overflow-hidden rounded-xl border border-border bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+                <div className="relative flex min-w-0 flex-1">
+                  <MagnifyingGlassIcon
+                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden
+                  />
+                  <Input
+                    ref={stickySearchInputRef}
+                    type="search"
+                    placeholder="Job title, skills or company"
+                    value={searchInput}
+                    onChange={(e) => updateSearchInput(e.target.value)}
+                    className="h-9 min-w-0 flex-1 rounded-none border-0 border-r-0 bg-transparent pl-10 pr-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                    aria-label="Search jobs"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="default"
+                  size="xs"
+                  className="h-9 shrink-0 rounded-l-none rounded-r-xl border-0 px-4"
+                  aria-label="Search"
+                >
+                  Search
+                </Button>
+              </div>
+            </form>
+            <div className="shrink-0">
+              {user ? (
+                <UserMenu user={user} onLogout={logout} />
+              ) : (
+                <Button asChild variant="default" size="xs" className="rounded-xl px-4 text-sm">
+                  <AuthModalLink auth="login">Sign In</AuthModalLink>
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <div
+        className={cn(
+          "min-h-screen flex flex-col",
+          PAGE_PX,
+          showSplitLayout && "lg:max-h-screen lg:overflow-hidden"
+        )}
+      >
+      {/* Search bar: full-width row below nav; search UI centered. Equal gap above (nav→search) and below (search→main). */}
       <section
-        className="w-full py-4"
+        className="w-full pt-8 pb-8"
         aria-label="Perform a job search"
         ref={searchDropdownRef}
       >
@@ -422,12 +526,12 @@ function BrowseContent() {
         </div>
       </section>
 
-      <CompareBar />
+      {hasSearched && <CompareBar fullWidth={showSplitLayout} />}
 
       <main
         id="main-content"
         className={cn(
-          "mx-auto flex-1 w-full py-8",
+          "mx-auto flex-1 w-full pt-0 pb-8",
           showSplitLayout
             ? "flex flex-col lg:flex-row gap-0 min-h-0 w-full max-w-full"
             : cn(CONTENT_MAX_W, SECTION_GAP)
@@ -438,14 +542,15 @@ function BrowseContent() {
           className={cn(
             "min-w-0 flex-1",
             showSplitLayout &&
-              "lg:max-w-[40%] lg:flex lg:flex-col lg:overflow-hidden pr-4 lg:pr-6",
+              "lg:max-w-[40%] lg:flex lg:flex-col lg:min-h-0 pr-4 lg:pr-6",
             showSplitLayout && selectedJobId && "hidden lg:flex"
           )}
         >
           <div
+            ref={leftColumnScrollRef}
             className={cn(
               showSplitLayout &&
-                "lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:space-y-6"
+                "lg:min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-auto lg:space-y-6 lg:pr-2"
             )}
           >
         {!hasSearched && user && (
@@ -468,26 +573,23 @@ function BrowseContent() {
             aria-label="Why sign in"
             className="mx-auto max-w-2xl space-y-6 rounded-xl border border-border bg-muted/40 p-6 text-center shadow-blue ring-1 ring-primary/20 sm:p-8"
           >
-            <p className="text-sm text-muted-foreground">
-              Search above to find jobs. Sign in to save them and get AI summaries.
-            </p>
             <h2 className="text-2xl font-semibold text-foreground">
               Find your next role,{" "}
               <span className="text-gradient-hero">faster</span>
             </h2>
             <p className="text-base text-muted-foreground">
-              Sign in to save jobs and get AI summaries for job listings.
+              Sign in to compare jobs, use your resume for better matches, and get AI summaries.
             </p>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Card variant="default" className="border-border">
                 <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <BookmarkIcon className="size-5 text-primary" />
+                    <ScalesIcon className="size-5 text-primary" />
                   </div>
-                  <h3 className="font-medium text-foreground">Save jobs</h3>
+                  <h3 className="font-medium text-foreground">Compare jobs</h3>
                   <p className="text-sm text-muted-foreground">
-                    Bookmark listings for later and access them in one place.
+                    Select up to 3 listings and compare them side by side.
                   </p>
                 </CardContent>
               </Card>
@@ -505,13 +607,11 @@ function BrowseContent() {
               <Card variant="default" className="border-border">
                 <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <StackIcon className="size-5 text-primary" />
+                    <FileTextIcon className="size-5 text-primary" />
                   </div>
-                  <h3 className="font-medium text-foreground">
-                    One collection
-                  </h3>
+                  <h3 className="font-medium text-foreground">Resume parser</h3>
                   <p className="text-sm text-muted-foreground">
-                    All saved listings in a single, organized list.
+                    Upload or paste your resume; we extract skills for better job matches.
                   </p>
                 </CardContent>
               </Card>
@@ -522,6 +622,7 @@ function BrowseContent() {
                 asChild
                 variant="cta"
                 size="default"
+                className="h-11 min-w-[10rem]"
                 iconRight={<ArrowRightIcon weight="bold" />}
               >
                 <AuthModalLink auth="signup" redirect="/browse">
@@ -706,15 +807,13 @@ function BrowseContent() {
                 </div>
               ) : (
                 <>
-                  <p className="text-xs text-muted-foreground">
-                    Select up to 3 jobs to compare them side by side.
-                  </p>
                   <div className="flex flex-col gap-3">
                     {listings.map((listing) => (
                       <ListingCard
                         key={listing.id}
                         listing={listing}
                         href={buildJobHref(listing.id)}
+                        isSelected={selectedJobId === listing.id}
                         isSaved={savedIds.has(listing.id)}
                         onView={() => recordListingView(listing.id)}
                         onSave={
@@ -725,7 +824,11 @@ function BrowseContent() {
                             ? () => unsaveMutation.mutate(listing.id)
                             : undefined
                         }
-                        onAddToCompare={() => addToCompare(listing.id)}
+                        onAddToCompare={
+                          isInCompareSet(listing.id)
+                            ? () => removeFromCompare(listing.id)
+                            : () => addToCompare(listing.id)
+                        }
                         isInCompareSet={isInCompareSet(listing.id)}
                         compareSetSize={compareSet.length}
                       />
@@ -755,31 +858,40 @@ function BrowseContent() {
             </section>
           </>
         )}
-        <TrendingListings />
+        {!hasSearched && <TrendingListings />}
           </div>
         </div>
 
         {showSplitLayout && selectedJobId && (
-          <aside className="flex flex-1 flex-col min-w-0 border-l border-border bg-card pl-4 lg:pl-6">
-            <JobDetailPanel
-              listingId={selectedJobId}
-              listingIdsForNav={listings.map((l) => l.id)}
-              basePath="/browse"
-              onAddToCompare={() => addToCompare(selectedJobId)}
-              isInCompareSet={isInCompareSet(selectedJobId)}
-              compareSetFull={compareSet.length >= 3}
-            />
+          <aside className="flex flex-1 flex-col min-w-0 pl-4 lg:pl-6">
+            <Card variant="default" className="flex flex-1 flex-col min-h-0 overflow-hidden border-border">
+              <JobDetailPanel
+                listingId={selectedJobId}
+                listingIdsForNav={listings.map((l) => l.id)}
+                basePath="/browse"
+                onAddToCompare={
+                  isInCompareSet(selectedJobId)
+                    ? () => removeFromCompare(selectedJobId)
+                    : () => addToCompare(selectedJobId)
+                }
+                isInCompareSet={isInCompareSet(selectedJobId)}
+                compareSetFull={compareSet.length >= 3}
+              />
+            </Card>
           </aside>
         )}
         {showSplitLayout && !selectedJobId && (
-          <aside className="hidden lg:flex flex-1 flex-col min-w-0 border-l border-border bg-card pl-4 lg:pl-6">
-            <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">
-              Select a job
-            </div>
+          <aside className="hidden lg:flex flex-1 flex-col min-w-0 pl-4 lg:pl-6">
+            <Card variant="default" className="flex flex-1 flex-col min-h-0 border-border">
+              <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">
+                Select a job
+              </div>
+            </Card>
           </aside>
         )}
       </main>
-    </div>
+      </div>
+    </>
   );
 }
 
