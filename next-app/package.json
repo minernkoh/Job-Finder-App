@@ -8,8 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "analyze": "ANALYZE=true next build"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.0.0",
@@ -33,7 +32,6 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^16.1.6",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",

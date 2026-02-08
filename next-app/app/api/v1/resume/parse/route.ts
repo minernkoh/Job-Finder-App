@@ -6,7 +6,6 @@ import { ParseResumeBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/request";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
-import { enforceRateLimit } from "@/lib/api/rate-limit";
 import { getEnv } from "@/lib/env";
 import {
   extractTextFromDocx,
@@ -42,13 +41,6 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
   const payload = auth;
-
-  const limited = enforceRateLimit(request, {
-    limit: 5,
-    windowMs: 60_000,
-    keyPrefix: "resume-parse",
-  });
-  if (limited) return limited;
 
   const env = getEnv();
   if (!env.GEMINI_API_KEY?.trim()) {

@@ -5,7 +5,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserCreateSchema } from "@schemas";
 import { validationErrorResponse } from "@/lib/api/errors";
-import { enforceRateLimit } from "@/lib/api/rate-limit";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
@@ -14,13 +13,6 @@ import { buildSetCookieHeader } from "@/lib/auth/cookies";
 /** Creates user and returns access token plus user; sets refresh token cookie. Duplicate email returns 409. */
 export async function POST(request: NextRequest) {
   try {
-    const limited = enforceRateLimit(request, {
-      limit: 5,
-      windowMs: 60_000,
-      keyPrefix: "auth-register",
-    });
-    if (limited) return limited;
-
     const body = await request.json();
     const parsed = UserCreateSchema.safeParse(body);
     if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");

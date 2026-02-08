@@ -1,8 +1,7 @@
 # Job Finder App
 
 AI-assisted job search built with Next.js. Users can browse listings, save jobs,
-compare roles, and generate AI summaries. Admins can view analytics and system
-health.
+compare roles, and generate AI summaries. Admins can view analytics.
 
 ## Tech stack
 - Next.js 16 (App Router), React 19
@@ -36,15 +35,7 @@ health.
 - `pnpm build` - build all workspace packages
 - `pnpm lint` - lint all workspace packages
 - `pnpm test` - run unit tests (vitest)
-- `pnpm analyze` - build with bundle analyzer
-
-## Health check
-Public health endpoint for uptime monitoring:
-```
-GET /api/v1/system/health
-```
 
 ## Notes
 - Auth uses JWT access tokens + HttpOnly refresh cookie.
-- Rate limiting is enforced on auth and resume parsing endpoints.
 - Job search caching TTL is controlled by `JOB_SEARCH_CACHE_TTL`.
