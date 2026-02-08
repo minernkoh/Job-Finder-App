@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 const baseEnv = {
+  MONGODB_URI: "mongodb://localhost:27017/test",
   JWT_SECRET: "a".repeat(32),
   JWT_REFRESH_SECRET: "b".repeat(32),
   JWT_ACCESS_TOKEN_EXPIRES_IN: "15m",
