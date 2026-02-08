@@ -6,7 +6,8 @@
     "dev": "pnpm --filter next-app dev",
     "dev:webpack": "pnpm --filter next-app exec next dev --webpack",
     "build": "pnpm -r build",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "test": "pnpm --filter next-app test"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

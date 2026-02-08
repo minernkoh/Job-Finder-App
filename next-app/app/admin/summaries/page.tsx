@@ -47,7 +47,7 @@ export default function AdminSummariesPage() {
       );
       if (res.data.success && res.data.data) setData(res.data.data);
       else setError("Failed to load summaries");
-    } catch (e) {
+    } catch {
       setError("Request failed");
     } finally {
       setLoading(false);

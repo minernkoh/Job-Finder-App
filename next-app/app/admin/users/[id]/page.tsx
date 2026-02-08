@@ -54,7 +54,7 @@ export default function AdminUserDetailPage() {
       );
       if (res.data.success && res.data.data) setUser(res.data.data);
       else setError("User not found");
-    } catch (e) {
+    } catch {
       setError("Failed to load user");
     } finally {
       setLoading(false);

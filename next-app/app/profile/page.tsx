@@ -4,7 +4,7 @@
 
 "use client";
 
-import { Suspense, useState, useRef, useEffect, useCallback } from "react";
+import { Suspense, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompare } from "@/contexts/CompareContext";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -17,7 +17,6 @@ import { useSavedListings } from "@/hooks/useSavedListings";
 import { TrendingListings } from "@/components/trending-listings";
 import { fetchProfile, updateProfile, suggestSkills, parseResume, parseResumeFile } from "@/lib/api/profile";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@ui/components";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { SkillsEditor } from "@/components/skills-editor";
 import { cn } from "@ui/components/lib/utils";
@@ -48,14 +47,12 @@ function ProfileContent() {
   const queryClient = useQueryClient();
   const [currentRole, setCurrentRole] = useState("");
   const [suggestedSkills, setSuggestedSkills] = useState<string[]>([]);
-  const [mySkills, setMySkills] = useState<string[]>([]);
+  const [draftSkills, setDraftSkills] = useState<string[] | null>(null);
   const [customSkill, setCustomSkill] = useState("");
   const [resumeText, setResumeText] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
   const isResumeFile = (f: File) => {
     const name = f.name?.toLowerCase() ?? "";
@@ -71,12 +68,18 @@ function ProfileContent() {
     queryKey: ["profile"],
     queryFn: fetchProfile,
   });
+  const profileSkills = useMemo(() => profile?.skills ?? [], [profile?.skills]);
+  const skills = draftSkills ?? profileSkills;
 
-  // Sync profile.skills to local mySkills when profile loads or is invalidated.
-  useEffect(() => {
-    const skills = profile?.skills ?? [];
-    setMySkills(skills);
-  }, [profile?.skills]);
+  const updateSkills = useCallback(
+    (updater: (prev: string[]) => string[]) => {
+      setDraftSkills((prev) => {
+        const base = prev ?? profileSkills;
+        return updater(base);
+      });
+    },
+    [profileSkills]
+  );
 
   const suggestMutation = useMutation({
     mutationFn: (role: string) => suggestSkills(role),
@@ -97,7 +100,7 @@ function ProfileContent() {
       typeof input === "string" ? parseResume(input) : parseResumeFile(input),
     onSuccess: (data) => {
       const newSkills = data?.skills ?? [];
-      setMySkills((prev) => dedupeSkills([...prev, ...newSkills]));
+      updateSkills((prev) => dedupeSkills([...prev, ...newSkills]));
       setResumeText("");
       setSelectedFile(null);
       setFileError(null);
@@ -106,15 +109,21 @@ function ProfileContent() {
     },
   });
 
-  const addToMySkills = useCallback((skill: string) => {
-    const s = skill.trim();
-    if (!s) return;
-    setMySkills((prev) => dedupeSkills([...prev, s]));
-  }, []);
+  const addToMySkills = useCallback(
+    (skill: string) => {
+      const s = skill.trim();
+      if (!s) return;
+      updateSkills((prev) => dedupeSkills([...prev, s]));
+    },
+    [updateSkills]
+  );
 
-  const removeFromMySkills = useCallback((index: number) => {
-    setMySkills((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const removeFromMySkills = useCallback(
+    (index: number) => {
+      updateSkills((prev) => prev.filter((_, i) => i !== index));
+    },
+    [updateSkills]
+  );
 
   const handleAddCustom = useCallback(() => {
     addToMySkills(customSkill);
@@ -122,9 +131,9 @@ function ProfileContent() {
   }, [customSkill, addToMySkills]);
 
   const handleSaveProfile = useCallback(() => {
-    const skills = dedupeSkills(mySkills);
-    updateMutation.mutate(skills);
-  }, [mySkills, updateMutation]);
+    const nextSkills = dedupeSkills(skills);
+    updateMutation.mutate(nextSkills);
+  }, [skills, updateMutation]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -167,8 +176,6 @@ function ProfileContent() {
     }
   };
 
-  const canParse = (selectedFile != null || resumeText.trim().length > 0) && !parseMutation.isPending;
-
   return (
     <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
       <AppHeader title="Profile" user={user} onLogout={logout} />
@@ -196,7 +203,6 @@ function ProfileContent() {
               onAddCustom={handleAddCustom}
               showResumeBlock
               resumeProps={{
-                fileInputRef,
                 selectedFile,
                 setSelectedFile,
                 setFileError,
@@ -215,7 +221,7 @@ function ProfileContent() {
                 onFileChange: handleFileChange,
                 onDrop: handleDrop,
               }}
-              skills={mySkills}
+              skills={skills}
               onRemoveSkill={removeFromMySkills}
               emptySkillsMessage="No skills yet. Use current role + Suggest, add custom, or paste/upload resume above."
               showSaveBlock={!isLoadingProfile}

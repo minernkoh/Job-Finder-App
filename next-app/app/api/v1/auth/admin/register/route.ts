@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
-    if (parsed.data.adminSecret !== secret) {
+    const { adminSecret, ...createData } = parsed.data;
+    if (adminSecret !== secret) {
       return NextResponse.json(
         {
           success: false,
@@ -39,7 +40,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { adminSecret: _, ...createData } = parsed.data;
     await connectDB();
     const existing = await User.findOne({ email: createData.email }).lean();
     if (existing) {

@@ -104,7 +104,11 @@ export function ListingCard({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  isSaved ? onUnsave?.() : onSave?.();
+                  if (isSaved) {
+                    onUnsave?.();
+                  } else {
+                    onSave?.();
+                  }
                 }}
                 aria-label={isSaved ? "Unsave" : "Save"}
               >

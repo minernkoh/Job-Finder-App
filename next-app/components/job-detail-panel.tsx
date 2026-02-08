@@ -105,8 +105,6 @@ export interface JobDetailPanelProps {
   listingIdsForNav?: string[];
   /** Base path for ?job= URLs (e.g. /browse or /profile). When set with listingIdsForNav, prev/next update this path. */
   basePath?: string;
-  /** Whether to show a compact toolbar (e.g. in split panel) vs full header. */
-  compact?: boolean;
   /** Optional: add current job to compare set. */
   onAddToCompare?: () => void;
   /** Optional: whether current job is in the compare set. */
@@ -120,7 +118,6 @@ export function JobDetailPanel({
   listingId,
   listingIdsForNav,
   basePath,
-  compact = false,
   onAddToCompare,
   isInCompareSet = false,
   compareSetFull = false,
@@ -160,9 +157,10 @@ export function JobDetailPanel({
     if (listingId) recordListingView(listingId);
   }, [listingId]);
 
+  const description = listing?.description ?? "";
   const sanitizedDescription = useMemo(() => {
-    if (!listing?.description) return "";
-    const sanitized = DOMPurify.sanitize(listing.description, {
+    if (!description) return "";
+    const sanitized = DOMPurify.sanitize(description, {
       ALLOWED_TAGS: [
         "p",
         "br",
@@ -181,7 +179,7 @@ export function JobDetailPanel({
       ADD_ATTR: ["href", "target", "rel"],
     });
     return sanitized.trim();
-  }, [listing?.description]);
+  }, [description]);
 
   const currentIndex =
     listingIdsForNav && basePath

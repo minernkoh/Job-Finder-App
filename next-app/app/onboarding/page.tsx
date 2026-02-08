@@ -4,7 +4,7 @@
 
 "use client";
 
-import { Suspense, useState, useRef, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -12,7 +12,6 @@ import { AppHeader } from "@/components/app-header";
 import { fetchProfile, updateProfile, suggestSkills, parseResume, parseResumeFile } from "@/lib/api/profile";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@ui/components";
-import { SparkleIcon } from "@phosphor-icons/react";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { SkillsEditor } from "@/components/skills-editor";
 import { cn } from "@ui/components/lib/utils";
@@ -50,7 +49,6 @@ function OnboardingContent() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
   const isResumeFile = (f: File) => {
@@ -176,7 +174,6 @@ function OnboardingContent() {
     }
   };
 
-  const canParse = (selectedFile != null || resumeText.trim().length > 0) && !parseMutation.isPending;
   const canContinue = dedupeSkills(mySkills).length > 0 && !updateMutation.isPending;
 
   if (isLoadingProfile) {
@@ -215,10 +212,11 @@ function OnboardingContent() {
             Add skills manually or from your resume. We use them to show match scores on job listings.
           </p>
 
-          <div className="flex gap-2 border-b border-border">
+          <div className="flex gap-2 border-b border-border" role="tablist">
             <button
               type="button"
               onClick={() => setTab("manual")}
+              role="tab"
               className={cn(
                 "px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors",
                 tab === "manual"
@@ -234,6 +232,7 @@ function OnboardingContent() {
             <button
               type="button"
               onClick={() => setTab("resume")}
+              role="tab"
               className={cn(
                 "px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors",
                 tab === "resume"
@@ -288,7 +287,6 @@ function OnboardingContent() {
                 showCustomBlock={false}
                 showResumeBlock
                 resumeProps={{
-                  fileInputRef,
                   selectedFile,
                   setSelectedFile,
                   setFileError,
