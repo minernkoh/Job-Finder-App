@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
+import { enforceRateLimit } from "@/lib/api/rate-limit";
 import {
   signAccessToken,
   signRefreshToken,
@@ -18,6 +19,13 @@ import {
 /** Rotates tokens using refresh cookie; returns new access token and sets new refresh cookie. */
 export async function POST(request: NextRequest) {
   try {
+    const limited = enforceRateLimit(request, {
+      limit: 20,
+      windowMs: 60_000,
+      keyPrefix: "auth-refresh",
+    });
+    if (limited) return limited;
+
     const cookieHeader = request.headers.get("cookie");
     const refreshToken = getRefreshTokenFromCookie(cookieHeader);
     if (!refreshToken) {

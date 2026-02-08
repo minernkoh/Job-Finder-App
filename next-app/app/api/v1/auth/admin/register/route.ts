@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AdminRegisterSchema } from "@schemas";
 import { validationErrorResponse } from "@/lib/api/errors";
+import { enforceRateLimit } from "@/lib/api/rate-limit";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
@@ -13,6 +14,13 @@ import { buildSetCookieHeader } from "@/lib/auth/cookies";
 /** Creates admin user when adminSecret is valid; returns access token and sets refresh cookie. Duplicate email returns 409; invalid or missing secret returns 403. */
 export async function POST(request: NextRequest) {
   try {
+    const limited = enforceRateLimit(request, {
+      limit: 5,
+      windowMs: 60_000,
+      keyPrefix: "auth-admin-register",
+    });
+    if (limited) return limited;
+
     const body = await request.json();
     const parsed = AdminRegisterSchema.safeParse(body);
     if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");

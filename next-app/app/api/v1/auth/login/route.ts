@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LoginSchema } from "@schemas";
 import { validationErrorResponse } from "@/lib/api/errors";
+import { enforceRateLimit } from "@/lib/api/rate-limit";
 import { connectDB } from "@/lib/db";
 import { User, comparePassword } from "@/lib/models/User";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
@@ -13,6 +14,13 @@ import { buildSetCookieHeader } from "@/lib/auth/cookies";
 /** Validates credentials and returns access token plus user; sets refresh token cookie. */
 export async function POST(request: NextRequest) {
   try {
+    const limited = enforceRateLimit(request, {
+      limit: 10,
+      windowMs: 60_000,
+      keyPrefix: "auth-login",
+    });
+    if (limited) return limited;
+
     const body = await request.json();
     const parsed = LoginSchema.safeParse(body);
     if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");
