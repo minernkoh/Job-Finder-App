@@ -140,3 +140,4 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 *.md
+!README.md
