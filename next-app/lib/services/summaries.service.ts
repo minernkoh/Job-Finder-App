@@ -138,8 +138,7 @@ async function resolveInputText(input: {
         text: extracted || fallback,
         fromAdzunaPage: !!extracted,
       };
-    } catch (err) {
-      console.error("Adzuna sourceUrl fetch failed, using fallback:", err instanceof Error ? err.message : String(err));
+    } catch {
       return { text: fallback, fromAdzunaPage: false };
     }
   }

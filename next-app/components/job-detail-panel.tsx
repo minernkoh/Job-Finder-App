@@ -13,6 +13,8 @@ import {
   BookmarkSimpleIcon,
   SparkleIcon,
   ArrowsLeftRightIcon,
+  PencilSimpleIcon,
+  TrashIcon,
 } from "@phosphor-icons/react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -111,6 +113,10 @@ export interface JobDetailPanelProps {
   isInCompareSet?: boolean;
   /** Optional: whether compare set is full (3). */
   compareSetFull?: boolean;
+  /** Optional: when provided, called when admin confirms delete; parent should call API and invalidate. */
+  onDeleteListing?: (listingId: string) => void;
+  /** Optional: when set, shows "Back to Listings" link (visible below lg) to return to the list view. */
+  backToListingsHref?: string | null;
 }
 
 /** Reusable job detail: title, company, description, AI summary, save, prev/next, open in full page. */
@@ -121,6 +127,8 @@ export function JobDetailPanel({
   onAddToCompare,
   isInCompareSet = false,
   compareSetFull = false,
+  onDeleteListing,
+  backToListingsHref,
 }: JobDetailPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -254,6 +262,14 @@ export function JobDetailPanel({
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-3">
+          {backToListingsHref && (
+            <Button asChild variant="ghost" size="sm" className="lg:hidden -ml-2" aria-label="Back to listings">
+              <Link href={backToListingsHref} className="inline-flex items-center gap-1.5">
+                <ArrowLeftIcon size={18} aria-hidden />
+                Back to Listings
+              </Link>
+            </Button>
+          )}
           {/* Group: Save, Add to compare */}
           {user && (
             <Button
@@ -296,17 +312,33 @@ export function JobDetailPanel({
               {isInCompareSet ? "In comparison" : "Add to compare"}
             </Button>
           )}
-          {/* Group: Open links */}
-          <span className="inline-flex items-center gap-2 border-l border-border pl-3">
-            <Link
-              href={`/browse/${listingId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              Open in new tab
-            </Link>
-          </span>
+          {user?.role === "admin" && (
+            <span className="inline-flex items-center gap-2 border-l border-border pl-3">
+              <Link
+                href={`/admin/listings?edit=${listingId}`}
+                className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <PencilSimpleIcon size={14} />
+                Edit
+              </Link>
+              {onDeleteListing && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => {
+                    if (typeof window !== "undefined" && window.confirm("Delete this listing? This cannot be undone.")) {
+                      onDeleteListing(listingId);
+                    }
+                  }}
+                  title="Delete listing"
+                >
+                  <TrashIcon size={14} />
+                  Delete
+                </Button>
+              )}
+            </span>
+          )}
         </div>
         {listingIdsForNav && basePath && (hasPrev || hasNext) && (
           <div className="flex items-center gap-3">
@@ -400,7 +432,7 @@ export function JobDetailPanel({
               <Button asChild variant="default" size="sm">
                 <AuthModalLink
                   auth="login"
-                  redirect={listingId ? `/browse/${listingId}` : undefined}
+                  redirect={listingId ? `/browse?job=${listingId}` : undefined}
                 >
                   Log in to get AI summaries
                 </AuthModalLink>

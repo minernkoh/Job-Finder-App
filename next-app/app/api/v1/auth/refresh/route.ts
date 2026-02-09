@@ -56,8 +56,7 @@ export async function POST(request: NextRequest) {
     headers.set("Set-Cookie", buildSetCookieHeader(newRefreshToken));
 
     return NextResponse.json({ accessToken: newAccessToken }, { headers });
-  } catch (e) {
-    console.error("Refresh error:", e);
+  } catch {
     return NextResponse.json(
       { success: false, message: "Refresh failed" },
       { status: 500 }

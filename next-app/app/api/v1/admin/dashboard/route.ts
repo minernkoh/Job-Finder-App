@@ -29,8 +29,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: parsed.data,
     });
-  } catch (e) {
-    console.error("Admin dashboard error:", e);
+  } catch {
     return NextResponse.json(
       { success: false, message: "Dashboard unavailable" },
       { status: 500 }

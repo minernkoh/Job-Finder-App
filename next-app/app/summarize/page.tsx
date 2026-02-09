@@ -91,21 +91,23 @@ function SummarizeContent() {
   }
 
   return (
-    <div className={cn("min-h-screen flex flex-col", "px-4 sm:px-6")}>
-      <header className="mx-auto flex w-full max-w-2xl items-center border-b border-border py-4">
-        <Link
-          href="/browse"
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeftIcon size={16} />
-          Back to browse
-        </Link>
+    <div className="min-h-screen flex flex-col">
+      <header className="sticky top-0 z-50 border-b border-border bg-background px-4 py-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-2xl items-center">
+          <Link
+            href="/browse"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeftIcon size={16} />
+            Back to browse
+          </Link>
+        </div>
       </header>
 
       <main
         id="main-content"
         className={cn(
-          "mx-auto w-full flex-1 space-y-8 py-8",
+          "mx-auto w-full flex-1 space-y-8 px-4 py-8 sm:px-6",
           summary ? "max-w-5xl" : "max-w-2xl"
         )}
       >

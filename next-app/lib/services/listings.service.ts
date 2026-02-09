@@ -2,13 +2,13 @@
  * Listings service: get-or-fetch pattern with MongoDB caching. Checks SearchCache by query hash, then Adzuna API if cache miss.
  */
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { Listing, type IListingDocument } from "@/lib/models/Listing";
 import { SearchCache } from "@/lib/models/SearchCache";
-import type { ListingResult } from "@schemas";
+import type { ListingCreate, ListingResult, ListingUpdate } from "@schemas";
 import {
   fetchAdzunaSearch,
   validateCountry,
@@ -213,4 +213,59 @@ export async function getListingById(
     if (doc) return docToListingResult(doc);
   }
   return null;
+}
+
+/** Creates a manual listing (admin). Sets sourceId and expiresAt server-side. */
+export async function createListing(
+  body: ListingCreate
+): Promise<ListingResult> {
+  await connectDB();
+  const sourceId = `manual-${randomUUID()}`;
+  const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+  const doc = await Listing.create({
+    title: body.title,
+    company: body.company,
+    location: body.location,
+    description: body.description,
+    country: body.country ?? "sg",
+    sourceUrl: body.sourceUrl,
+    source: "adzuna",
+    sourceId,
+    expiresAt,
+  });
+  const lean = doc.toObject();
+  return docToListingResult(lean);
+}
+
+/** Updates a listing by id (admin). Returns updated listing or null if not found. */
+export async function updateListingById(
+  id: string,
+  body: ListingUpdate
+): Promise<ListingResult | null> {
+  await connectDB();
+  const objId = mongoose.Types.ObjectId.isValid(id)
+    ? new mongoose.Types.ObjectId(id)
+    : null;
+  if (!objId) return null;
+  const doc = await Listing.findById(objId);
+  if (!doc) return null;
+  if (body.title !== undefined) doc.title = body.title;
+  if (body.company !== undefined) doc.company = body.company;
+  if (body.location !== undefined) doc.location = body.location;
+  if (body.description !== undefined) doc.description = body.description;
+  if (body.country !== undefined) doc.country = body.country;
+  if (body.sourceUrl !== undefined) doc.sourceUrl = body.sourceUrl ?? undefined;
+  await doc.save();
+  return docToListingResult(doc.toObject());
+}
+
+/** Deletes a listing by id (admin). Returns true if deleted, false if not found. */
+export async function deleteListingById(id: string): Promise<boolean> {
+  await connectDB();
+  const objId = mongoose.Types.ObjectId.isValid(id)
+    ? new mongoose.Types.ObjectId(id)
+    : null;
+  if (!objId) return false;
+  const result = await Listing.findByIdAndDelete(objId);
+  return result != null;
 }

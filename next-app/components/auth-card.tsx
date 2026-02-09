@@ -40,7 +40,7 @@ export function AuthCard({
       {backLink != null && backLink}
       <Card variant="elevated" className="w-full max-w-lg overflow-hidden">
         {onClose != null && (
-          <div className="flex min-h-[3rem] items-center justify-end border-b border-border pr-2 py-2">
+          <div className="flex min-h-[3rem] items-center justify-end pr-2 py-2">
             <button
               type="button"
               onClick={onClose}

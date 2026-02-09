@@ -9,6 +9,8 @@ import {
   BookmarkIcon,
   BookmarkSimpleIcon,
   ArrowsLeftRightIcon,
+  PencilSimpleIcon,
+  TrashIcon,
 } from "@phosphor-icons/react";
 import { Button, Card, CardContent, CardHeader } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
@@ -32,6 +34,10 @@ interface ListingCardProps {
   compareSetSize?: number;
   /** Whether this listing is the one currently shown in the detail panel (for split layout). */
   isSelected?: boolean;
+  /** When "admin", show Edit and Delete controls. */
+  userRole?: "admin" | "user";
+  /** Called when admin confirms delete; parent should call API and invalidate queries. */
+  onDeleteListing?: (listingId: string) => void;
 }
 
 /** Renders a job listing card with title, company, location, and optional save and compare. */
@@ -47,11 +53,22 @@ export function ListingCard({
   isInCompareSet = false,
   compareSetSize = 0,
   isSelected = false,
+  userRole,
+  onDeleteListing,
 }: ListingCardProps) {
-  const cardHref = href ?? `/browse/${listing.id}`;
+  const cardHref = href ?? `/browse?job=${listing.id}`;
   const compareSetFull = compareSetSize >= 3;
   const canAddToCompare =
     onAddToCompare && (isInCompareSet || !compareSetFull);
+  const isAdmin = userRole === "admin";
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof window !== "undefined" && window.confirm("Delete this listing? This cannot be undone.")) {
+      onDeleteListing?.(listing.id);
+    }
+  };
 
   return (
     <Card
@@ -131,6 +148,31 @@ export function ListingCard({
                   <BookmarkSimpleIcon className="text-muted-foreground" />
                 )}
               </Button>
+            )}
+            {isAdmin && (
+              <>
+                <Link
+                  href={`/admin/listings?edit=${listing.id}`}
+                  className="shrink-0 inline-flex items-center justify-center rounded-md hover:bg-muted p-1.5"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Edit listing"
+                  aria-label="Edit listing"
+                >
+                  <PencilSimpleIcon size={16} className="text-muted-foreground" />
+                </Link>
+                {onDeleteListing && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0"
+                    onClick={handleDelete}
+                    title="Delete listing"
+                    aria-label="Delete listing"
+                  >
+                    <TrashIcon size={16} className="text-muted-foreground" />
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </CardHeader>

@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
     const summary = await getOrCreateSummary(payload.sub, parsed.data);
     return NextResponse.json({ success: true, data: summary });
   } catch (err) {
-    console.error("POST /api/v1/summaries", err);
     const message =
       err instanceof Error ? err.message : "Failed to create summary";
     if (message === "AI summarization is not configured") {

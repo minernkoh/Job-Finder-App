@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
     const comparison = await generateComparisonSummary(parsed.data.listingIds);
     return NextResponse.json({ success: true, data: comparison });
   } catch (err) {
-    console.error("POST /api/v1/summaries/compare", err);
     const message =
       err instanceof Error ? err.message : "Failed to compare listings";
     if (message === "AI summarization is not configured") {

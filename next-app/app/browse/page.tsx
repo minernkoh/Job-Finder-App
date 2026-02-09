@@ -23,15 +23,15 @@ import {
   Label,
   Select,
 } from "@ui/components";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useRef, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  deleteListingApi,
   fetchListings,
   recordListingView,
   type ListingsFilters,
 } from "@/lib/api/listings";
-import { fetchProfile } from "@/lib/api/profile";
 import { AuthModalLink } from "@/components/auth-modal-link";
 import { AppHeader } from "@/components/app-header";
 import { CompareBar } from "@/components/compare-bar";
@@ -41,10 +41,11 @@ import { JobDetailPanel } from "@/components/job-detail-panel";
 import { ListingCard } from "@/components/listing-card";
 import { TrendingListings } from "@/components/trending-listings";
 import { useCompare } from "@/contexts/CompareContext";
+import { useIsLgViewport } from "@/hooks/useIsLgViewport";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { JOB_SEARCH_COUNTRIES } from "@/lib/constants/countries";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
-import { listingsKeys } from "@/lib/query-keys";
+import { listingKeys, listingsKeys } from "@/lib/query-keys";
 import { cn } from "@ui/components/lib/utils";
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
@@ -86,6 +87,7 @@ function BrowseContent() {
     isInCompareSet,
   } = useCompare();
   const selectedJobId = searchParams?.get("job") ?? null;
+  const isLg = useIsLgViewport();
 
   const [keyword, setKeyword] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -106,7 +108,6 @@ function BrowseContent() {
   const [hasSearched, setHasSearched] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [resumeSearchMessage, setResumeSearchMessage] = useState<string | null>(null);
   const [stickyBarVisible, setStickyBarVisible] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const stickySearchInputRef = useRef<HTMLInputElement>(null);
@@ -203,6 +204,7 @@ function BrowseContent() {
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [suggestionsOpen]);
 
+  const queryClient = useQueryClient();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: listingsKeys(
       appliedCountry,
@@ -218,6 +220,19 @@ function BrowseContent() {
         Object.keys(filters).length > 0 ? filters : undefined
       ),
     enabled: hasSearched,
+  });
+
+  const deleteListingMutation = useMutation({
+    mutationFn: (listingId: string) => deleteListingApi(listingId),
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ["listings"] });
+      queryClient.invalidateQueries({ queryKey: listingKeys(deletedId) });
+      if (selectedJobId === deletedId) {
+        const params = new URLSearchParams(searchParams?.toString() ?? "");
+        params.delete("job");
+        router.replace("/browse?" + params.toString());
+      }
+    },
   });
 
   const { savedIds, saveMutation, unsaveMutation } = useSavedListings();
@@ -242,26 +257,6 @@ function BrowseContent() {
     },
     [updateSearchInput]
   );
-
-  /** Fetches profile and runs search using skills as keyword; shows message if no profile. */
-  const handleSearchWithResume = useCallback(async () => {
-    setResumeSearchMessage(null);
-    try {
-      const profile = await fetchProfile();
-      const skills = profile?.skills ?? [];
-      if (skills.length === 0) {
-        setResumeSearchMessage("Add a resume in Profile to search by your skills.");
-        return;
-      }
-      const keywordFromSkills = skills.slice(0, 10).join(" ");
-      updateSearchInput(keywordFromSkills);
-      setKeyword(keywordFromSkills);
-      setPage(1);
-      setHasSearched(true);
-    } catch {
-      setResumeSearchMessage("Failed to load profile. Add a resume in Profile first.");
-    }
-  }, [updateSearchInput]);
 
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -330,13 +325,22 @@ function BrowseContent() {
     ]
   );
 
-  /** When results load with no job in URL, select the first listing so it shows in the right panel. */
+  /** When results load with no job in URL, select the first listing only on lg+ so the right panel is populated; on small screens show the list first. */
   useEffect(() => {
-    if (!hasSearched || listings.length === 0 || selectedJobId) return;
+    if (!isLg || !hasSearched || listings.length === 0 || selectedJobId) return;
     router.replace(buildJobHref(listings[0].id));
-  }, [hasSearched, listings, selectedJobId, router, buildJobHref]);
+  }, [isLg, hasSearched, listings, selectedJobId, router, buildJobHref]);
 
   const showSplitLayout = hasSearched && listings.length > 0;
+
+  /** URL to return to the listings list (current search params without job). Passed to JobDetailPanel for "Back to Listings" on small screens. */
+  const backToListingsHref = useMemo(() => {
+    if (!showSplitLayout || !selectedJobId) return undefined;
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.delete("job");
+    const qs = params.toString();
+    return `/browse${qs ? `?${qs}` : ""}`;
+  }, [showSplitLayout, selectedJobId, searchParams]);
 
   /** Show sticky nav (logo + search + auth) when user scrolls past the main search area. Use left column scroll in split layout, window scroll otherwise. */
   useEffect(() => {
@@ -502,26 +506,6 @@ function BrowseContent() {
                 </div>
               )}
             </div>
-            {user && (
-              <div className="flex flex-col gap-1">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="xs"
-                  className="w-fit"
-                  onClick={handleSearchWithResume}
-                  aria-label="Search using skills from your resume"
-                >
-                  <FileTextIcon className="mr-1.5 size-4" aria-hidden />
-                  Search with my resume
-                </Button>
-                {resumeSearchMessage && (
-                  <p className="text-sm text-muted-foreground">
-                    {resumeSearchMessage}
-                  </p>
-                )}
-              </div>
-            )}
           </form>
         </div>
       </section>
@@ -550,7 +534,7 @@ function BrowseContent() {
             ref={leftColumnScrollRef}
             className={cn(
               showSplitLayout &&
-                "lg:min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-auto lg:space-y-6 lg:pr-2"
+                "lg:min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-auto lg:space-y-6 lg:pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             )}
           >
         {!hasSearched && user && (
@@ -831,6 +815,12 @@ function BrowseContent() {
                         }
                         isInCompareSet={isInCompareSet(listing.id)}
                         compareSetSize={compareSet.length}
+                        userRole={user?.role}
+                        onDeleteListing={
+                          user?.role === "admin"
+                            ? (listingId) => deleteListingMutation.mutate(listingId)
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
@@ -858,7 +848,16 @@ function BrowseContent() {
             </section>
           </>
         )}
-        {!hasSearched && <TrendingListings />}
+        {!hasSearched && (
+          <TrendingListings
+            userRole={user?.role}
+            onDeleteListing={
+              user?.role === "admin"
+                ? (listingId) => deleteListingMutation.mutate(listingId)
+                : undefined
+            }
+          />
+        )}
           </div>
         </div>
 
@@ -869,6 +868,7 @@ function BrowseContent() {
                 listingId={selectedJobId}
                 listingIdsForNav={listings.map((l) => l.id)}
                 basePath="/browse"
+                backToListingsHref={backToListingsHref}
                 onAddToCompare={
                   isInCompareSet(selectedJobId)
                     ? () => removeFromCompare(selectedJobId)
@@ -876,6 +876,11 @@ function BrowseContent() {
                 }
                 isInCompareSet={isInCompareSet(selectedJobId)}
                 compareSetFull={compareSet.length >= 3}
+                onDeleteListing={
+                  user?.role === "admin"
+                    ? (listingId) => deleteListingMutation.mutate(listingId)
+                    : undefined
+                }
               />
             </Card>
           </aside>

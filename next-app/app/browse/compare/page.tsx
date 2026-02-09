@@ -95,19 +95,19 @@ function CompareColumn({
             dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
           />
           <Link
-            href={`/browse/${listingId}`}
+            href={`/browse?job=${listingId}`}
             className="mt-2 inline-block text-sm text-primary hover:underline"
           >
-            Open full page
+            View in browse
           </Link>
         </div>
       )}
       {sanitizedDescription.length === 0 && (
         <Link
-          href={`/browse/${listingId}`}
+          href={`/browse?job=${listingId}`}
           className="text-sm text-primary hover:underline"
         >
-          Open full page
+          View in browse
         </Link>
       )}
       <div className="border-t border-border pt-4">
@@ -163,9 +163,9 @@ function ComparePageInner() {
 
   if (!listingIds) {
     return (
-      <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
+      <div className="min-h-screen flex flex-col">
         <AppHeader backHref="/browse" backLabel="Back to browse" title="Compare jobs" user={user} onLogout={logout} />
-        <main id="main-content" className={cn("mx-auto w-full flex-1 py-8", CONTENT_MAX_W)}>
+        <main id="main-content" className={cn("mx-auto w-full flex-1 py-8", CONTENT_MAX_W, PAGE_PX)}>
           <h1 className="text-2xl font-semibold text-foreground">Compare jobs</h1>
           <p className="mt-2 text-muted-foreground">
             Select 2–3 jobs to compare.{" "}
@@ -179,7 +179,7 @@ function ComparePageInner() {
   }
 
   return (
-    <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
+    <div className="min-h-screen flex flex-col">
       <AppHeader
         backHref="/browse"
         backLabel="Back to browse"
@@ -188,7 +188,7 @@ function ComparePageInner() {
         onLogout={logout}
       />
 
-      <main id="main-content" className={cn("mx-auto w-full py-8", CONTENT_MAX_W, SECTION_GAP)}>
+      <main id="main-content" className={cn("mx-auto w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
         <h1 className="mb-6 text-2xl font-semibold text-foreground sm:mb-8">
           Comparing {listingIds.length} jobs
         </h1>

@@ -1,10 +1,13 @@
 /**
- * GET /api/v1/listings: search job listings with keyword, country, and Adzuna-aligned filters. Returns paginated results from Adzuna (cached).
+ * GET /api/v1/listings: search job listings. POST: create listing (admin only).
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { toErrorResponse } from "@/lib/api/errors";
+import { ListingCreateSchema } from "@schemas";
+import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { requireAdmin } from "@/lib/auth/guard";
 import {
+  createListing,
   searchListings,
   type ListingsFilters,
 } from "@/lib/services/listings.service";
@@ -65,5 +68,22 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     return toErrorResponse(err, "Failed to fetch listings");
+  }
+}
+
+/** Creates a listing (admin only). Returns 201 with created listing. */
+export async function POST(request: NextRequest) {
+  try {
+    const result = await requireAdmin(request);
+    if (result instanceof NextResponse) return result;
+
+    const body = await request.json();
+    const parsed = ListingCreateSchema.safeParse(body);
+    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
+
+    const listing = await createListing(parsed.data);
+    return NextResponse.json({ success: true, data: listing }, { status: 201 });
+  } catch (err) {
+    return toErrorResponse(err, "Failed to create listing");
   }
 }

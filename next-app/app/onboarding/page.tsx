@@ -178,9 +178,9 @@ function OnboardingContent() {
 
   if (isLoadingProfile) {
     return (
-      <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
+      <div className="min-h-screen flex flex-col">
         <AppHeader user={user} onLogout={logout} />
-        <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP)}>
+        <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
           <p className="text-muted-foreground">Loading…</p>
         </main>
       </div>
@@ -190,9 +190,9 @@ function OnboardingContent() {
   const skills = profile?.skills ?? [];
   if (skills.length > 0) {
     return (
-      <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
+      <div className="min-h-screen flex flex-col">
         <AppHeader user={user} onLogout={logout} />
-        <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP)}>
+        <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
           <p className="text-muted-foreground">Redirecting…</p>
         </main>
       </div>
@@ -200,10 +200,10 @@ function OnboardingContent() {
   }
 
   return (
-    <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
+    <div className="min-h-screen flex flex-col">
       <AppHeader user={user} onLogout={logout} />
 
-      <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP)}>
+      <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
         <section aria-label="Onboarding" className="max-w-xl mx-auto space-y-6">
           <h1 className="text-2xl font-semibold text-foreground">
             Add your skills for better job matches

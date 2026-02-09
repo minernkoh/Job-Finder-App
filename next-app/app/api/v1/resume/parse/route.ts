@@ -99,7 +99,6 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ success: true, data: result });
   } catch (err) {
-    console.error("POST /api/v1/resume/parse", err);
     const message = err instanceof Error ? err.message : "Failed to parse resume";
     if (message === "Resume parsing is not configured") {
       return NextResponse.json({ success: false, message }, { status: 503 });

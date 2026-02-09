@@ -1,8 +1,8 @@
 /**
- * API helpers for listings: fetch search results, single listing, and trending. Used by React Query hooks.
+ * API helpers for listings: fetch, create, update, delete (admin), and trending. Used by React Query hooks.
  */
 
-import type { ListingResult } from "@schemas";
+import type { ListingCreate, ListingResult, ListingUpdate } from "@schemas";
 import { apiClient } from "./client";
 
 export type { ListingResult };
@@ -104,4 +104,39 @@ export async function fetchTrending(
 /** Records a view for a listing (fire-and-forget). */
 export function recordListingView(listingId: string): void {
   apiClient.post(`/api/v1/listings/${listingId}/view`).catch(() => {});
+}
+
+/** Creates a listing (admin only). */
+export async function createListingApi(
+  body: ListingCreate
+): Promise<ListingResult> {
+  const res = await apiClient.post<ListingResponse>(
+    "/api/v1/listings",
+    body
+  );
+  if (!res.data.success || !("data" in res.data) || !res.data.data)
+    throw new Error("Failed to create listing");
+  return res.data.data;
+}
+
+/** Updates a listing (admin only). */
+export async function updateListingApi(
+  id: string,
+  body: ListingUpdate
+): Promise<ListingResult> {
+  const res = await apiClient.patch<ListingResponse>(
+    `/api/v1/listings/${id}`,
+    body
+  );
+  if (!res.data.success || !("data" in res.data) || !res.data.data)
+    throw new Error("Failed to update listing");
+  return res.data.data;
+}
+
+/** Deletes a listing (admin only). */
+export async function deleteListingApi(id: string): Promise<void> {
+  const res = await apiClient.delete<{ success: boolean }>(
+    `/api/v1/listings/${id}`
+  );
+  if (!res.data.success) throw new Error("Failed to delete listing");
 }

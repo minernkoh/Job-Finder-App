@@ -16,6 +16,7 @@ import {
 import { authCloseButtonClass } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { getPasswordStrength } from "@/lib/password-strength";
 import { Button, Card, CardContent, Input, Label } from "@ui/components";
 
 /** Builds pathname + search string without auth and redirect params. */
@@ -52,14 +53,7 @@ function AuthModalContent({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const passwordStrength =
-    password.length === 0
-      ? 0
-      : password.length < 8
-        ? 1
-        : /[A-Z]/.test(password) && /[0-9]/.test(password)
-          ? 3
-          : 2;
+  const passwordStrength = getPasswordStrength(password);
 
   const handleLogin = useCallback(
     async (e: React.FormEvent) => {
@@ -151,8 +145,8 @@ function AuthModalContent({
       variant="elevated"
       className="relative w-full max-w-lg overflow-hidden"
     >
-      {/* Header strip: close only; no gradient to match minimal auth card look. */}
-      <div className="relative min-h-[3rem] border-b border-border rounded-t-2xl flex items-center justify-end pr-2 py-2">
+      {/* Header strip: close only; no top border to match minimal look. */}
+      <div className="relative min-h-[3rem] rounded-t-2xl flex items-center justify-end pr-2 py-2">
         <button
           type="button"
           onClick={onClose}

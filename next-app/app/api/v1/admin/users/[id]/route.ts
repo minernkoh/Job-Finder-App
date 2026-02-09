@@ -5,7 +5,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/guard";
 import { getUserDetail, deleteUser } from "@/lib/services/admin-users.service";
-import { logAudit } from "@/lib/services/audit.service";
 import { toErrorResponse } from "@/lib/api/errors";
 
 /** Returns user detail with summary count, saved count, last activity. */
@@ -47,12 +46,6 @@ export async function DELETE(
         { status: 400 }
       );
     }
-    await logAudit(request, payload, {
-      action: "delete",
-      resourceType: "user",
-      resourceId: id,
-      details: { deletedUserId: id },
-    });
     return NextResponse.json({ success: true, data: { id } });
   } catch (e) {
     return toErrorResponse(e, "Failed to delete user");

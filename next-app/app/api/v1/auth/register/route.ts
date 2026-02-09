@@ -55,8 +55,7 @@ export async function POST(request: NextRequest) {
       },
       { status: 201, headers }
     );
-  } catch (e) {
-    console.error("Register error:", e);
+  } catch {
     return NextResponse.json(
       {
         success: false,

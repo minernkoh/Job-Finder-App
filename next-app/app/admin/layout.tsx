@@ -13,8 +13,6 @@ import {
   FileTextIcon,
   BriefcaseIcon,
   ChartBarIcon,
-  GearIcon,
-  ListChecksIcon,
 } from "@phosphor-icons/react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -24,8 +22,6 @@ const navItems = [
   { href: "/admin/summaries", label: "Summaries", icon: FileTextIcon },
   { href: "/admin/listings", label: "Listings", icon: BriefcaseIcon },
   { href: "/admin/analytics", label: "Analytics", icon: ChartBarIcon },
-  { href: "/admin/settings", label: "Settings", icon: GearIcon },
-  { href: "/admin/audit-logs", label: "Audit logs", icon: ListChecksIcon },
 ];
 
 export default function AdminLayout({

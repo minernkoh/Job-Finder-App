@@ -20,6 +20,7 @@ import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api/client";
+import { getPasswordStrength } from "@/lib/password-strength";
 import {
   Button,
   Card,
@@ -89,8 +90,13 @@ function AdminDashboard() {
     else setLoading(true);
     setError(null);
     try {
-      const url = refresh ? "/api/v1/admin/dashboard?refresh=1" : "/api/v1/admin/dashboard";
-      const res = await apiClient.get<{ success: boolean; data: DashboardData }>(url);
+      const url = refresh
+        ? "/api/v1/admin/dashboard?refresh=1"
+        : "/api/v1/admin/dashboard";
+      const res = await apiClient.get<{
+        success: boolean;
+        data: DashboardData;
+      }>(url);
       if (res.data.success && res.data.data) {
         setData(res.data.data);
       } else {
@@ -137,7 +143,9 @@ function AdminDashboard() {
     <div className="min-h-0">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold text-foreground">Admin dashboard</h1>
+          <h1 className="text-2xl font-semibold text-foreground">
+            Admin dashboard
+          </h1>
           <Button
             variant="outline"
             size="sm"
@@ -159,7 +167,10 @@ function AdminDashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Total users
               </CardTitle>
-              <UsersIcon className="size-4 text-muted-foreground" weight="regular" />
+              <UsersIcon
+                className="size-4 text-muted-foreground"
+                weight="regular"
+              />
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold">{m?.totalUsers ?? "—"}</span>
@@ -175,10 +186,15 @@ function AdminDashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 AI summaries
               </CardTitle>
-              <FileTextIcon className="size-4 text-muted-foreground" weight="regular" />
+              <FileTextIcon
+                className="size-4 text-muted-foreground"
+                weight="regular"
+              />
             </CardHeader>
             <CardContent>
-              <span className="text-2xl font-bold">{m?.totalSummaries ?? "—"}</span>
+              <span className="text-2xl font-bold">
+                {m?.totalSummaries ?? "—"}
+              </span>
               {m && m.summariesLast7Days > 0 && (
                 <p className="text-xs text-muted-foreground">
                   +{m.summariesLast7Days} in last 7 days
@@ -191,11 +207,18 @@ function AdminDashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Listing views (7d)
               </CardTitle>
-              <EyeIcon className="size-4 text-muted-foreground" weight="regular" />
+              <EyeIcon
+                className="size-4 text-muted-foreground"
+                weight="regular"
+              />
             </CardHeader>
             <CardContent>
-              <span className="text-2xl font-bold">{m?.viewsLast7Days ?? "—"}</span>
-              <p className="text-xs text-muted-foreground">views in last 7 days</p>
+              <span className="text-2xl font-bold">
+                {m?.viewsLast7Days ?? "—"}
+              </span>
+              <p className="text-xs text-muted-foreground">
+                views in last 7 days
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -203,11 +226,18 @@ function AdminDashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Saves (7d)
               </CardTitle>
-              <BookmarkIcon className="size-4 text-muted-foreground" weight="regular" />
+              <BookmarkIcon
+                className="size-4 text-muted-foreground"
+                weight="regular"
+              />
             </CardHeader>
             <CardContent>
-              <span className="text-2xl font-bold">{m?.savesLast7Days ?? "—"}</span>
-              <p className="text-xs text-muted-foreground">saves in last 7 days</p>
+              <span className="text-2xl font-bold">
+                {m?.savesLast7Days ?? "—"}
+              </span>
+              <p className="text-xs text-muted-foreground">
+                saves in last 7 days
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -215,11 +245,18 @@ function AdminDashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Active users (7d)
               </CardTitle>
-              <UsersThreeIcon className="size-4 text-muted-foreground" weight="regular" />
+              <UsersThreeIcon
+                className="size-4 text-muted-foreground"
+                weight="regular"
+              />
             </CardHeader>
             <CardContent>
-              <span className="text-2xl font-bold">{m?.activeUsersLast7Days ?? "—"}</span>
-              <p className="text-xs text-muted-foreground">summary or save in last 7 days</p>
+              <span className="text-2xl font-bold">
+                {m?.activeUsersLast7Days ?? "—"}
+              </span>
+              <p className="text-xs text-muted-foreground">
+                summary or save in last 7 days
+              </p>
             </CardContent>
           </Card>
         </section>
@@ -263,8 +300,14 @@ function AdminDashboard() {
                   <CardTitle>AI summary metrics</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm">
-                  <p>Total: {data.aiSummaryMetrics.total} · Last 7d: {data.aiSummaryMetrics.last7Days}</p>
-                  <p className="text-muted-foreground">With salary: {data.aiSummaryMetrics.withSalarySgd} · With JD match: {data.aiSummaryMetrics.withJdMatch}</p>
+                  <p>
+                    Total: {data.aiSummaryMetrics.total} · Last 7d:{" "}
+                    {data.aiSummaryMetrics.last7Days}
+                  </p>
+                  <p className="text-muted-foreground">
+                    With salary: {data.aiSummaryMetrics.withSalarySgd} · With JD
+                    match: {data.aiSummaryMetrics.withJdMatch}
+                  </p>
                 </CardContent>
               </Card>
             )}
@@ -274,9 +317,14 @@ function AdminDashboard() {
                   <CardTitle>JD match</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm">
-                  <p>With match: {data.jdMatchMetrics.countWithMatch} · Without: {data.jdMatchMetrics.countWithoutMatch}</p>
+                  <p>
+                    With match: {data.jdMatchMetrics.countWithMatch} · Without:{" "}
+                    {data.jdMatchMetrics.countWithoutMatch}
+                  </p>
                   {data.jdMatchMetrics.avgScore != null && (
-                    <p className="text-muted-foreground">Avg score: {data.jdMatchMetrics.avgScore.toFixed(1)}</p>
+                    <p className="text-muted-foreground">
+                      Avg score: {data.jdMatchMetrics.avgScore.toFixed(1)}
+                    </p>
                   )}
                 </CardContent>
               </Card>
@@ -307,14 +355,7 @@ function AdminForm() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const passwordStrength =
-    password.length === 0
-      ? 0
-      : password.length < 8
-        ? 1
-        : /[A-Z]/.test(password) && /[0-9]/.test(password)
-          ? 3
-          : 2;
+  const passwordStrength = getPasswordStrength(password);
 
   async function handleAdminSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -324,7 +365,7 @@ function AdminForm() {
       const res = await apiClient.post<AuthResponse>(
         "/api/v1/auth/admin/register",
         { name, email, password, adminSecret },
-        { withCredentials: true }
+        { withCredentials: true },
       );
       setToken(res.data.accessToken);
       setUser(res.data.user);
@@ -344,7 +385,7 @@ function AdminForm() {
       const res = await apiClient.post<AuthResponse>(
         "/api/v1/auth/login",
         { email, password },
-        { withCredentials: true }
+        { withCredentials: true },
       );
       if (res.data.user.role !== "admin") {
         setError("Not authorized for admin access");
@@ -362,8 +403,7 @@ function AdminForm() {
 
   return (
     <AuthCard
-      title="Admin"
-      hideTitle
+      title="Admin Log In"
       onClose={() => router.push("/browse")}
       footer={
         <p className="text-center text-sm text-muted-foreground">
@@ -517,9 +557,7 @@ function AdminForm() {
             className="w-full"
             disabled={submitting || isLoading}
             iconRight={
-              !submitting ? (
-                <ArrowRightIcon weight="bold" />
-              ) : undefined
+              !submitting ? <ArrowRightIcon weight="bold" /> : undefined
             }
           >
             {submitting ? "Creating account…" : "Sign up"}
