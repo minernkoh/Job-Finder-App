@@ -9,6 +9,7 @@ import type { User as UserType, UserRole } from "@schemas";
 export interface IUserDocument extends Omit<UserType, "password"> {
   _id: mongoose.Types.ObjectId;
   password: string;
+  username?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -16,7 +17,8 @@ export interface IUserDocument extends Omit<UserType, "password"> {
 const UserSchema = new Schema<IUserDocument>(
   {
     name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
+    email: { type: String, required: true },
+    username: { type: String, required: false, unique: true, sparse: true },
     password: { type: String, required: true, select: false },
     role: {
       type: String,
@@ -31,6 +33,8 @@ const UserSchema = new Schema<IUserDocument>(
   },
   { timestamps: true }
 );
+
+UserSchema.index({ email: 1, role: 1 }, { unique: true });
 
 // Hash password before saving (create or update when password is modified)
 UserSchema.pre("save", async function (next) {

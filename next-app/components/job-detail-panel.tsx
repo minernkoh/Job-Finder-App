@@ -19,6 +19,7 @@ import {
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import DOMPurify from "isomorphic-dompurify";
+import { AISummaryCard } from "@/components/ai-summary-card";
 import { AuthModalLink } from "@/components/auth-modal-link";
 import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
@@ -29,76 +30,6 @@ import { createSummary } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { listingKeys } from "@/lib/query-keys";
-
-const eyebrowClass = "text-xs uppercase tracking-widest text-muted-foreground";
-
-/** Renders AI summary: tldr, responsibilities, requirements, SG signals, caveats. */
-function SummaryPanel({ summary }: { summary: SummaryWithId }) {
-  return (
-    <Card variant="elevated" className="text-sm">
-      <CardContent className="p-4 space-y-4">
-        <p className="text-foreground">{summary.tldr}</p>
-        {summary.keyResponsibilities &&
-          summary.keyResponsibilities.length > 0 && (
-            <div>
-              <h3 className={cn(eyebrowClass, "mb-1")}>Key responsibilities</h3>
-              <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-                {summary.keyResponsibilities.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        {summary.requirements && summary.requirements.length > 0 && (
-          <div>
-            <h3 className={cn(eyebrowClass, "mb-1")}>Requirements</h3>
-            <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-              {summary.requirements.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {summary.salarySgd && (
-          <p className="text-foreground">
-            <span className={cn(eyebrowClass)}>Salary (SGD): </span>
-            {summary.salarySgd}
-          </p>
-        )}
-        {summary.jdMatch && (
-          <div className="space-y-1">
-            <p className="text-foreground">
-              <span className={eyebrowClass}>Match to your skills: </span>
-              {typeof summary.jdMatch.matchScore === "number" && (
-                <span className="font-medium">{summary.jdMatch.matchScore}%</span>
-              )}
-            </p>
-            {summary.jdMatch.matchedSkills &&
-              summary.jdMatch.matchedSkills.length > 0 && (
-                <p className="text-foreground text-xs">
-                  <span className={eyebrowClass}>Matched: </span>
-                  {summary.jdMatch.matchedSkills.join(", ")}
-                </p>
-              )}
-            {summary.jdMatch.missingSkills &&
-              summary.jdMatch.missingSkills.length > 0 && (
-                <p className="text-muted-foreground text-xs">
-                  <span className={eyebrowClass}>Missing: </span>
-                  {summary.jdMatch.missingSkills.join(", ")}
-                </p>
-              )}
-          </div>
-        )}
-        {summary.caveats && summary.caveats.length > 0 && (
-          <p className="text-muted-foreground text-xs">
-            <span className={eyebrowClass}>Caveats: </span>
-            {summary.caveats.join("; ")}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 export interface JobDetailPanelProps {
   /** Listing ID to show. */
@@ -406,9 +337,9 @@ export function JobDetailPanel({
 
         <div className="flex flex-col gap-6">
           <section className="space-y-3">
-            <h2 className={eyebrowClass}>AI Summary</h2>
+            <h2 className={"eyebrow"}>AI Summary</h2>
             {summary ? (
-              <SummaryPanel summary={summary} />
+              <AISummaryCard summary={summary} />
             ) : user ? (
               <>
                 <Button
@@ -442,7 +373,7 @@ export function JobDetailPanel({
 
           {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
             <section className="space-y-2">
-              <h2 className={cn(eyebrowClass, "mb-2")}>Description</h2>
+              <h2 className={cn("eyebrow", "mb-2")}>Description</h2>
               <Card variant="elevated" className="text-sm">
                 {sanitizedDescription.length > 0 && (
                   <CardContent

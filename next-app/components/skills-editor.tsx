@@ -126,7 +126,7 @@ export function SkillsEditor({
             </div>
             {suggestedSkills.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                <p className="eyebrow">
                   Suggested skills — click to add
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -279,7 +279,7 @@ export function SkillsEditor({
           </>
         )}
         <div className="pt-2 border-t border-border space-y-2">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">
+          <p className="eyebrow">
             {yourSkillsHeading ?? "Your skills"}
           </p>
           {skills.length === 0 ? (

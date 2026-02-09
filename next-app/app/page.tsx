@@ -1,15 +1,15 @@
 /**
- * Home route: redirects to the job search page so users can search instantly without a landing gate.
- * Preserves query params (e.g. auth, redirect) so the auth modal can open after redirect.
+ * Home route: redirects to /admin for admins and /browse for others. Preserves query params
+ * (e.g. auth, redirect) so the auth modal can open after redirect.
  */
 
-import { redirect } from "next/navigation";
+import { HomeRedirect } from "@/components/home-redirect";
 
 interface HomePageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
 }
 
-/** Sends visitors to the job search page; keeps auth and redirect params so modal can show. */
+/** Sends admins to /admin and others to /browse; keeps auth and redirect params for modal. */
 export default async function Home({ searchParams }: HomePageProps) {
   const params = await Promise.resolve(searchParams ?? {});
   const q = new URLSearchParams();
@@ -17,6 +17,6 @@ export default async function Home({ searchParams }: HomePageProps) {
     if (value === undefined) continue;
     q.set(key, Array.isArray(value) ? value[0] : value);
   }
-  const query = q.toString();
-  redirect(query ? `/browse?${query}` : "/browse");
+  const queryString = q.toString();
+  return <HomeRedirect queryString={queryString} />;
 }

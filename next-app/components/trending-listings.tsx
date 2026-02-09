@@ -34,7 +34,7 @@ export function TrendingListings({
 
   return (
     <section className="mt-10 overflow-visible">
-      <h2 className="mb-3 text-xs uppercase tracking-widest text-muted-foreground">
+      <h2 className="eyebrow mb-3">
         Trending
       </h2>
       <div className="scrollbar-hide flex gap-3 overflow-x-auto overflow-y-visible px-2 py-3">

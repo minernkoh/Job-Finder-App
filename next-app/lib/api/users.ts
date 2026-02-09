@@ -3,10 +3,12 @@
  */
 
 import { apiClient } from "./client";
+import { getErrorMessage } from "./errors";
 
 export interface UserUpdateBody {
   name?: string;
   email?: string;
+  username?: string;
   password?: string;
 }
 
@@ -15,6 +17,7 @@ export interface UserResponse {
   name: string;
   email: string;
   role: string;
+  username?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -34,11 +37,6 @@ export async function updateUser(
       throw new Error(res.data.message ?? "Failed to update user");
     return res.data.data;
   } catch (err: unknown) {
-    const msg =
-      err && typeof err === "object" && "response" in err
-        ? (err as { response?: { data?: { message?: string } } }).response?.data
-            ?.message
-        : undefined;
-    throw new Error(msg ?? (err instanceof Error ? err.message : "Failed to update user"));
+    throw new Error(getErrorMessage(err, "Failed to update user"));
   }
 }

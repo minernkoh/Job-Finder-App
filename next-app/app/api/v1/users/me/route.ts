@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       name: user.name,
       email: user.email,
       role: user.role,
+      username: (user as { username?: string }).username,
     });
   } catch (e) {
     return toErrorResponse(e, "Failed to get user");

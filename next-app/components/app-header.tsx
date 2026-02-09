@@ -1,5 +1,5 @@
 /**
- * Shared app header: logo left; optional back link and title; nav right (Browse Jobs and Profile when signed in, Sign in / UserMenu). Browse Jobs is shown only when signed in. Ensures consistency across Browse, Profile, Compare, and Job detail pages.
+ * Shared app header: logo left; nav right (Browse Jobs and Profile when signed in and not in admin mode; on admin pages, Dashboard / Users / Summaries / Listings). Sign in or UserMenu on the right.
  */
 
 "use client";
@@ -14,13 +14,14 @@ import { CONTENT_MAX_W, PAGE_PX } from "@/lib/layout";
 import { cn } from "@ui/components/lib/utils";
 import type { AuthUser } from "@/contexts/AuthContext";
 
+const adminNavItems = [
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/users", label: "Users" },
+  { href: "/admin/summaries", label: "Summaries" },
+  { href: "/admin/listings", label: "Listings" },
+];
+
 export interface AppHeaderProps {
-  /** Optional back link (e.g. /browse with label "Back to browse"). */
-  backHref?: string;
-  /** Label for the back link. */
-  backLabel?: string;
-  /** Optional page title shown next to logo (e.g. "Profile", "Compare jobs"). */
-  title?: string;
   /** Current user; when null, show Sign in. */
   user: AuthUser | null;
   /** Logout handler for UserMenu. */
@@ -29,23 +30,23 @@ export interface AppHeaderProps {
   className?: string;
 }
 
-/** Renders the app nav bar: logo (and optional back + title) left; when signed in, Browse Jobs and Profile; Sign in or UserMenu right. Active nav link is highlighted. */
+/** Renders the app nav bar: logo left; when signed in, Browse Jobs and Profile; Sign in or UserMenu right. Active nav link is highlighted. */
 export function AppHeader({
-  backHref,
-  backLabel,
-  title,
   user,
   onLogout,
   className,
 }: AppHeaderProps) {
   const pathname = usePathname() ?? "";
+  const isAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
   const isBrowse = pathname === "/browse" || pathname.startsWith("/browse/");
   const isProfile = pathname === "/profile" || pathname.startsWith("/profile/");
 
   const navLinkClass = (active: boolean) =>
     cn(
-      "text-sm underline-offset-4 hover:underline",
-      active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
+      "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+      active
+        ? "bg-primary text-primary-foreground"
+        : "text-muted-foreground hover:bg-muted hover:text-foreground"
     );
 
   return (
@@ -59,33 +60,31 @@ export function AppHeader({
     >
       <div
         className={cn(
-          "mx-auto flex w-full flex-wrap items-center justify-between gap-4",
+          "mx-auto flex w-full flex-wrap items-center justify-between gap-2",
           CONTENT_MAX_W
         )}
       >
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-1">
           <Logo className="shrink-0" />
-          {backHref && backLabel && (
-            <Link
-              href={backHref}
-              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              {backLabel}
-            </Link>
-          )}
-          {title && (
-            <span className="text-muted-foreground" aria-hidden>
-              {title}
-            </span>
-          )}
         </div>
-        <nav className="flex shrink-0 items-center gap-3">
-          {user && (
+        <nav className="flex shrink-0 items-center gap-1">
+          {user &&
+            isAdmin &&
+            adminNavItems.map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className={navLinkClass(pathname === href)}
+              >
+                {label}
+              </Link>
+            ))}
+          {user && !isAdmin && (
             <Link href="/browse" className={navLinkClass(isBrowse)}>
               Browse Jobs
             </Link>
           )}
-          {user && (
+          {user && !isAdmin && (
             <Link href="/profile" className={navLinkClass(isProfile)}>
               Profile
             </Link>

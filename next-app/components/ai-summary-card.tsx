@@ -1,0 +1,107 @@
+/**
+ * AI summary card: renders tldr, key responsibilities, requirements, salary, JD match, and caveats in a consistent Card. Used by job detail, summarize, and compare pages.
+ */
+
+"use client";
+
+import type { AISummary } from "@schemas";
+import { Card, CardContent } from "@ui/components";
+import { cn } from "@ui/components/lib/utils";
+
+/** Summary shape for display: at least tldr; other fields optional so compare column can pass partial data. */
+export type AISummaryCardSummary = Pick<AISummary, "tldr"> &
+  Partial<Omit<AISummary, "tldr">>;
+
+interface AISummaryCardProps {
+  summary: AISummaryCardSummary;
+  /** When true, render without Card wrapper (e.g. inside another card). Default false. */
+  noCard?: boolean;
+  /** When set, limit key responsibilities to this many (e.g. 3 for compare column). */
+  maxResponsibilities?: number;
+}
+
+/** Renders AI summary content: tldr, responsibilities, requirements, salary, JD match, caveats. */
+export function AISummaryCard({
+  summary,
+  noCard = false,
+  maxResponsibilities,
+}: AISummaryCardProps) {
+  const listClass = "list-disc pl-5 space-y-0.5 text-foreground";
+  const responsibilities =
+    summary.keyResponsibilities && summary.keyResponsibilities.length > 0
+      ? maxResponsibilities != null
+        ? summary.keyResponsibilities.slice(0, maxResponsibilities)
+        : summary.keyResponsibilities
+      : [];
+
+  const content = (
+    <div className="space-y-4 text-sm">
+      <p className="text-foreground">{summary.tldr}</p>
+      {responsibilities.length > 0 && (
+        <div>
+          <h3 className={cn("eyebrow", "mb-1")}>Key responsibilities</h3>
+          <ul className={listClass}>
+            {responsibilities.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {summary.requirements && summary.requirements.length > 0 && (
+        <div>
+          <h3 className={cn("eyebrow", "mb-1")}>Requirements</h3>
+          <ul className={listClass}>
+            {summary.requirements.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {summary.salarySgd && (
+        <p className="text-foreground">
+          <span className="eyebrow">Salary (SGD): </span>
+          {summary.salarySgd}
+        </p>
+      )}
+      {summary.jdMatch && (
+        <div className="space-y-1">
+          <p className="text-foreground">
+            <span className="eyebrow">Match to your skills: </span>
+            {typeof summary.jdMatch.matchScore === "number" && (
+              <span className="font-medium">{summary.jdMatch.matchScore}%</span>
+            )}
+          </p>
+          {summary.jdMatch.matchedSkills &&
+            summary.jdMatch.matchedSkills.length > 0 && (
+              <p className="text-foreground text-xs">
+                <span className="eyebrow">Matched: </span>
+                {summary.jdMatch.matchedSkills.join(", ")}
+              </p>
+            )}
+          {summary.jdMatch.missingSkills &&
+            summary.jdMatch.missingSkills.length > 0 && (
+              <p className="text-muted-foreground text-xs">
+                <span className="eyebrow">Missing: </span>
+                {summary.jdMatch.missingSkills.join(", ")}
+              </p>
+            )}
+        </div>
+      )}
+      {summary.caveats && summary.caveats.length > 0 && (
+        <p className="text-muted-foreground text-xs">
+          <span className="eyebrow">Caveats: </span>
+          {summary.caveats.join("; ")}
+        </p>
+      )}
+    </div>
+  );
+
+  if (noCard) {
+    return content;
+  }
+  return (
+    <Card variant="elevated" className="text-sm">
+      <CardContent className="p-4 space-y-4">{content}</CardContent>
+    </Card>
+  );
+}

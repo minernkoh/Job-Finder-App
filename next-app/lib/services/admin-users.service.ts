@@ -1,5 +1,5 @@
 /**
- * Admin users service: list users with filters/pagination, get user detail with activity counts, update role/status, delete user with safeguards.
+ * Admin users service: list users with filters/pagination, get user detail with activity counts, create user, update name/email, update role/status, delete user with safeguards.
  */
 
 import mongoose from "mongoose";
@@ -9,6 +9,8 @@ import { AISummary } from "@/lib/models/AISummary";
 import { SavedListing } from "@/lib/models/SavedListing";
 import type { UserRole } from "@schemas";
 import type { UserStatus } from "@schemas";
+import type { AdminCreateUserBody } from "@schemas";
+import type { AdminUpdateUserBody } from "@schemas";
 
 export interface ListUsersParams {
   search?: string;
@@ -23,6 +25,7 @@ export interface ListUsersResult {
     id: string;
     name: string;
     email: string;
+    username?: string;
     role: string;
     status: string;
     createdAt: Date;
@@ -63,6 +66,7 @@ export async function listUsers(
       id: u._id.toString(),
       name: u.name,
       email: u.email,
+      username: (u as { username?: string }).username,
       role: u.role,
       status: (u as { status?: string }).status ?? "active",
       createdAt: u.createdAt,
@@ -78,6 +82,7 @@ export interface UserDetailResult {
   id: string;
   name: string;
   email: string;
+  username?: string;
   role: string;
   status: string;
   createdAt: Date;
@@ -108,6 +113,7 @@ export async function getUserDetail(userId: string): Promise<UserDetailResult | 
     id: user._id.toString(),
     name: user.name,
     email: user.email,
+    username: (user as { username?: string }).username,
     role: user.role,
     status: (user as { status?: string }).status ?? "active",
     createdAt: user.createdAt,
@@ -123,6 +129,76 @@ export async function getUserDetail(userId: string): Promise<UserDetailResult | 
 export async function countAdmins(): Promise<number> {
   await connectDB();
   return User.countDocuments({ role: "admin" });
+}
+
+/** Create a new user (admin-only). Password is hashed by User model pre-save. Returns new user or duplicate email/username reason. */
+export async function createUser(
+  body: AdminCreateUserBody
+): Promise<
+  { success: true; user: { id: string; name: string; email: string; username?: string; role: string } } | { success: false; reason: string }
+> {
+  await connectDB();
+  const targetRole = body.role ?? "user";
+  const existing = await User.findOne({ email: body.email, role: targetRole }).lean();
+  if (existing) {
+    return { success: false, reason: "Email already registered for this role" };
+  }
+  const usernameTrimmed = body.username?.trim();
+  if (usernameTrimmed) {
+    const existingUsername = await User.findOne({ username: usernameTrimmed }).lean();
+    if (existingUsername) {
+      return { success: false, reason: "Username already taken" };
+    }
+  }
+  const user = await User.create(body);
+  return {
+    success: true,
+    user: {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      username: (user as { username?: string }).username,
+      role: user.role,
+    },
+  };
+}
+
+/** Update user name, email, and/or username (admin-only). */
+export async function updateUserProfile(
+  userId: string,
+  body: AdminUpdateUserBody
+): Promise<{ success: false; reason: string } | { success: true }> {
+  await connectDB();
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return { success: false, reason: "Invalid user id" };
+  }
+  const user = await User.findById(userId);
+  if (!user) return { success: false, reason: "User not found" };
+  if (body.name != null) user.name = body.name;
+  if (body.email != null) {
+    const existing = await User.findOne({
+      email: body.email,
+      role: user.role,
+      _id: { $ne: userId },
+    }).lean();
+    if (existing) return { success: false, reason: "Email already in use for this role" };
+    user.email = body.email;
+  }
+  if (body.username !== undefined) {
+    const trimmed = body.username?.trim();
+    if (trimmed) {
+      const existingUsername = await User.findOne({
+        username: trimmed,
+        _id: { $ne: userId },
+      }).lean();
+      if (existingUsername) return { success: false, reason: "Username already taken" };
+      (user as { username?: string }).username = trimmed;
+    } else {
+      (user as { username?: string }).username = undefined;
+    }
+  }
+  await user.save();
+  return { success: true };
 }
 
 /** Update user role; throws if demoting last admin. */

@@ -16,10 +16,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const parsed = LoginSchema.safeParse(body);
     if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");
-    const { email, password } = parsed.data;
+    const { email, password, role } = parsed.data;
+    const loginRole = role ?? "user";
 
     await connectDB();
-    const user = await User.findOne({ email }).select("+password").lean();
+    const user = await User.findOne({ email, role: loginRole }).select("+password").lean();
     if (!user) {
       return NextResponse.json(
         { success: false, message: "Invalid email or password" },
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
           name: user.name,
           email: user.email,
           role: user.role,
+          username: (user as { username?: string }).username,
         },
       },
       { headers }

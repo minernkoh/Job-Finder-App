@@ -6,13 +6,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  CaretLeftIcon,
-  CaretRightIcon,
-  PlusIcon,
-  PencilSimpleIcon,
-  TrashIcon,
-} from "@phosphor-icons/react";
+import { PlusIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react";
 import { apiClient } from "@/lib/api/client";
 import {
   createListingApi,
@@ -20,16 +14,12 @@ import {
   fetchListing,
   updateListingApi,
 } from "@/lib/api/listings";
+import { AdminPageShell } from "@/components/admin-page-shell";
+import { InlineError, InlineLoading } from "@/components/page-state";
+import { TablePagination } from "@/components/table-pagination";
 import type { ListingCreate, ListingResult, ListingUpdate } from "@schemas";
-import {
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Input,
-  Label,
-} from "@ui/components";
+import { Button, Card, CardContent, CardHeader, CardTitle } from "@ui/components";
+import { ListingForm } from "@/components/listing-form";
 
 interface ListingRow {
   id: string;
@@ -199,12 +189,10 @@ export default function AdminListingsPage() {
     }
   };
 
-  const totalPages = data ? Math.ceil(data.total / limit) : 0;
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-foreground">Listings</h1>
+    <AdminPageShell
+      title="Listings"
+      headerAction={
         <Button
           variant="default"
           size="sm"
@@ -213,8 +201,8 @@ export default function AdminListingsPage() {
         >
           {createOpen ? "Cancel" : "Create listing"}
         </Button>
-      </div>
-
+      }
+    >
       {createOpen && (
         <Card className="border-border">
           <CardHeader>
@@ -224,89 +212,18 @@ export default function AdminListingsPage() {
             </p>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleCreateSubmit} className="space-y-4 max-w-xl">
-              <div className="grid gap-2">
-                <Label htmlFor="create-title">Title *</Label>
-                <Input
-                  id="create-title"
-                  value={createForm.title}
-                  onChange={(e) =>
-                    setCreateForm((f) => ({ ...f, title: e.target.value }))
-                  }
-                  required
-                  placeholder="Job title"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="create-company">Company *</Label>
-                <Input
-                  id="create-company"
-                  value={createForm.company}
-                  onChange={(e) =>
-                    setCreateForm((f) => ({ ...f, company: e.target.value }))
-                  }
-                  required
-                  placeholder="Company name"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="create-location">Location</Label>
-                <Input
-                  id="create-location"
-                  value={createForm.location ?? ""}
-                  onChange={(e) =>
-                    setCreateForm((f) => ({ ...f, location: e.target.value }))
-                  }
-                  placeholder="e.g. Singapore"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="create-description">Description</Label>
-                <textarea
-                  id="create-description"
-                  className="min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={createForm.description ?? ""}
-                  onChange={(e) =>
-                    setCreateForm((f) => ({ ...f, description: e.target.value }))
-                  }
-                  placeholder="Job description (optional)"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="create-country">Country (2-letter)</Label>
-                <Input
-                  id="create-country"
-                  value={createForm.country ?? "sg"}
-                  onChange={(e) =>
-                    setCreateForm((f) => ({
-                      ...f,
-                      country: e.target.value.slice(0, 2),
-                    }))
-                  }
-                  placeholder="sg"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="create-sourceUrl">Source URL</Label>
-                <Input
-                  id="create-sourceUrl"
-                  type="url"
-                  value={createForm.sourceUrl ?? ""}
-                  onChange={(e) =>
-                    setCreateForm((f) => ({ ...f, sourceUrl: e.target.value }))
-                  }
-                  placeholder="https://..."
-                />
-              </div>
-              {createError && (
-                <p className="text-sm text-destructive" role="alert">
-                  {createError}
-                </p>
-              )}
-              <Button type="submit" disabled={createSubmitting}>
-                {createSubmitting ? "Creating…" : "Create"}
-              </Button>
-            </form>
+            <ListingForm
+              mode="create"
+              value={createForm}
+              onChange={(patch) =>
+                setCreateForm((f) => ({ ...f, ...patch }))
+              }
+              onSubmit={handleCreateSubmit}
+              submitLabel="Create"
+              submitting={createSubmitting}
+              error={createError}
+              fieldIdPrefix="create-"
+            />
           </CardContent>
         </Card>
       )}
@@ -324,86 +241,26 @@ export default function AdminListingsPage() {
             </Button>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleEditSubmit} className="space-y-4 max-w-xl">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-title">Title *</Label>
-                <Input
-                  id="edit-title"
-                  value={editForm.title ?? ""}
-                  onChange={(e) =>
-                    setEditForm((f) => ({ ...f, title: e.target.value }))
-                  }
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-company">Company *</Label>
-                <Input
-                  id="edit-company"
-                  value={editForm.company ?? ""}
-                  onChange={(e) =>
-                    setEditForm((f) => ({ ...f, company: e.target.value }))
-                  }
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-location">Location</Label>
-                <Input
-                  id="edit-location"
-                  value={editForm.location ?? ""}
-                  onChange={(e) =>
-                    setEditForm((f) => ({ ...f, location: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-description">Description</Label>
-                <textarea
-                  id="edit-description"
-                  className="min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={editForm.description ?? ""}
-                  onChange={(e) =>
-                    setEditForm((f) => ({ ...f, description: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-country">Country (2-letter)</Label>
-                <Input
-                  id="edit-country"
-                  value={editForm.country ?? "sg"}
-                  onChange={(e) =>
-                    setEditForm((f) => ({
-                      ...f,
-                      country: e.target.value.slice(0, 2),
-                    }))
-                  }
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-sourceUrl">Source URL</Label>
-                <Input
-                  id="edit-sourceUrl"
-                  type="url"
-                  value={editForm.sourceUrl ?? ""}
-                  onChange={(e) =>
-                    setEditForm((f) => ({
-                      ...f,
-                      sourceUrl: e.target.value || undefined,
-                    }))
-                  }
-                />
-              </div>
-              {editError && (
-                <p className="text-sm text-destructive" role="alert">
-                  {editError}
-                </p>
-              )}
-              <Button type="submit" disabled={editSubmitting}>
-                {editSubmitting ? "Saving…" : "Save"}
-              </Button>
-            </form>
+            <ListingForm
+              mode="edit"
+              value={{
+                title: editForm.title ?? "",
+                company: editForm.company ?? "",
+                location: editForm.location ?? "",
+                description: editForm.description ?? "",
+                country: editForm.country ?? "sg",
+                sourceUrl: editForm.sourceUrl ?? "",
+              }}
+              onChange={(patch) =>
+                setEditForm((f) => ({ ...f, ...patch }))
+              }
+              onSubmit={handleEditSubmit}
+              onCancel={() => setEditId(null)}
+              submitLabel="Save"
+              submitting={editSubmitting}
+              error={editError}
+              fieldIdPrefix="edit-"
+            />
           </CardContent>
         </Card>
       )}
@@ -416,14 +273,8 @@ export default function AdminListingsPage() {
           </p>
         </CardHeader>
         <CardContent>
-          {error && (
-            <p className="text-destructive text-sm" role="alert">
-              {error}
-            </p>
-          )}
-          {loading && !data && (
-            <p className="text-muted-foreground text-sm">Loading…</p>
-          )}
+          {error && <InlineError message={error} />}
+          {loading && !data && <InlineLoading />}
           {data && (
             <>
               <div className="overflow-x-auto">
@@ -522,33 +373,16 @@ export default function AdminListingsPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-muted-foreground text-xs">
-                  {data.total} total · page {data.page} of {totalPages || 1}
-                </p>
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={data.page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    <CaretLeftIcon className="size-4" weight="regular" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={data.page >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    <CaretRightIcon className="size-4" weight="regular" />
-                  </Button>
-                </div>
-              </div>
+              <TablePagination
+                total={data.total}
+                page={data.page}
+                limit={limit}
+                onPageChange={setPage}
+              />
             </>
           )}
         </CardContent>
       </Card>
-    </div>
+    </AdminPageShell>
   );
 }

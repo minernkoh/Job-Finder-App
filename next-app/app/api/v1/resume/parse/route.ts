@@ -85,10 +85,25 @@ export async function POST(request: NextRequest) {
         ? await extractTextFromPdf(buffer)
         : await extractTextFromDocx(buffer);
     } else {
-      const body = await request.json();
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return NextResponse.json(
+          { success: false, message: "Request body must be JSON with a text field." },
+          { status: 400 }
+        );
+      }
       const parsed = ParseResumeBodySchema.safeParse(body);
-      if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
-      text = parsed.data.text;
+      if (!parsed.success)
+        return validationErrorResponse(parsed.error, "Invalid body");
+      text = parsed.data.text.trim();
+      if (!text) {
+        return NextResponse.json(
+          { success: false, message: "Resume text is required." },
+          { status: 400 }
+        );
+      }
     }
 
     const result = await parseResumeWithRetry(text);

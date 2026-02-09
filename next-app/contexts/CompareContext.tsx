@@ -1,5 +1,5 @@
 /**
- * Compare context: holds up to 3 listing IDs for comparison. Used by listing cards, detail panel, and compare bar.
+ * Compare context: holds up to 3 listings (id + title) for comparison. Used by listing cards, detail panel, and compare bar.
  */
 
 "use client";
@@ -15,9 +15,14 @@ import {
 const COMPARE_STORAGE_KEY = "job-finder-compare-ids";
 const MAX_COMPARE = 3;
 
+export interface CompareItem {
+  id: string;
+  title: string;
+}
+
 interface CompareContextValue {
-  compareSet: string[];
-  addToCompare: (listingId: string) => void;
+  compareSet: CompareItem[];
+  addToCompare: (listing: CompareItem) => void;
   removeFromCompare: (listingId: string) => void;
   clearCompare: () => void;
   isInCompareSet: (listingId: string) => boolean;
@@ -25,25 +30,36 @@ interface CompareContextValue {
 
 const CompareContext = createContext<CompareContextValue | null>(null);
 
-function loadFromStorage(): string[] {
+function loadFromStorage(): CompareItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = sessionStorage.getItem(COMPARE_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((x): x is string => typeof x === "string")
+    const items: CompareItem[] = parsed
+      .map((x: unknown) => {
+        if (typeof x === "object" && x !== null && "id" in x) {
+          const obj = x as { id: unknown; title?: unknown };
+          if (typeof obj.id !== "string") return null;
+          const title = typeof obj.title === "string" ? obj.title : obj.id;
+          return { id: obj.id, title };
+        }
+        if (typeof x === "string") return { id: x, title: x };
+        return null;
+      })
+      .filter((item): item is CompareItem => item !== null)
       .slice(0, MAX_COMPARE);
+    return items;
   } catch {
     return [];
   }
 }
 
-function saveToStorage(ids: string[]) {
+function saveToStorage(items: CompareItem[]) {
   if (typeof window === "undefined") return;
   try {
-    sessionStorage.setItem(COMPARE_STORAGE_KEY, JSON.stringify(ids));
+    sessionStorage.setItem(COMPARE_STORAGE_KEY, JSON.stringify(items));
   } catch {
     // ignore
   }
@@ -51,28 +67,28 @@ function saveToStorage(ids: string[]) {
 
 /** Provides compare set state and helpers; persists to sessionStorage. */
 export function CompareProvider({ children }: { children: React.ReactNode }) {
-  const [compareSet, setCompareSet] = useState<string[]>(() => loadFromStorage());
+  const [compareSet, setCompareSet] = useState<CompareItem[]>(() => loadFromStorage());
 
   useEffect(() => {
     saveToStorage(compareSet);
   }, [compareSet]);
 
-  const addToCompare = useCallback((listingId: string) => {
+  const addToCompare = useCallback((listing: CompareItem) => {
     setCompareSet((prev) => {
-      if (prev.includes(listingId)) return prev;
+      if (prev.some((x) => x.id === listing.id)) return prev;
       if (prev.length >= MAX_COMPARE) return prev;
-      return [...prev, listingId];
+      return [...prev, listing];
     });
   }, []);
 
   const removeFromCompare = useCallback((listingId: string) => {
-    setCompareSet((prev) => prev.filter((id) => id !== listingId));
+    setCompareSet((prev) => prev.filter((item) => item.id !== listingId));
   }, []);
 
   const clearCompare = useCallback(() => setCompareSet([]), []);
 
   const isInCompareSet = useCallback(
-    (listingId: string) => compareSet.includes(listingId),
+    (listingId: string) => compareSet.some((item) => item.id === listingId),
     [compareSet]
   );
 

@@ -25,6 +25,7 @@ export interface AuthUser {
   name: string;
   email: string;
   role: "admin" | "user";
+  username?: string;
 }
 
 interface AuthContextValue {
@@ -32,7 +33,7 @@ interface AuthContextValue {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, username?: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: AuthUser | null) => void;
   setToken: (token: string | null) => void;
@@ -99,17 +100,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const res = await apiClient.post<{ accessToken: string; user: AuthUser }>(
       "/api/v1/auth/login",
-      { email, password }
+      { email, password, role: "user" }
     );
     setToken(res.data.accessToken);
     setUser(res.data.user);
   }, []);
 
   const register = useCallback(
-    async (name: string, email: string, password: string) => {
+    async (name: string, email: string, password: string, username?: string) => {
       const res = await apiClient.post<{ accessToken: string; user: AuthUser }>(
         "/api/v1/auth/register",
-        { name, email, password }
+        { name, email, password, username: username?.trim() || undefined }
       );
       setToken(res.data.accessToken);
       setUser(res.data.user);

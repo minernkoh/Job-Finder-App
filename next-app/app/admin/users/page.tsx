@@ -1,19 +1,25 @@
 /**
- * Admin users page: table with search, role/status filters, pagination; links to user detail.
+ * Admin users page: table with search, role/status filters, pagination; create user form; links to user detail.
  */
 
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { MagnifyingGlassIcon, CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
+import { MagnifyingGlassIcon, PlusIcon } from "@phosphor-icons/react";
 import { apiClient } from "@/lib/api/client";
+import { getErrorMessage } from "@/lib/api/errors";
+import { AdminPageShell } from "@/components/admin-page-shell";
+import { InlineError, InlineLoading } from "@/components/page-state";
+import { TablePagination } from "@/components/table-pagination";
+import { FormField } from "@/components/form-field";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@ui/components";
 
 interface UserRow {
   id: string;
   name: string;
   email: string;
+  username?: string;
   role: string;
   status: string;
   createdAt: string;
@@ -27,6 +33,14 @@ interface ListResponse {
   limit: number;
 }
 
+const defaultCreateForm = {
+  name: "",
+  email: "",
+  username: "",
+  password: "",
+  role: "user" as "user" | "admin",
+};
+
 export default function AdminUsersPage() {
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +50,11 @@ export default function AdminUsersPage() {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const limit = 20;
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(defaultCreateForm);
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -53,11 +72,7 @@ export default function AdminUsersPage() {
       if (res.data.success && res.data.data) setData(res.data.data);
       else setError("Failed to load users");
     } catch (e) {
-      setError(
-        e && typeof e === "object" && "response" in e
-          ? String((e as { response?: { data?: { message?: string } } }).response?.data?.message ?? "Request failed")
-          : "Request failed"
-      );
+      setError(getErrorMessage(e, "Request failed"));
     } finally {
       setLoading(false);
     }
@@ -67,11 +82,123 @@ export default function AdminUsersPage() {
     fetchUsers();
   }, [fetchUsers]);
 
-  const totalPages = data ? Math.ceil(data.total / limit) : 0;
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+    setCreateSubmitting(true);
+    try {
+      const res = await apiClient.post<{ success: boolean; data: { id: string; name: string; email: string; username?: string; role: string } }>(
+        "/api/v1/admin/users",
+        {
+          name: createForm.name.trim(),
+          email: createForm.email.trim(),
+          username: createForm.username?.trim() || undefined,
+          password: createForm.password,
+          role: createForm.role,
+        }
+      );
+      if (res.data.success) {
+        setCreateForm(defaultCreateForm);
+        setCreateOpen(false);
+        await fetchUsers();
+      } else {
+        setCreateError("Failed to create user");
+      }
+    } catch (e: unknown) {
+      setCreateError(getErrorMessage(e, "Failed to create user"));
+    } finally {
+      setCreateSubmitting(false);
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-foreground">Users</h1>
+    <AdminPageShell
+      title="Users"
+      headerAction={
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => setCreateOpen((o) => !o)}
+          iconRight={<PlusIcon size={18} weight="bold" />}
+        >
+          {createOpen ? "Cancel" : "Create user"}
+        </Button>
+      }
+    >
+      {createOpen && (
+        <Card className="border-border">
+          <CardHeader>
+            <CardTitle>New user</CardTitle>
+            <p className="text-muted-foreground text-sm">
+              Create a user account. They can log in with this email and password.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreateSubmit} className="space-y-4">
+              {createError && <InlineError message={createError} />}
+              <FormField id="create-name" label="Name" required>
+                <Input
+                  id="create-name"
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Full name"
+                  required
+                  disabled={createSubmitting}
+                />
+              </FormField>
+              <FormField id="create-email" label="Email" required>
+                <Input
+                  id="create-email"
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="user@example.com"
+                  required
+                  disabled={createSubmitting}
+                />
+              </FormField>
+              <FormField id="create-username" label="Username (optional)">
+                <Input
+                  id="create-username"
+                  value={createForm.username}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))}
+                  placeholder="3–30 chars, letters, numbers, _ -"
+                  disabled={createSubmitting}
+                />
+              </FormField>
+              <FormField id="create-password" label="Password" required>
+                <Input
+                  id="create-password"
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                  placeholder="Min 8 characters"
+                  required
+                  minLength={8}
+                  disabled={createSubmitting}
+                />
+              </FormField>
+              <div className="grid gap-2">
+                <Label htmlFor="create-role">Role</Label>
+                <select
+                  id="create-role"
+                  value={createForm.role}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, role: e.target.value as "user" | "admin" }))}
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  disabled={createSubmitting}
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <Button type="submit" disabled={createSubmitting}>
+                {createSubmitting ? "Creating…" : "Create user"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>All users</CardTitle>
@@ -116,12 +243,8 @@ export default function AdminUsersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {error && (
-            <p className="text-destructive text-sm" role="alert">
-              {error}
-            </p>
-          )}
-          {loading && !data && <p className="text-muted-foreground text-sm">Loading…</p>}
+          {error && <InlineError message={error} />}
+          {loading && !data && <InlineLoading />}
           {data && (
             <>
               <div className="overflow-x-auto">
@@ -129,6 +252,7 @@ export default function AdminUsersPage() {
                   <thead>
                     <tr className="border-b border-border">
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">Name</th>
+                      <th className="pb-2 pr-2 font-medium text-muted-foreground">Username</th>
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">Email</th>
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">Role</th>
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">Status</th>
@@ -139,6 +263,7 @@ export default function AdminUsersPage() {
                     {data.users.map((u) => (
                       <tr key={u.id} className="border-b border-border/50">
                         <td className="py-2 pr-2 text-foreground">{u.name}</td>
+                        <td className="py-2 pr-2 text-muted-foreground text-xs">{u.username ?? "—"}</td>
                         <td className="py-2 pr-2 text-foreground">{u.email}</td>
                         <td className="py-2 pr-2 text-foreground">{u.role}</td>
                         <td className="py-2 pr-2 text-foreground">{u.status}</td>
@@ -154,33 +279,16 @@ export default function AdminUsersPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-muted-foreground text-xs">
-                  {data.total} total · page {data.page} of {totalPages || 1}
-                </p>
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={data.page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    <CaretLeftIcon className="size-4" weight="regular" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={data.page >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    <CaretRightIcon className="size-4" weight="regular" />
-                  </Button>
-                </div>
-              </div>
+              <TablePagination
+                total={data.total}
+                page={data.page}
+                limit={limit}
+                onPageChange={setPage}
+              />
             </>
           )}
         </CardContent>
       </Card>
-    </div>
+    </AdminPageShell>
   );
 }

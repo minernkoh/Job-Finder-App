@@ -13,6 +13,7 @@ import { fetchProfile, updateProfile, suggestSkills, parseResume, parseResumeFil
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@ui/components";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
+import { PageShell } from "@/components/page-shell";
 import { SkillsEditor } from "@/components/skills-editor";
 import { cn } from "@ui/components/lib/utils";
 
@@ -205,9 +206,7 @@ function OnboardingContent() {
 
       <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
         <section aria-label="Onboarding" className="max-w-xl mx-auto space-y-6">
-          <h1 className="text-2xl font-semibold text-foreground">
-            Add your skills for better job matches
-          </h1>
+          <PageShell title="Add your skills for better job matches">
           <p className="text-muted-foreground">
             Add skills manually or from your resume. We use them to show match scores on job listings.
           </p>
@@ -340,6 +339,7 @@ function OnboardingContent() {
               </p>
             )}
           </div>
+          </PageShell>
         </section>
       </main>
     </div>

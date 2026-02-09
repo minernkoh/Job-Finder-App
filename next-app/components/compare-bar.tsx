@@ -22,7 +22,7 @@ export function CompareBar({ fullWidth }: CompareBarProps) {
 
   if (compareSet.length < 1) return null;
 
-  const idsQuery = compareSet.join(",");
+  const idsQuery = compareSet.map((item) => item.id).join(",");
   const viewHref = `/browse/compare?ids=${encodeURIComponent(idsQuery)}`;
   const canCompare = compareSet.length >= 2;
 
@@ -47,24 +47,27 @@ export function CompareBar({ fullWidth }: CompareBarProps) {
           )}
           {compareSet.length === 2 && (
             <span className="text-xs text-muted-foreground">
-              Add one more job to compare all three side by side.
+              Select up to three job listings to compare them.
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {compareSet.map((id) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => removeFromCompare(id)}
-              className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-              title="Remove from comparison"
-              aria-label={`Remove job ${id} from comparison`}
-            >
-              {id.slice(0, 8)}…
-              <XIcon size={12} className="ml-0.5 inline" />
-            </button>
-          ))}
+          {compareSet.map((item) => {
+            const displayTitle = item.title.length > 24 ? item.title.slice(0, 24) + "…" : item.title;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => removeFromCompare(item.id)}
+                className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                title="Remove from comparison"
+                aria-label={`Remove job ${item.title} from comparison`}
+              >
+                {displayTitle}
+                <XIcon size={12} className="ml-0.5 inline" />
+              </button>
+            );
+          })}
         </div>
         <Button
           variant="default"

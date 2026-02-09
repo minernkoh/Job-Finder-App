@@ -8,6 +8,7 @@ import type {
   UserProfileUpdate,
 } from "@schemas";
 import { apiClient } from "./client";
+import { getErrorMessage } from "./errors";
 
 export type { ResumeParseResult, UserProfile, UserProfileUpdate };
 
@@ -52,30 +53,38 @@ export async function updateProfile(
 
 /** Parses resume text and saves result to profile. Returns parsed result. */
 export async function parseResume(text: string): Promise<ResumeParseResult> {
-  const res = await apiClient.post<ParseResumeResponse>(
-    "/api/v1/resume/parse",
-    { text }
-  );
-  if (!res.data.success || !res.data.data)
-    throw new Error(
-      (res.data as { message?: string }).message ?? "Failed to parse resume"
+  try {
+    const res = await apiClient.post<ParseResumeResponse>(
+      "/api/v1/resume/parse",
+      { text }
     );
-  return res.data.data;
+    if (!res.data.success || !res.data.data)
+      throw new Error(
+        (res.data as { message?: string }).message ?? "Failed to parse resume"
+      );
+    return res.data.data;
+  } catch (err: unknown) {
+    throw new Error(getErrorMessage(err, "Failed to parse resume"));
+  }
 }
 
 /** Parses resume from an uploaded PDF or DOCX file and saves result to profile. Returns parsed result. */
 export async function parseResumeFile(file: File): Promise<ResumeParseResult> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await apiClient.post<ParseResumeResponse>(
-    "/api/v1/resume/parse",
-    formData
-  );
-  if (!res.data.success || !res.data.data)
-    throw new Error(
-      (res.data as { message?: string }).message ?? "Failed to parse resume"
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await apiClient.post<ParseResumeResponse>(
+      "/api/v1/resume/parse",
+      formData
     );
-  return res.data.data;
+    if (!res.data.success || !res.data.data)
+      throw new Error(
+        (res.data as { message?: string }).message ?? "Failed to parse resume"
+      );
+    return res.data.data;
+  } catch (err: unknown) {
+    throw new Error(getErrorMessage(err, "Failed to parse resume"));
+  }
 }
 
 export interface SuggestSkillsResponse {

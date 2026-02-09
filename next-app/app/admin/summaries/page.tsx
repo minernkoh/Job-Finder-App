@@ -5,13 +5,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CaretLeftIcon, CaretRightIcon, TrashIcon } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react";
 import { apiClient } from "@/lib/api/client";
+import { AdminPageShell } from "@/components/admin-page-shell";
+import { InlineError, InlineLoading } from "@/components/page-state";
+import { TablePagination } from "@/components/table-pagination";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@ui/components";
 
 interface SummaryRow {
   id: string;
   userId: string;
+  userName?: string;
   tldr: string;
   createdAt: string;
   hasSalarySgd: boolean;
@@ -79,11 +83,8 @@ export default function AdminSummariesPage() {
     }
   };
 
-  const totalPages = data ? Math.ceil(data.total / limit) : 0;
-
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-foreground">Summaries</h1>
+    <AdminPageShell title="Summaries">
       <Card>
         <CardHeader>
           <CardTitle>All summaries</CardTitle>
@@ -102,12 +103,8 @@ export default function AdminSummariesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {error && (
-            <p className="text-destructive text-sm" role="alert">
-              {error}
-            </p>
-          )}
-          {loading && !data && <p className="text-muted-foreground text-sm">Loading…</p>}
+          {error && <InlineError message={error} />}
+          {loading && !data && <InlineLoading />}
           {data && (
             <>
               <div className="overflow-x-auto">
@@ -115,7 +112,7 @@ export default function AdminSummariesPage() {
                   <thead>
                     <tr className="border-b border-border">
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">TL;DR</th>
-                      <th className="pb-2 pr-2 font-medium text-muted-foreground">User ID</th>
+                      <th className="pb-2 pr-2 font-medium text-muted-foreground">User</th>
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">Created</th>
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">Salary</th>
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">JD match</th>
@@ -128,7 +125,9 @@ export default function AdminSummariesPage() {
                         <td className="max-w-xs truncate py-2 pr-2 text-foreground" title={s.tldr}>
                           {s.tldr}
                         </td>
-                        <td className="py-2 pr-2 font-mono text-muted-foreground text-xs">{s.userId}</td>
+                        <td className="py-2 pr-2 text-muted-foreground text-xs">
+                          {s.userName ?? s.userId}
+                        </td>
                         <td className="py-2 pr-2 text-foreground">
                           {new Date(s.createdAt).toLocaleDateString()}
                         </td>
@@ -149,33 +148,16 @@ export default function AdminSummariesPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-muted-foreground text-xs">
-                  {data.total} total · page {data.page} of {totalPages || 1}
-                </p>
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={data.page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    <CaretLeftIcon className="size-4" weight="regular" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={data.page >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    <CaretRightIcon className="size-4" weight="regular" />
-                  </Button>
-                </div>
-              </div>
+              <TablePagination
+                total={data.total}
+                page={data.page}
+                limit={limit}
+                onPageChange={setPage}
+              />
             </>
           )}
         </CardContent>
       </Card>
-    </div>
+    </AdminPageShell>
   );
 }

@@ -7,6 +7,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { PageLoading } from "@/components/page-state";
 
 /** Renders children only when the user is logged in; otherwise redirects to the homepage. */
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -19,11 +20,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }, [user, isLoading, router]);
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <PageLoading fullScreen />;
   }
 
   if (!user) {

@@ -10,7 +10,7 @@ import { User } from "@/lib/models/User";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 import { buildSetCookieHeader } from "@/lib/auth/cookies";
 
-/** Creates user and returns access token plus user; sets refresh token cookie. Duplicate email returns 409. */
+/** Creates user and returns access token plus user; sets refresh token cookie. Duplicate (email, user) returns 409. */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");
 
     await connectDB();
-    const existing = await User.findOne({ email: parsed.data.email }).lean();
+    const existing = await User.findOne({ email: parsed.data.email, role: "user" }).lean();
     if (existing) {
       return NextResponse.json(
         {
@@ -28,6 +28,16 @@ export async function POST(request: NextRequest) {
         },
         { status: 409 }
       );
+    }
+    const usernameTrimmed = parsed.data.username?.trim();
+    if (usernameTrimmed) {
+      const existingUsername = await User.findOne({ username: usernameTrimmed }).lean();
+      if (existingUsername) {
+        return NextResponse.json(
+          { success: false, message: "Username already taken", error: "Username already taken" },
+          { status: 409 }
+        );
+      }
     }
 
     const user = await User.create(parsed.data);
@@ -51,6 +61,7 @@ export async function POST(request: NextRequest) {
           name: user.name,
           email: user.email,
           role: user.role,
+          username: (user as { username?: string }).username,
         },
       },
       { status: 201, headers }

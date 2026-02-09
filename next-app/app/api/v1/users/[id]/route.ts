@@ -53,6 +53,7 @@ export async function GET(
         name: user.name,
         email: user.email,
         role: user.role,
+        username: (user as { username?: string }).username,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       },
@@ -62,7 +63,7 @@ export async function GET(
   }
 }
 
-/** Updates user if requester is the user or admin; duplicate email returns 409. */
+/** Updates user if requester is the user or admin; duplicate email or username returns 409. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -103,7 +104,10 @@ export async function PATCH(
     }
 
     if (parsed.data.email !== undefined) {
-      const existing = await User.findOne({ email: parsed.data.email }).lean();
+      const existing = await User.findOne({
+        email: parsed.data.email,
+        role: user.role,
+      }).lean();
       if (existing && existing._id.toString() !== id) {
         return NextResponse.json(
           { success: false, message: "Email already in use" },
@@ -113,6 +117,24 @@ export async function PATCH(
       user.email = parsed.data.email;
     }
     if (parsed.data.name !== undefined) user.name = parsed.data.name;
+    if (parsed.data.username !== undefined) {
+      const trimmed = parsed.data.username.trim();
+      if (trimmed) {
+        const existingByUsername = await User.findOne({
+          username: trimmed,
+          _id: { $ne: id },
+        }).lean();
+        if (existingByUsername) {
+          return NextResponse.json(
+            { success: false, message: "Username already taken" },
+            { status: 409 }
+          );
+        }
+        user.username = trimmed;
+      } else {
+        user.username = undefined;
+      }
+    }
     if (parsed.data.password !== undefined)
       user.password = parsed.data.password;
 
@@ -126,6 +148,7 @@ export async function PATCH(
         name: updated!.name,
         email: updated!.email,
         role: updated!.role,
+        username: (updated as { username?: string }).username,
         createdAt: updated!.createdAt,
         updatedAt: updated!.updatedAt,
       },

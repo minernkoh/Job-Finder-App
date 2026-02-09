@@ -4,6 +4,7 @@
 
 import type { AISummary, ComparisonSummary } from "@schemas";
 import { apiClient } from "./client";
+import { getErrorMessage } from "./errors";
 
 export type SummaryWithId = AISummary & { id: string };
 
@@ -38,11 +39,7 @@ export async function createSummary(
       );
     return res.data.data;
   } catch (err: unknown) {
-    const res = err as { response?: { data?: { message?: string } } };
-    const message =
-      res.response?.data?.message ??
-      (err instanceof Error ? err.message : "Failed to create summary");
-    throw new Error(message);
+    throw new Error(getErrorMessage(err, "Failed to create summary"));
   }
 }
 
@@ -76,10 +73,6 @@ export async function createComparisonSummary(
       );
     return res.data.data;
   } catch (err: unknown) {
-    const res = err as { response?: { data?: { message?: string } } };
-    const message =
-      res.response?.data?.message ??
-      (err instanceof Error ? err.message : "Failed to create comparison");
-    throw new Error(message);
+    throw new Error(getErrorMessage(err, "Failed to create comparison"));
   }
 }

@@ -7,17 +7,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
-import {
-  ArrowRightIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  XIcon,
-} from "@phosphor-icons/react";
+import { ArrowRightIcon, XIcon } from "@phosphor-icons/react";
 import { authCloseButtonClass } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
+import { getErrorMessage } from "@/lib/api/errors";
+import { InlineError } from "@/components/page-state";
 import { useAuth } from "@/contexts/AuthContext";
-import { getPasswordStrength } from "@/lib/password-strength";
-import { Button, Card, CardContent, Input, Label } from "@ui/components";
+import { AuthFormFields } from "@/components/auth-form-fields";
+import { Button, Card, CardContent } from "@ui/components";
 
 /** Builds pathname + search string without auth and redirect params. */
 function stripAuthParams(
@@ -47,13 +44,11 @@ function AuthModalContent({
   const [tab, setTab] = useState<AuthTab>(initialTab);
   const { login, register, isLoading } = useAuth();
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const passwordStrength = getPasswordStrength(password);
 
   const handleLogin = useCallback(
     async (e: React.FormEvent) => {
@@ -64,11 +59,7 @@ function AuthModalContent({
         await login(email, password);
         onSuccess();
       } catch (err: unknown) {
-        const data = err && typeof err === "object" && "response" in err
-            ? (err as { response?: { data?: { message?: string; error?: string } } }).response?.data
-            : undefined;
-        const message = data?.message ?? data?.error ?? "Login failed";
-        setError(message);
+        setError(getErrorMessage(err, "Login failed"));
       } finally {
         setSubmitting(false);
       }
@@ -82,19 +73,15 @@ function AuthModalContent({
       setError(null);
       setSubmitting(true);
       try {
-        await register(name, email, password);
+        await register(name, email, password, username?.trim() || undefined);
         onSignupSuccess();
       } catch (err: unknown) {
-        const data = err && typeof err === "object" && "response" in err
-            ? (err as { response?: { data?: { message?: string; error?: string } } }).response?.data
-            : undefined;
-        const message = data?.message ?? data?.error ?? "Registration failed";
-        setError(message);
+        setError(getErrorMessage(err, "Registration failed"));
       } finally {
         setSubmitting(false);
       }
     },
-    [name, email, password, register, onSignupSuccess]
+    [name, email, password, username, register, onSignupSuccess]
   );
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -160,51 +147,16 @@ function AuthModalContent({
         <AuthTabs value={tab} onChange={setTab} />
         {tab === "login" ? (
           <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="modal-login-email">Email</Label>
-              <Input
-                id="modal-login-email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                disabled={submitting || isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="modal-login-password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="modal-login-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  disabled={submitting || isLoading}
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="size-5" weight="regular" />
-                  ) : (
-                    <EyeIcon className="size-5" weight="regular" />
-                  )}
-                </button>
-              </div>
-            </div>
-            {error && (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            )}
+            <AuthFormFields
+              mode="login"
+              idPrefix="modal-login-"
+              email={email}
+              onEmailChange={(e) => setEmail(e.target.value)}
+              password={password}
+              onPasswordChange={(e) => setPassword(e.target.value)}
+              disabled={submitting || isLoading}
+            />
+            {error && <InlineError message={error} />}
             <Button
               type="submit"
               variant="default"
@@ -217,77 +169,23 @@ function AuthModalContent({
           </form>
         ) : (
           <form onSubmit={handleSignup} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="modal-register-name">Name</Label>
-              <Input
-                id="modal-register-name"
-                type="text"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                autoComplete="name"
-                disabled={submitting || isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="modal-register-email">Email</Label>
-              <Input
-                id="modal-register-email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                disabled={submitting || isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="modal-register-password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="modal-register-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  disabled={submitting || isLoading}
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="size-5" weight="regular" />
-                  ) : (
-                    <EyeIcon className="size-5" weight="regular" />
-                  )}
-                </button>
-              </div>
-              {password.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Strength:{" "}
-                  {passwordStrength === 1 && "Weak (min 8 characters)"}
-                  {passwordStrength === 2 &&
-                    "Medium (add uppercase and number)"}
-                  {passwordStrength === 3 && "Strong"}
-                </p>
-              )}
-            </div>
-            {error && (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            )}
+            <AuthFormFields
+              mode="signup"
+              idPrefix="modal-register-"
+              email={email}
+              onEmailChange={(e) => setEmail(e.target.value)}
+              password={password}
+              onPasswordChange={(e) => setPassword(e.target.value)}
+              name={name}
+              onNameChange={(e) => setName(e.target.value)}
+              username={username}
+              onUsernameChange={(e) => setUsername(e.target.value)}
+              disabled={submitting || isLoading}
+            />
+            {error && <InlineError message={error} />}
             <Button
               type="submit"
-              variant="cta"
+              variant="default"
               size="lg"
               className="w-full"
               disabled={submitting || isLoading}

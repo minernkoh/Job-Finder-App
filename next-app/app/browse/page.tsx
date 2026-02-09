@@ -46,6 +46,7 @@ import { useSavedListings } from "@/hooks/useSavedListings";
 import { JOB_SEARCH_COUNTRIES } from "@/lib/constants/countries";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { listingKeys, listingsKeys } from "@/lib/query-keys";
+import { UserOnlyRoute } from "@/components/user-only-route";
 import { cn } from "@ui/components/lib/utils";
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
@@ -604,7 +605,7 @@ function BrowseContent() {
             <div className="flex justify-center">
               <Button
                 asChild
-                variant="cta"
+                variant="default"
                 size="default"
                 className="h-11 min-w-[10rem]"
                 iconRight={<ArrowRightIcon weight="bold" />}
@@ -811,7 +812,7 @@ function BrowseContent() {
                         onAddToCompare={
                           isInCompareSet(listing.id)
                             ? () => removeFromCompare(listing.id)
-                            : () => addToCompare(listing.id)
+                            : () => addToCompare({ id: listing.id, title: listing.title })
                         }
                         isInCompareSet={isInCompareSet(listing.id)}
                         compareSetSize={compareSet.length}
@@ -872,7 +873,10 @@ function BrowseContent() {
                 onAddToCompare={
                   isInCompareSet(selectedJobId)
                     ? () => removeFromCompare(selectedJobId)
-                    : () => addToCompare(selectedJobId)
+                    : () => {
+                        const selectedListing = listings.find((l) => l.id === selectedJobId);
+                        if (selectedListing) addToCompare({ id: selectedListing.id, title: selectedListing.title });
+                      }
                 }
                 isInCompareSet={isInCompareSet(selectedJobId)}
                 compareSetFull={compareSet.length >= 3}
@@ -900,11 +904,13 @@ function BrowseContent() {
   );
 }
 
-/** Browse jobs page: browse listings without login; Log in for save and AI summaries. */
+/** Browse jobs page: browse listings without login; Log in for save and AI summaries. Admins are redirected to /admin. */
 export default function BrowsePage() {
   return (
     <Suspense fallback={null}>
-      <BrowseContent />
+      <UserOnlyRoute requireAuth={false}>
+        <BrowseContent />
+      </UserOnlyRoute>
     </Suspense>
   );
 }

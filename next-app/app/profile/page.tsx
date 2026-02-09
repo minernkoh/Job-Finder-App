@@ -4,10 +4,10 @@
 
 "use client";
 
-import { Suspense, useState, useCallback, useEffect, useMemo } from "react";
+import { Suspense, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompare } from "@/contexts/CompareContext";
-import { ProtectedRoute } from "@/components/protected-route";
+import { UserOnlyRoute } from "@/components/user-only-route";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { CompareBar } from "@/components/compare-bar";
@@ -15,11 +15,10 @@ import { savedListingToListingResult } from "@/lib/api/saved";
 import { ListingCard } from "@/components/listing-card";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { fetchProfile, updateProfile, suggestSkills, parseResume, parseResumeFile } from "@/lib/api/profile";
-import { updateUser } from "@/lib/api/users";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { SkillsEditor } from "@/components/skills-editor";
-import { Button, Card, CardContent, Input, Label } from "@ui/components";
+import { Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 
 /** Deduplicates and trims skill strings (case-insensitive). */
@@ -36,9 +35,9 @@ function dedupeSkills(skills: string[]): string[] {
     });
 }
 
-/** Inner content: header, compare bar, account edit, profile, saved list (single column; saved cards link to full job page). */
+/** Inner content: header, compare bar, resume/skills left, saved listings right (two columns on lg). */
 function ProfileContent() {
-  const { user, logout, setUser } = useAuth();
+  const { user, logout } = useAuth();
   const { savedListings, isLoadingSaved, unsaveMutation } = useSavedListings();
   const {
     compareSet,
@@ -46,10 +45,6 @@ function ProfileContent() {
     isInCompareSet,
   } = useCompare();
   const queryClient = useQueryClient();
-  const [accountName, setAccountName] = useState(user?.name ?? "");
-  const [accountEmail, setAccountEmail] = useState(user?.email ?? "");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [currentRole, setCurrentRole] = useState("");
   const [suggestedSkills, setSuggestedSkills] = useState<string[]>([]);
   const [draftSkills, setDraftSkills] = useState<string[] | null>(null);
@@ -59,13 +54,6 @@ function ProfileContent() {
   const [dragOver, setDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
-
-  useEffect(() => {
-    if (user) {
-      setAccountName(user.name);
-      setAccountEmail(user.email);
-    }
-  }, [user?.id, user?.name, user?.email]);
 
   const isResumeFile = (f: File) => {
     const name = f.name?.toLowerCase() ?? "";
@@ -107,28 +95,6 @@ function ProfileContent() {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
     },
   });
-
-  const accountMutation = useMutation({
-    mutationFn: (payload: { name?: string; email?: string; password?: string }) =>
-      user ? updateUser(user.id, payload) : Promise.reject(new Error("Not signed in")),
-    onSuccess: (data) => {
-      if (user) setUser({ ...user, name: data.name, email: data.email });
-      setNewPassword("");
-      setConfirmPassword("");
-    },
-  });
-
-  const handleSaveAccount = useCallback(() => {
-    const name = accountName.trim();
-    const email = accountEmail.trim();
-    if (!name || !email) return;
-    const payload: { name?: string; email?: string; password?: string } = { name, email };
-    if (newPassword || confirmPassword) {
-      if (newPassword.length < 8 || newPassword !== confirmPassword) return;
-      payload.password = newPassword;
-    }
-    accountMutation.mutate(payload);
-  }, [accountName, accountEmail, newPassword, confirmPassword, accountMutation]);
 
   const parseMutation = useMutation({
     mutationFn: (input: string | File) =>
@@ -218,80 +184,9 @@ function ProfileContent() {
 
       <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
         <h1 className="sr-only">Profile</h1>
-        <div className="min-w-0 flex-1 space-y-8">
-          <section aria-label="Account" className="space-y-3">
-            <h2 className="text-xs uppercase tracking-widest text-muted-foreground">
-              Account
-            </h2>
-            <Card variant="default" className="border-border">
-              <CardContent className="p-4 space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="account-name">Name</Label>
-                  <Input
-                    id="account-name"
-                    value={accountName}
-                    onChange={(e) => setAccountName(e.target.value)}
-                    placeholder="Your name"
-                    className="max-w-md"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="account-email">Email</Label>
-                  <Input
-                    id="account-email"
-                    type="email"
-                    value={accountEmail}
-                    onChange={(e) => setAccountEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="max-w-md"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="account-new-password">New password (optional)</Label>
-                  <Input
-                    id="account-new-password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="At least 8 characters"
-                    className="max-w-md"
-                    autoComplete="new-password"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="account-confirm-password">Confirm new password</Label>
-                  <Input
-                    id="account-confirm-password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Repeat new password"
-                    className="max-w-md"
-                    autoComplete="new-password"
-                  />
-                </div>
-                {accountMutation.isError && (
-                  <p className="text-sm text-destructive" role="alert">
-                    {accountMutation.error instanceof Error
-                      ? accountMutation.error.message
-                      : "Failed to update account"}
-                  </p>
-                )}
-                <Button
-                  variant="default"
-                  onClick={handleSaveAccount}
-                  disabled={accountMutation.isPending || !user}
-                >
-                  {accountMutation.isPending ? "Saving…" : "Save account"}
-                </Button>
-              </CardContent>
-            </Card>
-          </section>
-
-          <section aria-label="Your profile" className="space-y-3">
-            <h2 className="text-xs uppercase tracking-widest text-muted-foreground">
-              Your profile
-            </h2>
+        <div className="min-w-0 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 lg:items-start">
+          <section aria-label="Resume and skills" className="space-y-3 min-w-0">
+            <h2 className="eyebrow">Resume &amp; skills</h2>
             <SkillsEditor
               idPrefix="profile"
               introText="Add skills manually or from your resume for job match and search."
@@ -342,38 +237,42 @@ function ProfileContent() {
             />
           </section>
 
-          <section aria-label="Saved listings" className="space-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-muted-foreground">
-              Saved listings
-            </h2>
+          <section aria-label="Saved listings" className="space-y-4 min-w-0">
+            <h2 className="eyebrow">Saved listings</h2>
             {isLoadingSaved && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {[...Array(4)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-32 animate-pulse rounded-xl bg-muted"
-                  />
-                ))}
-              </div>
+              <Card variant="default" className="border-border">
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-4">
+                    {[...Array(4)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-32 animate-pulse rounded-xl bg-muted"
+                      />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {!isLoadingSaved && savedListings.length === 0 && (
-              <p className="text-muted-foreground">
-                You haven&apos;t saved any listings yet.{" "}
-                <Link href="/browse" className="text-primary hover:underline">
-                  Browse jobs
-                </Link>{" "}
-                to save your favorites.
-              </p>
+              <Card variant="default" className="border-border">
+                <CardContent className="p-4">
+                  <p className="text-muted-foreground">
+                    You haven&apos;t saved any listings yet.{" "}
+                    <Link href="/browse" className="text-primary hover:underline">
+                      Browse jobs
+                    </Link>{" "}
+                    to save your favorites.
+                  </p>
+                </CardContent>
+              </Card>
             )}
 
             {!isLoadingSaved && savedListings.length > 0 && (
-              <>
-                <p className="text-xs text-muted-foreground">
-                  Select up to 3 jobs to compare them side by side.
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {savedListings.map((s) => {
+              <Card variant="default" className="border-border">
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-4">
+                    {savedListings.map((s) => {
                     const listing = savedListingToListingResult(s);
                     return (
                       <ListingCard
@@ -383,14 +282,15 @@ function ProfileContent() {
                         isSaved
                         onUnsave={() => unsaveMutation.mutate(s.listingId)}
                         onView={() => {}}
-                        onAddToCompare={() => addToCompare(listing.id)}
+                        onAddToCompare={() => addToCompare({ id: listing.id, title: listing.title })}
                         isInCompareSet={isInCompareSet(listing.id)}
                         compareSetSize={compareSet.length}
                       />
                     );
                   })}
-                </div>
-              </>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </section>
         </div>
@@ -399,13 +299,13 @@ function ProfileContent() {
   );
 }
 
-/** Profile page: protected; shows profile and saved listings (single column). */
+/** Profile page: protected; two columns on lg (resume/skills left, saved listings right). */
 export default function ProfilePage() {
   return (
     <Suspense fallback={null}>
-      <ProtectedRoute>
+      <UserOnlyRoute>
         <ProfileContent />
-      </ProtectedRoute>
+      </UserOnlyRoute>
     </Suspense>
   );
 }

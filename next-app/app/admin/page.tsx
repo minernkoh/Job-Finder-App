@@ -8,10 +8,9 @@ import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import {
   ArrowRightIcon,
+  ArrowClockwiseIcon,
   BookmarkIcon,
   EyeIcon,
-  EyeSlashIcon,
-  ArrowClockwiseIcon,
   FileTextIcon,
   UsersIcon,
   UsersThreeIcon,
@@ -20,7 +19,9 @@ import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api/client";
-import { getPasswordStrength } from "@/lib/password-strength";
+import { getErrorMessage } from "@/lib/api/errors";
+import { AuthFormFields } from "@/components/auth-form-fields";
+import { InlineError, PageError, PageLoading } from "@/components/page-state";
 import {
   Button,
   Card,
@@ -35,45 +36,32 @@ interface DashboardData {
   metrics: {
     totalUsers: number;
     totalSummaries: number;
+    totalViews: number;
+    totalSaves: number;
     summariesLast7Days: number;
     usersLast7Days: number;
     viewsLast7Days: number;
     savesLast7Days: number;
     activeUsersLast7Days?: number;
   };
-  wordCloud?: Array<{ word: string; count: number }>;
-  aiSummaryMetrics?: {
-    total: number;
-    last7Days: number;
-    withSalarySgd: number;
-    withJdMatch: number;
-    withKeyResponsibilities: number;
-    withRequirements: number;
-  };
-  jdMatchMetrics?: {
-    countWithMatch: number;
-    countWithoutMatch: number;
-    avgScore?: number;
-    medianScore?: number;
-    scoreBuckets?: Array<{ min: number; max: number; count: number }>;
-  };
   summary: string;
+  userGrowth: Array<{ date: string; count: number }>;
+  popularListings: Array<{
+    listingId: string;
+    viewCount: number;
+    saveCount: number;
+  }>;
+  recentUsers: Array<{
+    id: string;
+    username?: string;
+    name: string;
+    createdAt: string;
+  }>;
 }
 
 interface AuthResponse {
   accessToken: string;
-  user: { id: string; name: string; email: string; role: "admin" | "user" };
-}
-
-/** Extracts error message from API error response. */
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === "object" && "response" in err) {
-    const data = (
-      err as { response?: { data?: { error?: string; message?: string } } }
-    ).response?.data;
-    return data?.error ?? data?.message ?? fallback;
-  }
-  return fallback;
+  user: { id: string; name: string; email: string; role: "admin" | "user"; username?: string };
 }
 
 /** Admin dashboard: metrics cards and AI summary; fetches on mount and supports refresh. */
@@ -116,25 +104,20 @@ function AdminDashboard() {
 
   if (loading && !data) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">Loading dashboard…</p>
-      </div>
+      <PageLoading message="Loading dashboard…" fullScreen />
     );
   }
 
   if (error && !data) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-4">
-        <p className="text-destructive" role="alert">
-          {error}
-        </p>
-        <Button variant="outline" onClick={() => fetchDashboard()}>
-          Retry
-        </Button>
-        <Button variant="ghost" onClick={() => router.push("/admin")}>
-          Back to admin
-        </Button>
-      </div>
+      <PageError
+        message={error}
+        onRetry={() => fetchDashboard()}
+        retryLabel="Retry"
+        onBack={() => router.push("/admin")}
+        backLabel="Back to admin"
+        fullScreen
+      />
     );
   }
 
@@ -184,7 +167,7 @@ function AdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                AI summaries
+                Avg AI summaries per user
               </CardTitle>
               <FileTextIcon
                 className="size-4 text-muted-foreground"
@@ -193,7 +176,9 @@ function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold">
-                {m?.totalSummaries ?? "—"}
+                {m && m.totalUsers > 0
+                  ? (m.totalSummaries / m.totalUsers).toFixed(1)
+                  : "—"}
               </span>
               {m && m.summariesLast7Days > 0 && (
                 <p className="text-xs text-muted-foreground">
@@ -205,7 +190,7 @@ function AdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Listing views (7d)
+                Avg listing views per user
               </CardTitle>
               <EyeIcon
                 className="size-4 text-muted-foreground"
@@ -214,17 +199,21 @@ function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold">
-                {m?.viewsLast7Days ?? "—"}
+                {m && m.totalUsers > 0
+                  ? (m.totalViews / m.totalUsers).toFixed(1)
+                  : "—"}
               </span>
-              <p className="text-xs text-muted-foreground">
-                views in last 7 days
-              </p>
+              {m && (
+                <p className="text-xs text-muted-foreground">
+                  {m.viewsLast7Days} views in last 7 days
+                </p>
+              )}
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Saves (7d)
+                Avg saves per user
               </CardTitle>
               <BookmarkIcon
                 className="size-4 text-muted-foreground"
@@ -233,17 +222,21 @@ function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold">
-                {m?.savesLast7Days ?? "—"}
+                {m && m.totalUsers > 0
+                  ? (m.totalSaves / m.totalUsers).toFixed(1)
+                  : "—"}
               </span>
-              <p className="text-xs text-muted-foreground">
-                saves in last 7 days
-              </p>
+              {m && (
+                <p className="text-xs text-muted-foreground">
+                  {m.savesLast7Days} saves in last 7 days
+                </p>
+              )}
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Active users (7d)
+                Active users
               </CardTitle>
               <UsersThreeIcon
                 className="size-4 text-muted-foreground"
@@ -272,65 +265,82 @@ function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {data?.wordCloud && data.wordCloud.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader>
-              <CardTitle>Word cloud (skills/keywords)</CardTitle>
+              <CardTitle>User growth (last 7 days)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {data.wordCloud.slice(0, 30).map((t) => (
-                  <span
-                    key={t.word}
-                    className="rounded-md bg-muted px-2 py-0.5 text-sm text-foreground"
-                  >
-                    {t.word} ({t.count})
-                  </span>
-                ))}
-              </div>
+              {data?.userGrowth && data.userGrowth.length > 0 ? (
+                <ul className="space-y-1 text-sm">
+                  {data.userGrowth.map((d) => (
+                    <li key={d.date} className="flex justify-between">
+                      <span className="text-foreground">{d.date}</span>
+                      <span className="font-medium text-foreground">
+                        {d.count}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  No new users in the last 7 days.
+                </p>
+              )}
             </CardContent>
           </Card>
-        )}
-
-        {(data?.aiSummaryMetrics || data?.jdMatchMetrics) && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {data.aiSummaryMetrics && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>AI summary metrics</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm">
-                  <p>
-                    Total: {data.aiSummaryMetrics.total} · Last 7d:{" "}
-                    {data.aiSummaryMetrics.last7Days}
-                  </p>
-                  <p className="text-muted-foreground">
-                    With salary: {data.aiSummaryMetrics.withSalarySgd} · With JD
-                    match: {data.aiSummaryMetrics.withJdMatch}
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-            {data.jdMatchMetrics && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>JD match</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm">
-                  <p>
-                    With match: {data.jdMatchMetrics.countWithMatch} · Without:{" "}
-                    {data.jdMatchMetrics.countWithoutMatch}
-                  </p>
-                  {data.jdMatchMetrics.avgScore != null && (
-                    <p className="text-muted-foreground">
-                      Avg score: {data.jdMatchMetrics.avgScore.toFixed(1)}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent users</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data?.recentUsers && data.recentUsers.length > 0 ? (
+                <ul className="space-y-1 text-sm">
+                  {data.recentUsers.map((u) => (
+                    <li key={u.id} className="flex justify-between gap-2">
+                      <span className="truncate text-foreground">
+                        {u.username ?? u.name ?? u.id}
+                      </span>
+                      <span className="text-muted-foreground text-xs shrink-0">
+                        {new Date(u.createdAt).toLocaleDateString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-sm">No users yet.</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Popular listings (views, last 7 days)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data?.popularListings && data.popularListings.length > 0 ? (
+                <ul className="space-y-1 text-sm">
+                  {data.popularListings.slice(0, 10).map((p) => (
+                    <li
+                      key={p.listingId}
+                      className="flex justify-between font-mono text-xs"
+                    >
+                      <span className="truncate text-muted-foreground">
+                        {p.listingId}
+                      </span>
+                      <span className="text-foreground">
+                        views: {p.viewCount}, saves: {p.saveCount}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  No view data.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="flex justify-end">
           <Button variant="ghost" onClick={() => router.push("/browse")}>
@@ -348,14 +358,12 @@ function AdminForm() {
   const [tab, setTab] = useState<AuthTab>("login");
   const { setToken, setUser, isLoading } = useAuth();
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [adminSecret, setAdminSecret] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const passwordStrength = getPasswordStrength(password);
 
   async function handleAdminSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -364,7 +372,7 @@ function AdminForm() {
     try {
       const res = await apiClient.post<AuthResponse>(
         "/api/v1/auth/admin/register",
-        { name, email, password, adminSecret },
+        { name, email, password, adminSecret, username: username?.trim() || undefined },
         { withCredentials: true },
       );
       setToken(res.data.accessToken);
@@ -384,7 +392,7 @@ function AdminForm() {
     try {
       const res = await apiClient.post<AuthResponse>(
         "/api/v1/auth/login",
-        { email, password },
+        { email, password, role: "admin" },
         { withCredentials: true },
       );
       if (res.data.user.role !== "admin") {
@@ -407,7 +415,7 @@ function AdminForm() {
       onClose={() => router.push("/browse")}
       footer={
         <p className="text-center text-sm text-muted-foreground">
-          Admin access only.
+          Create a user account with the same email at signup to browse jobs.
         </p>
       }
     >
@@ -415,51 +423,16 @@ function AdminForm() {
 
       {tab === "login" ? (
         <form onSubmit={handleAdminLogin} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="admin-login-email">Email</Label>
-            <Input
-              id="admin-login-email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              disabled={submitting || isLoading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="admin-login-password">Password</Label>
-            <div className="relative">
-              <Input
-                id="admin-login-password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                disabled={submitting || isLoading}
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? (
-                  <EyeSlashIcon className="size-5" weight="regular" />
-                ) : (
-                  <EyeIcon className="size-5" weight="regular" />
-                )}
-              </button>
-            </div>
-          </div>
-          {error && (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          )}
+          <AuthFormFields
+            mode="login"
+            idPrefix="admin-login-"
+            email={email}
+            onEmailChange={(e) => setEmail(e.target.value)}
+            password={password}
+            onPasswordChange={(e) => setPassword(e.target.value)}
+            disabled={submitting || isLoading}
+          />
+          {error && <InlineError message={error} />}
           <Button
             type="submit"
             size="lg"
@@ -471,67 +444,19 @@ function AdminForm() {
         </form>
       ) : (
         <form onSubmit={handleAdminSignup} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="admin-signup-name">Name</Label>
-            <Input
-              id="admin-signup-name"
-              type="text"
-              placeholder="Your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              autoComplete="name"
-              disabled={submitting || isLoading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="admin-signup-email">Email</Label>
-            <Input
-              id="admin-signup-email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              disabled={submitting || isLoading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="admin-signup-password">Password</Label>
-            <div className="relative">
-              <Input
-                id="admin-signup-password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                autoComplete="new-password"
-                disabled={submitting || isLoading}
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? (
-                  <EyeSlashIcon className="size-5" weight="regular" />
-                ) : (
-                  <EyeIcon className="size-5" weight="regular" />
-                )}
-              </button>
-            </div>
-            {password.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Strength: {passwordStrength === 1 && "Weak (min 8 characters)"}
-                {passwordStrength === 2 && "Medium (add uppercase and number)"}
-                {passwordStrength === 3 && "Strong"}
-              </p>
-            )}
-          </div>
+          <AuthFormFields
+            mode="signup"
+            idPrefix="admin-signup-"
+            email={email}
+            onEmailChange={(e) => setEmail(e.target.value)}
+            password={password}
+            onPasswordChange={(e) => setPassword(e.target.value)}
+            name={name}
+            onNameChange={(e) => setName(e.target.value)}
+            username={username}
+            onUsernameChange={(e) => setUsername(e.target.value)}
+            disabled={submitting || isLoading}
+          />
           <div className="space-y-2">
             <Label htmlFor="admin-signup-secret">Admin secret</Label>
             <Input
@@ -545,14 +470,10 @@ function AdminForm() {
               disabled={submitting || isLoading}
             />
           </div>
-          {error && (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          )}
+          {error && <InlineError message={error} />}
           <Button
             type="submit"
-            variant="cta"
+            variant="default"
             size="lg"
             className="w-full"
             disabled={submitting || isLoading}
@@ -572,35 +493,19 @@ export default function AdminPage() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <PageLoading fullScreen />;
   }
 
   if (user?.role === "admin") {
     return (
-      <Suspense
-        fallback={
-          <div className="flex min-h-screen items-center justify-center">
-            <p className="text-muted-foreground">Loading…</p>
-          </div>
-        }
-      >
+      <Suspense fallback={<PageLoading fullScreen />}>
         <AdminDashboard />
       </Suspense>
     );
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center">
-          <p className="text-muted-foreground">Loading…</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<PageLoading fullScreen />}>
       <AdminForm />
     </Suspense>
   );

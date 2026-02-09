@@ -9,17 +9,18 @@ import Link from "next/link";
 import { useEffect, useMemo, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DOMPurify from "isomorphic-dompurify";
+import { AISummaryCard } from "@/components/ai-summary-card";
 import { Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { UserOnlyRoute } from "@/components/user-only-route";
 import { AppHeader } from "@/components/app-header";
+import { PageShell } from "@/components/page-shell";
 import { formatSalaryRange } from "@/lib/format";
 import { fetchListing } from "@/lib/api/listings";
 import { createComparisonSummary } from "@/lib/api/summaries";
 import { listingKeys } from "@/lib/query-keys";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
-
-const eyebrowClass = "text-xs uppercase tracking-widest text-muted-foreground";
 
 /** One column: listing meta, description, and optional per-listing AI summary (no summarize button). */
 function CompareColumn({
@@ -86,7 +87,7 @@ function CompareColumn({
       </div>
       {sanitizedDescription.length > 0 && (
         <div className="border-t border-border pt-4">
-          <h4 className={cn(eyebrowClass, "mb-2")}>Description</h4>
+          <h4 className={cn("eyebrow", "mb-2")}>Description</h4>
           <div
             className={cn(
               "max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground",
@@ -111,19 +112,13 @@ function CompareColumn({
         </Link>
       )}
       <div className="border-t border-border pt-4">
-        <h4 className={cn(eyebrowClass, "mb-2")}>AI Summary</h4>
+        <h4 className={cn("eyebrow", "mb-2")}>AI Summary</h4>
         {summary ? (
-          <div className="space-y-2 text-sm text-foreground">
-            <p>{summary.tldr}</p>
-            {summary.keyResponsibilities &&
-              summary.keyResponsibilities.length > 0 && (
-                <ul className="list-disc pl-5">
-                  {summary.keyResponsibilities.slice(0, 3).map((r, i) => (
-                    <li key={i}>{r}</li>
-                  ))}
-                </ul>
-              )}
-          </div>
+          <AISummaryCard
+            summary={summary}
+            noCard
+            maxResponsibilities={3}
+          />
         ) : (
           <p className="text-sm text-muted-foreground">
             Open full page for AI summary.
@@ -164,15 +159,16 @@ function ComparePageInner() {
   if (!listingIds) {
     return (
       <div className="min-h-screen flex flex-col">
-        <AppHeader backHref="/browse" backLabel="Back to browse" title="Compare jobs" user={user} onLogout={logout} />
+        <AppHeader user={user} onLogout={logout} />
         <main id="main-content" className={cn("mx-auto w-full flex-1 py-8", CONTENT_MAX_W, PAGE_PX)}>
-          <h1 className="text-2xl font-semibold text-foreground">Compare jobs</h1>
-          <p className="mt-2 text-muted-foreground">
+          <PageShell title="Compare jobs">
+          <p className="text-muted-foreground">
             Select 2–3 jobs to compare.{" "}
             <Link href="/browse" className="text-primary hover:underline">
               Back to browse
             </Link>
           </p>
+          </PageShell>
         </main>
       </div>
     );
@@ -180,21 +176,12 @@ function ComparePageInner() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <AppHeader
-        backHref="/browse"
-        backLabel="Back to browse"
-        title="Compare jobs"
-        user={user}
-        onLogout={logout}
-      />
+      <AppHeader user={user} onLogout={logout} />
 
       <main id="main-content" className={cn("mx-auto w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
-        <h1 className="mb-6 text-2xl font-semibold text-foreground sm:mb-8">
-          Comparing {listingIds.length} jobs
-        </h1>
-
+        <PageShell title={`Comparing ${listingIds.length} jobs`}>
         <section aria-label="Unified comparison">
-          <h2 className={cn(eyebrowClass, "mb-4")}>Comparison summary</h2>
+          <h2 className={cn("eyebrow", "mb-4")}>Comparison summary</h2>
           {!user && (
             <Card variant="elevated" className="p-6">
               <h3 className="mb-2 font-medium text-foreground">
@@ -231,7 +218,7 @@ function ComparePageInner() {
                 {comparisonQuery.data.similarities &&
                   comparisonQuery.data.similarities.length > 0 && (
                     <div>
-                      <h3 className={cn(eyebrowClass, "mb-1")}>
+                      <h3 className={cn("eyebrow", "mb-1")}>
                         Similarities
                       </h3>
                       <ul className="list-disc pl-5 space-y-0.5 text-foreground">
@@ -244,7 +231,7 @@ function ComparePageInner() {
                 {comparisonQuery.data.differences &&
                   comparisonQuery.data.differences.length > 0 && (
                     <div>
-                      <h3 className={cn(eyebrowClass, "mb-1")}>
+                      <h3 className={cn("eyebrow", "mb-1")}>
                         Differences
                       </h3>
                       <ul className="list-disc pl-5 space-y-0.5 text-foreground">
@@ -265,7 +252,7 @@ function ComparePageInner() {
                 {comparisonQuery.data.recommendedListingId &&
                   comparisonQuery.data.recommendationReason && (
                     <div className="rounded-lg bg-primary/10 p-3 text-foreground">
-                      <span className={eyebrowClass}>Better fit: </span>
+                      <span className={"eyebrow"}>Better fit: </span>
                       {comparisonQuery.data.recommendationReason}
                     </div>
                   )}
@@ -282,6 +269,7 @@ function ComparePageInner() {
             <CompareColumn key={id} listingId={id} summary={null} />
           ))}
         </section>
+        </PageShell>
       </main>
     </div>
   );
@@ -290,7 +278,9 @@ function ComparePageInner() {
 export default function ComparePage() {
   return (
     <Suspense fallback={null}>
-      <ComparePageInner />
+      <UserOnlyRoute>
+        <ComparePageInner />
+      </UserOnlyRoute>
     </Suspense>
   );
 }

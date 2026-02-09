@@ -8,6 +8,8 @@ import { z } from "zod";
 export const DashboardMetricsSchema = z.object({
   totalUsers: z.number(),
   totalSummaries: z.number(),
+  totalViews: z.number(),
+  totalSaves: z.number(),
   summariesLast7Days: z.number(),
   usersLast7Days: z.number(),
   viewsLast7Days: z.number(),
@@ -24,41 +26,37 @@ export const DashboardSummarySchema = z.object({
 
 export type DashboardSummary = z.infer<typeof DashboardSummarySchema>;
 
-/** Word cloud term (word and count). */
-export const WordCloudTermSchema = z.object({
-  word: z.string(),
+/** User growth bucket: new users per day (last 7 days). */
+export const UserGrowthBucketSchema = z.object({
+  date: z.string(),
   count: z.number(),
 });
-export type WordCloudTerm = z.infer<typeof WordCloudTermSchema>;
+export type UserGrowthBucket = z.infer<typeof UserGrowthBucketSchema>;
 
-/** AI summary usage and field-population metrics. */
-export const AISummaryMetricsSchema = z.object({
-  total: z.number(),
-  last7Days: z.number(),
-  withSalarySgd: z.number(),
-  withJdMatch: z.number(),
-  withKeyResponsibilities: z.number(),
-  withRequirements: z.number(),
+/** Popular listing row: listing id with view and save counts (last 7 days for views). */
+export const PopularListingItemSchema = z.object({
+  listingId: z.string(),
+  viewCount: z.number(),
+  saveCount: z.number(),
 });
-export type AISummaryMetrics = z.infer<typeof AISummaryMetricsSchema>;
+export type PopularListingItem = z.infer<typeof PopularListingItemSchema>;
 
-/** JD–skillset match score distribution and counts. */
-export const JDMatchMetricsSchema = z.object({
-  countWithMatch: z.number(),
-  countWithoutMatch: z.number(),
-  avgScore: z.number().optional(),
-  medianScore: z.number().optional(),
-  scoreBuckets: z.array(z.object({ min: z.number(), max: z.number(), count: z.number() })).optional(),
+/** Recent user row for dashboard: id, optional username, name, createdAt. */
+export const RecentUserSchema = z.object({
+  id: z.string(),
+  username: z.string().optional(),
+  name: z.string(),
+  createdAt: z.coerce.date(),
 });
-export type JDMatchMetrics = z.infer<typeof JDMatchMetricsSchema>;
+export type RecentUser = z.infer<typeof RecentUserSchema>;
 
-/** Full admin dashboard API response: metrics, optional word cloud and AI/JD metrics, plus summary. */
+/** Full admin dashboard API response: metrics, summary, user growth, popular listings, recent users. */
 export const AdminDashboardResponseSchema = z.object({
   metrics: DashboardMetricsSchema,
-  wordCloud: z.array(WordCloudTermSchema).optional(),
-  aiSummaryMetrics: AISummaryMetricsSchema.optional(),
-  jdMatchMetrics: JDMatchMetricsSchema.optional(),
   summary: z.string(),
+  userGrowth: z.array(UserGrowthBucketSchema),
+  popularListings: z.array(PopularListingItemSchema),
+  recentUsers: z.array(RecentUserSchema),
 });
 
 export type AdminDashboardResponse = z.infer<typeof AdminDashboardResponseSchema>;
