@@ -4,6 +4,7 @@
 
 "use client";
 
+import { toast } from "sonner";
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -78,6 +79,7 @@ function OnboardingContent() {
     mutationFn: (payload: { skills: string[]; yearsOfExperience?: number | null }) => updateProfile(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
+      toast.success("Skills saved");
       router.replace(redirectTo);
     },
   });
@@ -94,6 +96,7 @@ function OnboardingContent() {
         dedupeSkills([...(data?.skills ?? []), ...(data?.suggestedSkills ?? [])])
       );
       if (data?.yearsOfExperience != null) setOnboardingYears(String(data.yearsOfExperience));
+      toast.success("Resume parsed");
     },
   });
 

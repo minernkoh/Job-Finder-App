@@ -31,6 +31,7 @@ import {
   useMemo,
   Suspense,
 } from "react";
+import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   deleteListingApi,
@@ -38,6 +39,7 @@ import {
   recordListingView,
   type ListingsFilters,
 } from "@/lib/api/listings";
+import { getErrorMessage } from "@/lib/api/errors";
 import { AuthModalLink } from "@/components/auth-modal-link";
 import { AppHeader } from "@/components/app-header";
 import { CompareBar } from "@/components/compare-bar";
@@ -54,6 +56,8 @@ import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { listingKeys, listingsKeys, recommendedKeys } from "@/lib/query-keys";
 import { UserOnlyRoute } from "@/components/user-only-route";
 import { cn } from "@ui/components/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
+import { EASE_TRANSITION, FADE_IN, SLIDE_UP, staggerDelay } from "@/lib/animations";
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Relevance" },
@@ -232,11 +236,15 @@ function BrowseContent() {
       queryClient.invalidateQueries({ queryKey: ["listings"] });
       queryClient.invalidateQueries({ queryKey: listingKeys(deletedId) });
       queryClient.invalidateQueries({ queryKey: recommendedKeys.all });
+      toast.success("Listing deleted");
       if (selectedJobId === deletedId) {
         const params = new URLSearchParams(searchParams?.toString() ?? "");
         params.delete("job");
         router.replace("/browse?" + params.toString());
       }
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, "Failed to delete listing"));
     },
   });
 
@@ -433,7 +441,11 @@ function BrowseContent() {
           </div>
         </section>
 
-        {compareSet.length > 0 && <CompareBar fullWidth={showSplitLayout} />}
+        <AnimatePresence>
+          {compareSet.length > 0 && (
+            <CompareBar key="compare-bar" fullWidth={showSplitLayout} />
+          )}
+        </AnimatePresence>
 
         <main
           id="main-content"
@@ -565,10 +577,15 @@ function BrowseContent() {
               )}
 
               {hasSearched && !isLoading && !isError && (
-                <>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <section aria-label="Results" className="space-y-4">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={`results-${keyword}-${page}-${appliedSortBy}`}
+                    {...FADE_IN}
+                    transition={EASE_TRANSITION}
+                  >
+                    <Card>
+                      <CardContent className="pt-6">
+                        <section aria-label="Results" className="space-y-4">
                         {/* Toolbar aligned with right panel (JobDetailPanel) header: single line, sticky, same border/padding */}
                         <div className="sticky top-0 z-10 -mx-4 -mt-6 flex shrink-0 flex-nowrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-3 sm:px-6">
                       <p className="shrink-0 text-sm text-muted-foreground">
@@ -748,43 +765,51 @@ function BrowseContent() {
                     ) : (
                       <>
                         <div className="flex flex-col gap-3">
-                          {listings.map((listing) => (
-                            <ListingCard
+                          {listings.map((listing, index) => (
+                            <motion.div
                               key={listing.id}
-                              listing={listing}
-                              href={buildJobHref(listing.id)}
-                              isSelected={selectedJobId === listing.id}
-                              isSaved={savedIds.has(listing.id)}
-                              onView={() => recordListingView(listing.id)}
-                              onSave={
-                                user
-                                  ? () => saveMutation.mutate(listing)
-                                  : undefined
-                              }
-                              onUnsave={
-                                user
-                                  ? () => unsaveMutation.mutate(listing.id)
-                                  : undefined
-                              }
-                              onAddToCompare={
-                                isInCompareSet(listing.id)
-                                  ? () => removeFromCompare(listing.id)
-                                  : () =>
-                                      addToCompare({
-                                        id: listing.id,
-                                        title: listing.title,
-                                      })
-                              }
-                              isInCompareSet={isInCompareSet(listing.id)}
-                              compareSetSize={compareSet.length}
-                              userRole={user?.role}
-                              onDeleteListing={
-                                user?.role === "admin"
-                                  ? (listingId) =>
-                                      deleteListingMutation.mutate(listingId)
-                                  : undefined
-                              }
-                            />
+                              {...SLIDE_UP}
+                              transition={{
+                                ...EASE_TRANSITION,
+                                ...staggerDelay(index),
+                              }}
+                            >
+                              <ListingCard
+                                listing={listing}
+                                href={buildJobHref(listing.id)}
+                                isSelected={selectedJobId === listing.id}
+                                isSaved={savedIds.has(listing.id)}
+                                onView={() => recordListingView(listing.id)}
+                                onSave={
+                                  user
+                                    ? () => saveMutation.mutate(listing)
+                                    : undefined
+                                }
+                                onUnsave={
+                                  user
+                                    ? () => unsaveMutation.mutate(listing.id)
+                                    : undefined
+                                }
+                                onAddToCompare={
+                                  isInCompareSet(listing.id)
+                                    ? () => removeFromCompare(listing.id)
+                                    : () =>
+                                        addToCompare({
+                                          id: listing.id,
+                                          title: listing.title,
+                                        })
+                                }
+                                isInCompareSet={isInCompareSet(listing.id)}
+                                compareSetSize={compareSet.length}
+                                userRole={user?.role}
+                                onDeleteListing={
+                                  user?.role === "admin"
+                                    ? (listingId) =>
+                                        deleteListingMutation.mutate(listingId)
+                                    : undefined
+                                }
+                              />
+                            </motion.div>
                           ))}
                         </div>
                       </>
@@ -808,10 +833,11 @@ function BrowseContent() {
                         </Button>
                       </div>
                     )}
-                      </section>
-                    </CardContent>
-                  </Card>
-                </>
+                        </section>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </AnimatePresence>
               )}
               {!hasSearched && (
                 <TrendingListings

@@ -4,6 +4,7 @@
 
 "use client";
 
+import { toast } from "sonner";
 import { Suspense, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompare } from "@/contexts/CompareContext";
@@ -88,6 +89,7 @@ function ProfileContent() {
     onSuccess: () => {
       setDraftYears(null);
       queryClient.invalidateQueries({ queryKey: ["profile"] });
+      toast.success("Profile saved");
     },
   });
 
@@ -104,6 +106,7 @@ function ProfileContent() {
       );
       if (data?.yearsOfExperience != null) setDraftYears(String(data.yearsOfExperience));
       queryClient.invalidateQueries({ queryKey: ["profile"] });
+      toast.success("Resume parsed");
     },
   });
 

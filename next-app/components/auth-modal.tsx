@@ -7,7 +7,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
 import { XIcon } from "@phosphor-icons/react";
+import { EASE_TRANSITION } from "@/lib/animations";
 import {
   authCloseButtonClass,
   authModalHeightClass,
@@ -287,7 +289,10 @@ export function AuthModal() {
   const initialTab: AuthTab = auth === "signup" ? "signup" : "login";
 
   const overlay = (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={EASE_TRANSITION}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
@@ -296,7 +301,10 @@ export function AuthModal() {
         if (e.target === e.currentTarget) closeModal();
       }}
     >
-      <div
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={EASE_TRANSITION}
         onClick={(e) => e.stopPropagation()}
         className={`flex ${authModalNarrowWidthClass} justify-center`}
       >
@@ -306,8 +314,8 @@ export function AuthModal() {
           onSuccess={onSuccess}
           onSignupSuccess={onSignupSuccess}
         />
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 
   if (typeof document === "undefined") return null;

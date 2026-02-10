@@ -68,24 +68,25 @@ export async function generateSummaryWithRetry(
     : "You are a job summary assistant for the Singapore job market. Summarize the following job description into a structured summary.";
   const experienceLine =
     yearsOfExperience != null
-      ? ` The candidate has ${yearsOfExperience} year(s) of professional experience. When the job description mentions experience requirements (e.g. "5+ years", "3–5 years"), consider this when setting matchScore and include an experience gap in missingSkills if the job asks for more years than the candidate has.`
+      ? ` You have ${yearsOfExperience} year(s) of professional experience. When the job description mentions experience requirements (e.g. "5+ years", "3–5 years"), consider this when setting matchScore and include an experience gap in missingSkills if the job asks for more years than you have.`
       : "";
   const jdMatchRules = hasUserSkills
     ? `
-- The candidate's skills are: ${userSkills.join(", ")}.${experienceLine} Compare the job description to these skills and output "jdMatch" with:
-  - matchScore: number 0-100 (how well the job matches the candidate's skills for this specific role).
-  - matchedSkills: array of skills from the candidate list that are actually required or clearly relevant for this job role.
-  - missingSkills: array of skills the job requires or prefers that are not in the candidate list (or empty if well matched). Include experience-related gaps here when the job requires more years than the candidate has.
-- Consider the job title/role when scoring. Relevance is for this specific role only. Include in matchedSkills only candidate skills that are actually required or clearly relevant for this job role. Do not list a candidate skill as matched just because the job description mentions a related word (e.g. do not match "JavaScript" for an Art Director role unless the role explicitly requires development/technical skills).
-- If the job role is clearly unrelated to the candidate's skills (e.g. Art Director vs software engineering), set matchScore low (e.g. 0–30), leave matchedSkills empty or minimal, and set missingSkills to the main skills/experience the job actually requires.`
+- Your skills are: ${userSkills.join(", ")}.${experienceLine} Compare the job description to these skills and output "jdMatch" with:
+  - matchScore: number 0-100 (how well the job matches your skills for this specific role).
+  - matchedSkills: array of skills from your list that are actually required or clearly relevant for this job role.
+  - missingSkills: array of skills the job requires or prefers that are not in your skills list (or empty if well matched). Include experience-related gaps here when the job requires more years than you have.
+- Consider the job title/role when scoring. Relevance is for this specific role only. Include in matchedSkills only skills from your list that are actually required or clearly relevant for this job role. Do not list one of your skills as matched just because the job description mentions a related word (e.g. do not match "JavaScript" for an Art Director role unless the role explicitly requires development/technical skills).
+- If the job role is clearly unrelated to your skills (e.g. Art Director vs software engineering), set matchScore low (e.g. 0–30), leave matchedSkills empty or minimal, and set missingSkills to the main skills/experience the job actually requires.`
     : "";
   const prompt = `${intro}
 
 Rules:
-- The tldr must describe only the job (role, main duties, key requirements). Do not state whether the candidate is a good fit or has suitable skills; do not address the candidate in the tldr. Provide a short tldr in at most 2-3 short sentences.
+- The tldr must describe only the job (role, main duties, key requirements). Do not state whether you are a good fit or have suitable skills; do not address the user in the tldr. Provide a short tldr in at most 2-3 short sentences.
 - Extract at most 4-5 key responsibilities and at most 4-5 requirements (most important first). Omit nice-to-haves or fold into requirements if needed.
 - If salary in SGD is mentioned, put it in salarySgd (e.g. "SGD 5,000 - 7,000").
 - Add caveats for missing or unclear information.${jdMatchRules}
+- When describing match results, skills, or recommendations, use second-person ("you", "your") — never "the candidate".
 - Output must match the schema exactly (tldr required; other fields optional).
 
 ${roleContext}Job description:
@@ -239,37 +240,12 @@ export async function getOrCreateSummary(
     userId: uid,
     inputTextHash,
     tldr: safe.tldr,
-    keyResponsibilities: Array.isArray(safe.keyResponsibilities)
-      ? safe.keyResponsibilities
-      : undefined,
-    requirements: Array.isArray(safe.requirements)
-      ? safe.requirements
-      : undefined,
-    niceToHaves: Array.isArray(safe.niceToHaves) ? safe.niceToHaves : undefined,
-    salarySgd: typeof safe.salarySgd === "string" ? safe.salarySgd : undefined,
-    jdMatch:
-      safe.jdMatch &&
-      typeof safe.jdMatch === "object" &&
-      !Array.isArray(safe.jdMatch)
-        ? {
-            matchScore:
-              typeof (safe.jdMatch as { matchScore?: unknown }).matchScore ===
-              "number"
-                ? (safe.jdMatch as { matchScore: number }).matchScore
-                : undefined,
-            matchedSkills: Array.isArray(
-              (safe.jdMatch as { matchedSkills?: unknown }).matchedSkills,
-            )
-              ? (safe.jdMatch as { matchedSkills: string[] }).matchedSkills
-              : undefined,
-            missingSkills: Array.isArray(
-              (safe.jdMatch as { missingSkills?: unknown }).missingSkills,
-            )
-              ? (safe.jdMatch as { missingSkills: string[] }).missingSkills
-              : undefined,
-          }
-        : undefined,
-    caveats: Array.isArray(safe.caveats) ? safe.caveats : undefined,
+    keyResponsibilities: safe.keyResponsibilities,
+    requirements: safe.requirements,
+    niceToHaves: safe.niceToHaves,
+    salarySgd: safe.salarySgd,
+    jdMatch: safe.jdMatch,
+    caveats: safe.caveats,
   });
   return docToSummary(doc);
 }
@@ -317,11 +293,7 @@ function jobBlock(
   company: string,
   description: string,
 ): string {
-  const snippet = description
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 4000);
+  const snippet = extractTextFromHtml(description).slice(0, 4000);
   return `--- Job ${index} ---
 Title: ${title}
 Company: ${company}
@@ -364,14 +336,14 @@ export async function generateComparisonSummary(
     yearsOfExperience != null;
   const candidateContext = hasCandidateContext
     ? `
-The candidate's context (use this to recommend which job is the better fit for them):
+Your context (use this to recommend which job is the better fit for you):
 - Skills: ${userSkills.length > 0 ? userSkills.join(", ") : "Not provided"}
 ${currentRole != null && currentRole.trim() !== "" ? `- Current or target role: ${currentRole.trim()}` : ""}
 ${yearsOfExperience != null ? `- Years of experience: ${yearsOfExperience}` : ""}
 
-Given this candidate's skills and experience, which listing is the better fit? Set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation based on this candidate's skills and experience.`
+Given your skills and experience, which listing is the better fit for you? Set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation based on your skills and experience.`
     : `
-If one listing is clearly a better fit for a typical candidate, set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation.`;
+If one listing is clearly a better fit for a typical applicant, set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation.`;
   const prompt = `You are a job comparison assistant for the Singapore job market. Compare the following ${listings.length} job listings and produce a unified comparison that summarizes similarities and differences.
 
 ${blocks.join("\n\n")}
@@ -382,6 +354,7 @@ Rules:
 - Provide "differences": an array of 3–6 short points describing key differences (e.g. seniority level, salary range, remote vs on-site, different tech stacks).
 - Optionally list 3–6 "comparisonPoints" (additional comparison points if needed).
 - Use the job order (Job 1, Job 2, Job 3) – the IDs are: ${listingIds.join(", ")}. recommendedListingId must be one of: ${listingIds.join(", ")}.${candidateContext}
+- Address the user in second-person ("you", "your") in all text fields — never "the candidate".
 - Output must match the schema exactly.`;
 
   const { object } = await retryWithBackoff(

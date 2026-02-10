@@ -4,6 +4,7 @@
 
 "use client";
 
+import { toast } from "sonner";
 import { useState, useCallback } from "react";
 import { updateUser } from "@/lib/api/users";
 import { useMutation } from "@tanstack/react-query";
@@ -47,6 +48,7 @@ function AccountSettingsFormInner({
       onSuccess?.({ email: data.email, username: data.username });
       setNewPassword("");
       setConfirmPassword("");
+      toast.success("Account updated");
     },
   });
 

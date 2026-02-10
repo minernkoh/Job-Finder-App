@@ -15,7 +15,8 @@ import { isValidObjectId } from "@/lib/objectid";
 import { UserProfile } from "@/lib/models/UserProfile";
 import mongoose from "mongoose";
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
+/** Maximum file size (5 MB) for PDF and DOCX resume uploads. */
+export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 /** User-facing message when PDF text extraction fails (image-only or unsupported PDF). */
 export const PDF_EXTRACT_ERROR_MESSAGE =

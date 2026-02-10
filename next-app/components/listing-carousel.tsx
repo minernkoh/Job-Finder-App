@@ -4,7 +4,9 @@
 
 "use client";
 
+import { motion } from "framer-motion";
 import { recordListingView } from "@/lib/api/listings";
+import { EASE_TRANSITION, staggerDelay } from "@/lib/animations";
 import { ListingCard } from "./listing-card";
 import type { ListingResult } from "@schemas";
 
@@ -52,9 +54,15 @@ export function ListingCarousel({
     >
       <h2 className="eyebrow mb-3">{title}</h2>
       <div className="scrollbar-hide flex min-w-0 w-full min-h-[12rem] gap-3 overflow-x-auto overflow-y-visible px-4 pt-3 pb-4">
-        {listings.map((listing) => (
-          <div
+        {listings.map((listing, index) => (
+          <motion.div
             key={listing.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{
+              ...EASE_TRANSITION,
+              ...staggerDelay(index),
+            }}
             className="min-w-[280px] max-w-[320px] flex-1 shrink-0"
           >
             <ListingCard
@@ -71,7 +79,7 @@ export function ListingCarousel({
               userRole={userRole}
               onDeleteListing={onDeleteListing}
             />
-          </div>
+          </motion.div>
         ))}
       </div>
     </section>

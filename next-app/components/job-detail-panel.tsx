@@ -4,6 +4,7 @@
 
 "use client";
 
+import { toast } from "sonner";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,11 +20,14 @@ import {
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "isomorphic-dompurify";
+import { AnimatePresence, motion } from "framer-motion";
+import { EASE_TRANSITION } from "@/lib/animations";
 import { AISummaryCard } from "@/components/ai-summary-card";
 import { AuthModalLink } from "@/components/auth-modal-link";
 import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { getErrorMessage } from "@/lib/api/errors";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
 import { fetchListing, recordListingView } from "@/lib/api/listings";
 import { createSummary } from "@/lib/api/summaries";
@@ -127,11 +131,12 @@ export function JobDetailPanel({
     onSuccess: (data) => {
       setSummary(data);
       setSummaryError(null);
+      toast.success("AI summary ready");
     },
     onError: (err) => {
-      setSummaryError(
-        err instanceof Error ? err.message : "Failed to summarize",
-      );
+      const message = getErrorMessage(err, "Failed to summarize");
+      setSummaryError(message);
+      toast.error(message);
     },
   });
 
@@ -361,8 +366,16 @@ export function JobDetailPanel({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-6 p-4 sm:p-6 sm:space-y-8">
-        <div className="flex flex-row flex-wrap items-start justify-between gap-3">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={listingId}
+          initial={{ opacity: 0, x: 8 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -8 }}
+          transition={EASE_TRANSITION}
+          className="flex-1 overflow-y-auto space-y-6 p-4 sm:p-6 sm:space-y-8"
+        >
+          <div className="flex flex-row flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <h1 className="text-xl font-semibold text-foreground">
               {listing.title}
@@ -403,11 +416,17 @@ export function JobDetailPanel({
           <section className="space-y-3">
             <h2 className={"eyebrow"}>AI Summary</h2>
             {summary ? (
-              <AISummaryCard
-                summary={summary}
-                maxResponsibilities={5}
-                maxRequirements={5}
-              />
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={EASE_TRANSITION}
+              >
+                <AISummaryCard
+                  summary={summary}
+                  maxResponsibilities={5}
+                  maxRequirements={5}
+                />
+              </motion.div>
             ) : user ? (
               <>
                 <Button
@@ -492,7 +511,8 @@ export function JobDetailPanel({
             </section>
           )}
         </div>
-      </div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }

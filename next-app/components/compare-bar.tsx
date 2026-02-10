@@ -5,10 +5,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { ArrowsLeftRightIcon, XIcon } from "@phosphor-icons/react";
 import { Button, Card } from "@ui/components";
 import { useCompare } from "@/contexts/CompareContext";
 import { CONTENT_MAX_W, PAGE_PX } from "@/lib/layout";
+import { EASE_TRANSITION } from "@/lib/animations";
 
 interface CompareBarProps {
   /** When true, bar spans full content width (e.g. same as left + right panels). */
@@ -27,7 +29,13 @@ export function CompareBar({ fullWidth }: CompareBarProps) {
   const canCompare = compareSet.length >= 2;
 
   return (
-    <div className={`sticky top-0 z-40 py-2 mb-6 ${PAGE_PX}`}>
+    <motion.div
+      initial={{ opacity: 0, y: -12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -12 }}
+      transition={EASE_TRANSITION}
+      className={`sticky top-0 z-40 py-2 mb-6 ${PAGE_PX}`}
+    >
       <Card
         variant="default"
         className={
@@ -88,6 +96,6 @@ export function CompareBar({ fullWidth }: CompareBarProps) {
           </Button>
         </div>
       </Card>
-    </div>
+    </motion.div>
   );
 }

@@ -11,12 +11,11 @@ import {
   DOCX_EXTRACT_ERROR_MESSAGE,
   extractTextFromDocx,
   extractTextFromPdf,
+  MAX_FILE_BYTES,
   PDF_EXTRACT_ERROR_MESSAGE,
   parseResumeWithRetry,
   upsertProfileForUser,
 } from "@/lib/services/resume.service";
-
-const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";

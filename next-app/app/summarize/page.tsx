@@ -4,6 +4,7 @@
 
 "use client";
 
+import { toast } from "sonner";
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -32,6 +33,7 @@ function SummarizeContent() {
     onSuccess: (data) => {
       setSummary(data);
       setError(null);
+      toast.success("Summary generated");
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : "Failed to summarize");

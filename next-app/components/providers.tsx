@@ -4,6 +4,7 @@
 
 "use client";
 
+import { Toaster } from "sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { AuthModal } from "@/components/auth-modal";
@@ -30,6 +31,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <AuthModal />
           </Suspense>
           {children}
+          <Toaster
+            theme="dark"
+            richColors
+            toastOptions={{
+              classNames: {
+                toast: "bg-card border-border text-foreground",
+                title: "text-foreground",
+                description: "text-muted-foreground",
+              },
+            }}
+          />
         </CompareProvider>
       </AuthProvider>
     </QueryClientProvider>
