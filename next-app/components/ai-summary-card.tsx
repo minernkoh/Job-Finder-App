@@ -4,8 +4,9 @@
 
 "use client";
 
+import { useState } from "react";
 import type { AISummary } from "@schemas";
-import { Card, CardContent } from "@ui/components";
+import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 
 /** Summary shape for display: at least tldr; other fields optional so compare column can pass partial data. */
@@ -18,6 +19,8 @@ interface AISummaryCardProps {
   noCard?: boolean;
   /** When set, limit key responsibilities to this many (e.g. 3 for compare column). */
   maxResponsibilities?: number;
+  /** When set, limit requirements to this many. */
+  maxRequirements?: number;
 }
 
 /** Renders AI summary content: tldr, responsibilities, requirements, salary, JD match, caveats. */
@@ -25,36 +28,71 @@ export function AISummaryCard({
   summary,
   noCard = false,
   maxResponsibilities,
+  maxRequirements,
 }: AISummaryCardProps) {
+  const [expandResponsibilities, setExpandResponsibilities] = useState(false);
+  const [expandRequirements, setExpandRequirements] = useState(false);
   const listClass = "list-disc pl-5 space-y-0.5 text-foreground";
-  const responsibilities =
-    summary.keyResponsibilities && summary.keyResponsibilities.length > 0
-      ? maxResponsibilities != null
-        ? summary.keyResponsibilities.slice(0, maxResponsibilities)
-        : summary.keyResponsibilities
-      : [];
+  const allResponsibilities = summary.keyResponsibilities ?? [];
+  const allRequirements = summary.requirements ?? [];
+  const responsibilitiesLimit =
+    maxResponsibilities ?? allResponsibilities.length;
+  const requirementsLimit = maxRequirements ?? allRequirements.length;
+  const responsibilitiesShown =
+    expandResponsibilities || responsibilitiesLimit >= allResponsibilities.length
+      ? allResponsibilities
+      : allResponsibilities.slice(0, responsibilitiesLimit);
+  const requirementsShown =
+    expandRequirements || requirementsLimit >= allRequirements.length
+      ? allRequirements
+      : allRequirements.slice(0, requirementsLimit);
+  const hasMoreResponsibilities =
+    allResponsibilities.length > responsibilitiesShown.length;
+  const hasMoreRequirements = allRequirements.length > requirementsShown.length;
 
   const content = (
     <div className="space-y-4 text-sm">
       <p className="text-foreground">{summary.tldr}</p>
-      {responsibilities.length > 0 && (
+      {responsibilitiesShown.length > 0 && (
         <div>
           <h3 className={cn("eyebrow", "mb-1")}>Key responsibilities</h3>
           <ul className={listClass}>
-            {responsibilities.map((r, i) => (
+            {responsibilitiesShown.map((r, i) => (
               <li key={i}>{r}</li>
             ))}
           </ul>
+          {hasMoreResponsibilities && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="mt-1 -ml-1"
+              onClick={() => setExpandResponsibilities((v) => !v)}
+            >
+              {expandResponsibilities ? "Show less" : "Show more"}
+            </Button>
+          )}
         </div>
       )}
-      {summary.requirements && summary.requirements.length > 0 && (
+      {requirementsShown.length > 0 && (
         <div>
           <h3 className={cn("eyebrow", "mb-1")}>Requirements</h3>
           <ul className={listClass}>
-            {summary.requirements.map((r, i) => (
+            {requirementsShown.map((r, i) => (
               <li key={i}>{r}</li>
             ))}
           </ul>
+          {hasMoreRequirements && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="mt-1 -ml-1"
+              onClick={() => setExpandRequirements((v) => !v)}
+            >
+              {expandRequirements ? "Show less" : "Show more"}
+            </Button>
+          )}
         </div>
       )}
       {summary.salarySgd && (

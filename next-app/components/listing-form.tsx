@@ -27,7 +27,7 @@ interface ListingFormProps {
   submitting: boolean;
   error: string | null;
   /** Prefix for input ids to avoid duplicate ids when create and edit are both in DOM (e.g. "create-", "edit-"). */
-  fieldIdPrefix: string;
+  idPrefix: string;
 }
 
 const textareaClass =
@@ -43,9 +43,9 @@ export function ListingForm({
   submitLabel,
   submitting,
   error,
-  fieldIdPrefix,
+  idPrefix,
 }: ListingFormProps) {
-  const p = fieldIdPrefix;
+  const p = idPrefix;
   return (
     <form onSubmit={onSubmit} className="space-y-4 max-w-xl">
       <FormField id={`${p}title`} label="Title *" required>

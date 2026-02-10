@@ -4,6 +4,7 @@
 
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
+import { calculatePagination } from "@/lib/pagination";
 import { isValidObjectId, parseObjectId } from "@/lib/objectid";
 import { AISummary } from "@/lib/models/AISummary";
 import { User } from "@/lib/models/User";
@@ -19,7 +20,7 @@ export interface ListSummariesResult {
   summaries: Array<{
     id: string;
     userId: string;
-    userName?: string;
+    userName: string;
     tldr: string;
     createdAt: Date;
     hasSalarySgd: boolean;
@@ -35,9 +36,7 @@ export async function listSummaries(
   params: ListSummariesParams
 ): Promise<ListSummariesResult> {
   await connectDB();
-  const page = Math.max(1, params.page ?? 1);
-  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
-  const skip = (page - 1) * limit;
+  const { page, limit, skip } = calculatePagination(params);
   const sortKey =
     params.sort === "-createdAt"
       ? { createdAt: -1 as const }
@@ -66,10 +65,11 @@ export async function listSummaries(
           .select("username")
           .lean()
       : [];
-  const usernameByUserId = new Map<string, string | undefined>();
+  const usernameByUserId = new Map<string, string>();
   for (const u of userDocs) {
     const id = (u as { _id: mongoose.Types.ObjectId })._id.toString();
-    usernameByUserId.set(id, (u as { username?: string }).username);
+    const uname = (u as { username: string }).username;
+    usernameByUserId.set(id, uname);
   }
 
   return {
@@ -78,7 +78,7 @@ export async function listSummaries(
       return {
         id: (s as { _id: mongoose.Types.ObjectId })._id.toString(),
         userId: uid,
-        userName: usernameByUserId.get(uid) ?? undefined,
+        userName: usernameByUserId.get(uid) ?? "",
         tldr: (s as { tldr: string }).tldr,
         createdAt: (s as { createdAt: Date }).createdAt,
         hasSalarySgd: !!(s as { salarySgd?: string }).salarySgd,

@@ -4,7 +4,7 @@
 
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
@@ -17,7 +17,7 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "isomorphic-dompurify";
 import { AISummaryCard } from "@/components/ai-summary-card";
 import { AuthModalLink } from "@/components/auth-modal-link";
@@ -30,6 +30,47 @@ import { createSummary } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { listingKeys } from "@/lib/query-keys";
+
+/** Compare button that shows "Remove" on hover when job is in comparison (tooltip and label). */
+function CompareButtonWithHover({
+  isInCompareSet,
+  compareSetFull,
+  onAddToCompare,
+}: {
+  isInCompareSet: boolean;
+  compareSetFull: boolean;
+  onAddToCompare: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const showRemove = isInCompareSet && hovered;
+  const label = showRemove
+    ? "Remove"
+    : isInCompareSet
+      ? "In comparison"
+      : "Add to compare";
+  const title =
+    compareSetFull && !isInCompareSet
+      ? "You can compare up to 3 jobs. Remove one to add another."
+      : isInCompareSet
+        ? "Remove"
+        : "Add to compare";
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={!isInCompareSet && compareSetFull}
+      onClick={onAddToCompare}
+      title={title}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label={isInCompareSet ? "Remove from comparison" : "Add to compare"}
+      className={showRemove ? "!text-destructive hover:!text-destructive [&_svg]:!text-destructive" : undefined}
+    >
+      <ArrowsLeftRightIcon size={16} className="mr-1" />
+      {label}
+    </Button>
+  );
+}
 
 export interface JobDetailPanelProps {
   /** Listing ID to show. */
@@ -62,6 +103,8 @@ export function JobDetailPanel({
   backToListingsHref,
 }: JobDetailPanelProps) {
   const router = useRouter();
+  const pathname = usePathname() ?? "/";
+  const isBrowseList = pathname === "/browse";
   const searchParams = useSearchParams();
   const { user } = useAuth();
 
@@ -87,7 +130,7 @@ export function JobDetailPanel({
     },
     onError: (err) => {
       setSummaryError(
-        err instanceof Error ? err.message : "Failed to summarize"
+        err instanceof Error ? err.message : "Failed to summarize",
       );
     },
   });
@@ -95,6 +138,28 @@ export function JobDetailPanel({
   useEffect(() => {
     if (listingId) recordListingView(listingId);
   }, [listingId]);
+
+  const hasAutoSummarized = useRef(false);
+  useEffect(() => {
+    if (
+      hasAutoSummarized.current ||
+      !user ||
+      !searchParams ||
+      searchParams.get("summarize") !== "1" ||
+      searchParams.get("job") !== listingId
+    ) {
+      return;
+    }
+    hasAutoSummarized.current = true;
+    summarizeMutation.mutate(undefined, {
+      onSettled: () => {
+        const next = new URLSearchParams(searchParams.toString());
+        next.delete("summarize");
+        const q = next.toString();
+        router.replace(q ? `${pathname}?${q}` : pathname);
+      },
+    });
+  }, [user, searchParams, listingId, pathname, router]);
 
   const description = listing?.description ?? "";
   const sanitizedDescription = useMemo(() => {
@@ -121,9 +186,7 @@ export function JobDetailPanel({
   }, [description]);
 
   const currentIndex =
-    listingIdsForNav && basePath
-      ? listingIdsForNav.indexOf(listingId)
-      : -1;
+    listingIdsForNav && basePath ? listingIdsForNav.indexOf(listingId) : -1;
   const hasPrev =
     currentIndex > 0 && listingIdsForNav && listingIdsForNav[currentIndex - 1];
   const hasNext =
@@ -145,7 +208,7 @@ export function JobDetailPanel({
         router.replace(`${basePath}?job=${id}`);
       }
     },
-    [basePath, router, searchParams]
+    [basePath, router, searchParams],
   );
 
   useEffect(() => {
@@ -191,11 +254,20 @@ export function JobDetailPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-6">
+        <div className="flex flex-wrap items-center gap-2">
           {backToListingsHref && (
-            <Button asChild variant="ghost" size="sm" className="lg:hidden -ml-2" aria-label="Back to listings">
-              <Link href={backToListingsHref} className="inline-flex items-center gap-1.5">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="lg:hidden -ml-2"
+              aria-label="Back to listings"
+            >
+              <Link
+                href={backToListingsHref}
+                className="inline-flex items-center gap-1.5"
+              >
                 <ArrowLeftIcon size={18} aria-hidden />
                 Back to Listings
               </Link>
@@ -226,22 +298,11 @@ export function JobDetailPanel({
             </Button>
           )}
           {onAddToCompare && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!isInCompareSet && compareSetFull}
-              onClick={onAddToCompare}
-              title={
-                compareSetFull && !isInCompareSet
-                  ? "You can compare up to 3 jobs. Remove one to add another."
-                  : isInCompareSet
-                    ? "Remove from comparison"
-                    : "Add to compare"
-              }
-            >
-              <ArrowsLeftRightIcon size={16} className="mr-1" />
-              {isInCompareSet ? "In comparison" : "Add to compare"}
-            </Button>
+            <CompareButtonWithHover
+              isInCompareSet={isInCompareSet}
+              compareSetFull={compareSetFull}
+              onAddToCompare={onAddToCompare}
+            />
           )}
           {user?.role === "admin" && (
             <span className="inline-flex items-center gap-2 border-l border-border pl-3">
@@ -258,7 +319,12 @@ export function JobDetailPanel({
                   size="sm"
                   className="text-destructive hover:text-destructive"
                   onClick={() => {
-                    if (typeof window !== "undefined" && window.confirm("Delete this listing? This cannot be undone.")) {
+                    if (
+                      typeof window !== "undefined" &&
+                      window.confirm(
+                        "Delete this listing? This cannot be undone.",
+                      )
+                    ) {
                       onDeleteListing(listingId);
                     }
                   }}
@@ -272,7 +338,7 @@ export function JobDetailPanel({
           )}
         </div>
         {listingIdsForNav && basePath && (hasPrev || hasNext) && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -311,12 +377,10 @@ export function JobDetailPanel({
               const salary = formatSalaryRange(
                 listing.salaryMin,
                 listing.salaryMax,
-                listing.country
+                listing.country,
               );
               return salary ? (
-                <p className="text-sm font-medium text-foreground">
-                  {salary}
-                </p>
+                <p className="text-sm font-medium text-foreground">{salary}</p>
               ) : null;
             })()}
             {listing.country && listing.country !== "sg" && (
@@ -339,7 +403,11 @@ export function JobDetailPanel({
           <section className="space-y-3">
             <h2 className={"eyebrow"}>AI Summary</h2>
             {summary ? (
-              <AISummaryCard summary={summary} />
+              <AISummaryCard
+                summary={summary}
+                maxResponsibilities={5}
+                maxRequirements={5}
+              />
             ) : user ? (
               <>
                 <Button
@@ -363,7 +431,11 @@ export function JobDetailPanel({
               <Button asChild variant="default" size="sm">
                 <AuthModalLink
                   auth="login"
-                  redirect={listingId ? `/browse?job=${listingId}` : undefined}
+                  redirect={
+                    listingId
+                      ? `/browse?job=${listingId}&summarize=1`
+                      : undefined
+                  }
                 >
                   Log in to get AI summaries
                 </AuthModalLink>
@@ -371,7 +443,9 @@ export function JobDetailPanel({
             )}
           </section>
 
-          {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
+          {(sanitizedDescription.length > 0 ||
+            listing.sourceUrl ||
+            (isBrowseList && !!listingId)) && (
             <section className="space-y-2">
               <h2 className={cn("eyebrow", "mb-2")}>Description</h2>
               <Card variant="elevated" className="text-sm">
@@ -383,22 +457,35 @@ export function JobDetailPanel({
                     }}
                   />
                 )}
-                {listing.sourceUrl && (
+                {(listing.sourceUrl || isBrowseList) && (
                   <div
                     className={cn(
                       "px-4 pb-4",
                       sanitizedDescription.length > 0 &&
-                        "border-t border-border pt-4"
+                        "border-t border-border pt-4",
                     )}
                   >
-                    <a
-                      href={listing.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-block text-sm text-primary hover:underline"
-                    >
-                      View original posting
-                    </a>
+                    {listing.sourceUrl && (
+                      <a
+                        href={listing.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block text-sm text-primary hover:underline"
+                      >
+                        View original posting
+                      </a>
+                    )}
+                    {listing.sourceUrl && isBrowseList && (
+                      <span className="mx-2 text-muted-foreground">·</span>
+                    )}
+                    {isBrowseList && listingId && (
+                      <Link
+                        href={`/browse/${listingId}`}
+                        className="inline-block text-sm text-primary hover:underline"
+                      >
+                        Open full page
+                      </Link>
+                    )}
                   </div>
                 )}
               </Card>

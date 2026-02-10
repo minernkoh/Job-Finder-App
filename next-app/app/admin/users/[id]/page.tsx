@@ -1,5 +1,5 @@
 /**
- * Admin user detail page: view user and activity counts; edit name/email; promote/demote, suspend/activate, delete with confirmation.
+ * Admin user detail page: view user and activity counts; edit email/username; promote/demote, suspend/activate, delete with confirmation.
  */
 
 "use client";
@@ -26,9 +26,8 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@ui/com
 
 interface UserDetail {
   id: string;
-  name: string;
   email: string;
-  username?: string;
+  username: string;
   role: string;
   status: string;
   createdAt: string;
@@ -50,7 +49,6 @@ export default function AdminUserDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editUsername, setEditUsername] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
@@ -78,23 +76,26 @@ export default function AdminUserDetailPage() {
 
   useEffect(() => {
     if (user) {
-      setEditName(user.name);
       setEditEmail(user.email);
-      setEditUsername(user.username ?? "");
+      setEditUsername(user.username);
     }
   }, [user]);
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setActionError(null);
+    const usernameTrimmed = editUsername.trim();
+    if (usernameTrimmed.length < 3) {
+      setActionError("Username must be at least 3 characters");
+      return;
+    }
     setEditSubmitting(true);
     try {
       const res = await apiClient.patch<{ success: boolean; data: UserDetail }>(
         `/api/v1/admin/users/${id}`,
         {
-          name: editName.trim(),
           email: editEmail.trim(),
-          username: editUsername.trim() || undefined,
+          username: usernameTrimmed,
         }
       );
       if (res.data.success && res.data.data) {
@@ -194,7 +195,7 @@ export default function AdminUserDetailPage() {
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <UserCircleIcon className="size-5 text-muted-foreground" weight="regular" />
-            <CardTitle>{user.name}</CardTitle>
+            <CardTitle>{user.username}</CardTitle>
           </div>
           {!editing ? (
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
@@ -210,15 +211,6 @@ export default function AdminUserDetailPage() {
         <CardContent className="space-y-4">
           {editing ? (
             <form onSubmit={handleEditSubmit} className="space-y-4">
-              <FormField id="edit-name" label="Name" required>
-                <Input
-                  id="edit-name"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  required
-                  disabled={editSubmitting}
-                />
-              </FormField>
               <FormField id="edit-email" label="Email" required>
                 <Input
                   id="edit-email"
@@ -229,12 +221,15 @@ export default function AdminUserDetailPage() {
                   disabled={editSubmitting}
                 />
               </FormField>
-              <FormField id="edit-username" label="Username (optional)">
+              <FormField id="edit-username" label="Username" required>
                 <Input
                   id="edit-username"
                   value={editUsername}
                   onChange={(e) => setEditUsername(e.target.value)}
                   placeholder="3–30 chars, letters, numbers, _ -"
+                  required
+                  minLength={3}
+                  maxLength={30}
                   disabled={editSubmitting}
                 />
               </FormField>
@@ -250,7 +245,7 @@ export default function AdminUserDetailPage() {
               </div>
               <div>
                 <dt className="text-muted-foreground">Username</dt>
-                <dd className="text-foreground">{user.username ?? "—"}</dd>
+                <dd className="text-foreground">{user.username}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Role</dt>

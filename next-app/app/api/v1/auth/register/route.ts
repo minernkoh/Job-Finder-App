@@ -1,5 +1,6 @@
 /**
  * Register API: creates a new user, returns access token in JSON and sets refresh token in HttpOnly cookie.
+ * Note: Returns { accessToken, user } (not wrapped in { success, data }) for compatibility with AuthContext.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -29,15 +30,13 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
-    const usernameTrimmed = parsed.data.username?.trim();
-    if (usernameTrimmed) {
-      const existingUsername = await User.findOne({ username: usernameTrimmed }).lean();
-      if (existingUsername) {
-        return NextResponse.json(
-          { success: false, message: "Username already taken", error: "Username already taken" },
-          { status: 409 }
-        );
-      }
+    const usernameTrimmed = parsed.data.username.trim();
+    const existingUsername = await User.findOne({ username: usernameTrimmed }).lean();
+    if (existingUsername) {
+      return NextResponse.json(
+        { success: false, message: "Username already taken", error: "Username already taken" },
+        { status: 409 }
+      );
     }
 
     const user = await User.create(parsed.data);
@@ -58,21 +57,21 @@ export async function POST(request: NextRequest) {
         accessToken,
         user: {
           id: sub,
-          name: user.name,
           email: user.email,
           role: user.role,
-          username: (user as { username?: string }).username,
+          username: user.username,
         },
       },
       { status: 201, headers }
     );
-  } catch {
+  } catch (err: unknown) {
+    const message = "Registration failed";
+    const errorDetail =
+      process.env.NODE_ENV !== "production"
+        ? (err instanceof Error ? err.message : String(err))
+        : "Registration failed";
     return NextResponse.json(
-      {
-        success: false,
-        message: "Registration failed",
-        error: "Registration failed",
-      },
+      { success: false, message, error: errorDetail },
       { status: 500 }
     );
   }

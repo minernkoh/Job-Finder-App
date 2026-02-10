@@ -17,6 +17,7 @@ const UserProfileSchema = new Schema<IUserProfileDocument>(
     skills: { type: [String], default: [] },
     jobTitles: { type: [String], default: [] },
     resumeSummary: { type: String },
+    yearsOfExperience: { type: Number, required: false },
   },
   { timestamps: { createdAt: false, updatedAt: true } }
 );

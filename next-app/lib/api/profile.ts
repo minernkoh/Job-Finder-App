@@ -16,7 +16,7 @@ export interface ProfileResponse {
   success: boolean;
   data:
     | UserProfile
-    | { skills: string[]; jobTitles?: string[]; resumeSummary?: string };
+    | { skills: string[]; jobTitles?: string[]; resumeSummary?: string; yearsOfExperience?: number };
 }
 
 export interface ParseResumeResponse {
@@ -27,7 +27,7 @@ export interface ParseResumeResponse {
 /** Fetches the current user's profile. Returns profile with empty skills if none. */
 export async function fetchProfile(): Promise<
   | UserProfile
-  | { skills: string[]; jobTitles?: string[]; resumeSummary?: string }
+  | { skills: string[]; jobTitles?: string[]; resumeSummary?: string; yearsOfExperience?: number }
 > {
   const res = await apiClient.get<ProfileResponse>("/api/v1/profile");
   if (!res.data.success || res.data.data === undefined)
@@ -38,7 +38,12 @@ export async function fetchProfile(): Promise<
 /** Updates the current user's profile with partial data. */
 export async function updateProfile(
   data: UserProfileUpdate
-): Promise<{ skills: string[]; jobTitles?: string[]; resumeSummary?: string }> {
+): Promise<{
+  skills: string[];
+  jobTitles?: string[];
+  resumeSummary?: string;
+  yearsOfExperience?: number;
+}> {
   const res = await apiClient.put<ProfileResponse>("/api/v1/profile", data);
   if (!res.data.success || res.data.data === undefined)
     throw new Error(
@@ -48,6 +53,7 @@ export async function updateProfile(
     skills: string[];
     jobTitles?: string[];
     resumeSummary?: string;
+    yearsOfExperience?: number;
   };
 }
 

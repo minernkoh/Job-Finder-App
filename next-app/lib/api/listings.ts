@@ -26,6 +26,11 @@ export interface TrendingResponse {
   data: { listings: ListingResult[] };
 }
 
+export interface RecommendedResponse {
+  success: boolean;
+  data: { listings: ListingResult[]; totalCount: number };
+}
+
 /** Filter options for job search; aligned with Adzuna API and GET /api/v1/listings. */
 export interface ListingsFilters {
   where?: string;
@@ -99,6 +104,18 @@ export async function fetchTrending(
   );
   if (!res.data.success) throw new Error("Failed to fetch trending");
   return res.data.data.listings;
+}
+
+/** Fetches recommended listings for the current user (based on profile role/skills). Requires auth. */
+export async function fetchRecommendedListings(): Promise<{
+  listings: ListingResult[];
+  totalCount: number;
+}> {
+  const res = await apiClient.get<RecommendedResponse>(
+    "/api/v1/listings/recommended"
+  );
+  if (!res.data.success) throw new Error("Failed to fetch recommended listings");
+  return res.data.data;
 }
 
 /** Records a view for a listing (fire-and-forget). */

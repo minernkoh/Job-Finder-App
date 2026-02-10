@@ -1,5 +1,5 @@
 /**
- * Shared auth form fields: email, password for login; name, username (optional), email, password for signup.
+ * Shared auth form fields: for login, email or username + password; for signup, username (required), email, password.
  * Parent owns state and submit handler. Used by auth-modal and admin page.
  */
 
@@ -7,6 +7,7 @@
 
 import { Input, Label } from "@ui/components";
 import { PasswordInput } from "@/components/password-input";
+import { InlineError } from "@/components/page-state";
 import { getPasswordStrength } from "@/lib/password-strength";
 
 interface AuthFormFieldsProps {
@@ -16,14 +17,19 @@ interface AuthFormFieldsProps {
   onEmailChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   password: string;
   onPasswordChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  name?: string;
-  onNameChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   username?: string;
   onUsernameChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   disabled?: boolean;
+  /** Field-level validation errors from API (e.g. Zod flatten fieldErrors). */
+  usernameError?: string;
+  emailError?: string;
+  passwordError?: string;
 }
 
-/** Renders login (email, password) or signup (name, username optional, email, password) form fields. */
+/** Backend username rule: 3–30 chars, letters, numbers, underscore, hyphen. Exported for use in submit handlers. */
+export const USERNAME_REGEX = /^[a-zA-Z0-9_-]+$/;
+
+/** Renders login (email or username, password) or signup (username required, email, password) form fields. */
 export function AuthFormFields({
   mode,
   idPrefix,
@@ -31,11 +37,12 @@ export function AuthFormFields({
   onEmailChange,
   password,
   onPasswordChange,
-  name = "",
-  onNameChange,
   username = "",
   onUsernameChange,
   disabled = false,
+  usernameError,
+  emailError,
+  passwordError,
 }: AuthFormFieldsProps) {
   const p = idPrefix;
   const passwordStrength = mode === "signup" ? getPasswordStrength(password) : 0;
@@ -44,45 +51,37 @@ export function AuthFormFields({
     <>
       {mode === "signup" && (
         <div className="space-y-2">
-          <Label htmlFor={`${p}name`}>Name</Label>
-          <Input
-            id={`${p}name`}
-            type="text"
-            placeholder="Your name"
-            value={name}
-            onChange={onNameChange ?? (() => {})}
-            required
-            autoComplete="name"
-            disabled={disabled}
-          />
-        </div>
-      )}
-      {mode === "signup" && (
-        <div className="space-y-2">
-          <Label htmlFor={`${p}username`}>Username (optional)</Label>
+          <Label htmlFor={`${p}username`}>Username</Label>
           <Input
             id={`${p}username`}
             type="text"
             placeholder="3–30 chars, letters, numbers, _ -"
             value={username}
             onChange={onUsernameChange ?? (() => {})}
+            required
+            minLength={3}
+            maxLength={30}
+            pattern="[a-zA-Z0-9_-]+"
+            title="Letters, numbers, underscore, and hyphen only"
             autoComplete="username"
             disabled={disabled}
           />
+          {usernameError && <InlineError message={usernameError} />}
         </div>
       )}
       <div className="space-y-2">
-        <Label htmlFor={`${p}email`}>Email</Label>
+        <Label htmlFor={`${p}email`}>{mode === "login" ? "Email or username" : "Email"}</Label>
         <Input
           id={`${p}email`}
-          type="email"
-          placeholder="you@example.com"
+          type={mode === "login" ? "text" : "email"}
+          placeholder={mode === "login" ? "Email or username" : "you@example.com"}
           value={email}
           onChange={onEmailChange}
           required
-          autoComplete="email"
+          autoComplete={mode === "login" ? "username" : "email"}
           disabled={disabled}
         />
+        {emailError && <InlineError message={emailError} />}
       </div>
       <div className="space-y-2">
         <Label htmlFor={`${p}password`}>Password</Label>
@@ -95,7 +94,8 @@ export function AuthFormFields({
           autoComplete={mode === "login" ? "current-password" : "new-password"}
           disabled={disabled}
         />
-        {mode === "signup" && password.length > 0 && (
+        {passwordError && <InlineError message={passwordError} />}
+        {mode === "signup" && password.length > 0 && !passwordError && (
           <p className="text-xs text-muted-foreground">
             Strength:{" "}
             {passwordStrength === 1 && "Weak (min 8 characters)"}

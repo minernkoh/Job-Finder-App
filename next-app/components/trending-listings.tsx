@@ -5,8 +5,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchTrending, recordListingView } from "@/lib/api/listings";
-import { ListingCard } from "./listing-card";
+import { fetchTrending } from "@/lib/api/listings";
+import { ListingCarousel } from "./listing-carousel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { trendingKeys } from "@/lib/query-keys";
@@ -27,34 +27,22 @@ export function TrendingListings({
   const { data: listings = [], isLoading } = useQuery({
     queryKey: trendingKeys.all,
     queryFn: () => fetchTrending(5, 24),
+    staleTime: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
   const { savedIds, saveMutation, unsaveMutation } = useSavedListings();
 
   if (isLoading || listings.length === 0) return null;
 
   return (
-    <section className="mt-10 overflow-visible">
-      <h2 className="eyebrow mb-3">
-        Trending
-      </h2>
-      <div className="scrollbar-hide flex gap-3 overflow-x-auto overflow-y-visible px-2 py-3">
-        {listings.map((listing) => (
-          <div key={listing.id} className="min-w-[280px] max-w-[320px] flex-1 shrink-0">
-            <ListingCard
-              listing={listing}
-              showTrendingBadge
-              onView={() => recordListingView(listing.id)}
-              onSave={user ? () => saveMutation.mutate(listing) : undefined}
-              onUnsave={
-                user ? () => unsaveMutation.mutate(listing.id) : undefined
-              }
-              isSaved={savedIds.has(listing.id)}
-              userRole={userRole}
-              onDeleteListing={onDeleteListing}
-            />
-          </div>
-        ))}
-      </div>
-    </section>
+    <ListingCarousel
+      title="Trending"
+      listings={listings}
+      savedIds={savedIds}
+      onSave={user ? (listing) => saveMutation.mutate(listing) : undefined}
+      onUnsave={user ? (id) => unsaveMutation.mutate(id) : undefined}
+      showTrendingBadge
+      userRole={userRole}
+      onDeleteListing={onDeleteListing}
+    />
   );
 }

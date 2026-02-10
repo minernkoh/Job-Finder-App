@@ -33,27 +33,27 @@ export const UserGrowthBucketSchema = z.object({
 });
 export type UserGrowthBucket = z.infer<typeof UserGrowthBucketSchema>;
 
-/** Popular listing row: listing id with view and save counts (last 7 days for views). */
+/** Popular listing row: listing id, optional title, view and save counts (last 7 days for views). */
 export const PopularListingItemSchema = z.object({
   listingId: z.string(),
+  title: z.string().optional(),
   viewCount: z.number(),
   saveCount: z.number(),
 });
 export type PopularListingItem = z.infer<typeof PopularListingItemSchema>;
 
-/** Recent user row for dashboard: id, optional username, name, createdAt. */
+/** Recent user row for dashboard: id, username, createdAt. */
 export const RecentUserSchema = z.object({
   id: z.string(),
-  username: z.string().optional(),
-  name: z.string(),
+  username: z.string(),
   createdAt: z.coerce.date(),
 });
 export type RecentUser = z.infer<typeof RecentUserSchema>;
 
-/** Full admin dashboard API response: metrics, summary, user growth, popular listings, recent users. */
+/** Full admin dashboard API response: metrics, optional summary, user growth, popular listings, recent users. Summary may be omitted when loaded separately. */
 export const AdminDashboardResponseSchema = z.object({
   metrics: DashboardMetricsSchema,
-  summary: z.string(),
+  summary: z.string().optional(),
   userGrowth: z.array(UserGrowthBucketSchema),
   popularListings: z.array(PopularListingItemSchema),
   recentUsers: z.array(RecentUserSchema),

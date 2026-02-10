@@ -31,22 +31,20 @@ export interface AppHeaderProps {
 }
 
 /** Renders the app nav bar: logo left; when signed in, Browse Jobs and Profile; Sign in or UserMenu right. Active nav link is highlighted. */
-export function AppHeader({
-  user,
-  onLogout,
-  className,
-}: AppHeaderProps) {
+export function AppHeader({ user, onLogout, className }: AppHeaderProps) {
   const pathname = usePathname() ?? "";
   const isAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
-  const isBrowse = pathname === "/browse" || pathname.startsWith("/browse/");
+  const isCompare = pathname.startsWith("/browse/compare");
+  const isBrowse =
+    (pathname === "/browse" || pathname.startsWith("/browse/")) && !isCompare;
   const isProfile = pathname === "/profile" || pathname.startsWith("/profile/");
 
   const navLinkClass = (active: boolean) =>
     cn(
-      "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+      "px-3 py-2 text-sm font-medium transition-colors",
       active
-        ? "bg-primary text-primary-foreground"
-        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        ? "text-foreground underline decoration-2 decoration-primary underline-offset-8"
+        : "rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
     );
 
   return (
@@ -55,19 +53,27 @@ export function AppHeader({
         "sticky top-0 z-50 border-b border-border bg-background",
         PAGE_PX,
         "py-4",
-        className
+        className,
       )}
     >
       <div
         className={cn(
           "mx-auto flex w-full flex-wrap items-center justify-between gap-2",
-          CONTENT_MAX_W
+          CONTENT_MAX_W,
         )}
       >
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-2">
           <Logo className="shrink-0" />
+          {isAdmin && user?.role === "admin" && (
+            <span
+              className="rounded-full px-2 py-0.5 text-xs font-medium bg-primary/15 text-primary border border-primary/30"
+              aria-label="Admin mode"
+            >
+              Admin
+            </span>
+          )}
         </div>
-        <nav className="flex shrink-0 items-center gap-1">
+        <nav className="flex shrink-0 items-center gap-2">
           {user &&
             isAdmin &&
             adminNavItems.map(({ href, label }) => (
@@ -86,13 +92,18 @@ export function AppHeader({
           )}
           {user && !isAdmin && (
             <Link href="/profile" className={navLinkClass(isProfile)}>
-              Profile
+              My Profile
             </Link>
           )}
           {user ? (
             <UserMenu user={user} onLogout={onLogout} />
           ) : (
-            <Button asChild variant="default" size="xs" className="rounded-xl px-4 text-sm">
+            <Button
+              asChild
+              variant="default"
+              size="xs"
+              className="rounded-xl px-4 text-sm"
+            >
               <AuthModalLink auth="login">Sign In</AuthModalLink>
             </Button>
           )}

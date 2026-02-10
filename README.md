@@ -3,9 +3,10 @@
 AI-assisted job search built with Next.js. Users can browse listings at `/browse`, save jobs,
 compare roles, and generate AI summaries. Admins can view analytics.
 
-*(Add a screenshot or app logo here after deployment. App icon: `next-app/app/icon.svg`.)*
+_(Add a screenshot of the app here)_
 
-## Tech stack
+## Tech Stack
+
 - Next.js 16 (App Router), React 19
 - MongoDB + Mongoose
 - TanStack Query
@@ -13,11 +14,13 @@ compare roles, and generate AI summaries. Admins can view analytics.
 - UI components via `packages/ui`
 
 ## Monorepo layout
+
 - `next-app/` - main Next.js application
 - `packages/schemas` - shared Zod schemas and types
 - `packages/ui` - shared UI components
 
 ## Getting started
+
 1. Install dependencies:
    ```bash
    pnpm install
@@ -26,7 +29,7 @@ compare roles, and generate AI summaries. Admins can view analytics.
    ```bash
    cp next-app/.env.example next-app/.env.local
    ```
-   Then edit `next-app/.env.local` with real values.
+   Then edit `next-app/.env.local` with real values. For auth (login/register) to work: set `MONGODB_URI` (MongoDB must be running and reachable) and set `JWT_SECRET` and `JWT_REFRESH_SECRET` to at least 32 characters each.
 3. Run the app:
    ```bash
    pnpm dev
@@ -34,11 +37,12 @@ compare roles, and generate AI summaries. Admins can view analytics.
 
 **Links**
 
-- **Deployed app:** *(add URL when deployed)*
+- **Deployed app:** _(add URL when deployed)_
 - **Planning and requirements:** see `md_files/` in this repository.
 - **Backend and API:** this repository; API routes live in `next-app/app/api/v1/`.
 
 ## Useful scripts (root)
+
 - `pnpm dev` - start Next.js dev server
 - `pnpm build` - build all workspace packages
 - `pnpm lint` - lint all workspace packages
@@ -52,14 +56,6 @@ compare roles, and generate AI summaries. Admins can view analytics.
 - **@phosphor-icons/react** – icons.
 - **framer-motion** – animations.
 - **Cursor AI** – used per course AI attribution guidelines.
-
-## Next steps
-
-- Add app screenshot to README after deployment.
-- Optional: auth rate limiting (e.g. login/register per IP).
-- Expand test coverage (e.g. API and services).
-- WCAG contrast pass and image alt audit if content images are added.
-- Optional: email alerts for new jobs or saved-job updates.
 
 ## Notes
 

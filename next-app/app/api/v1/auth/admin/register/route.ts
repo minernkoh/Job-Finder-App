@@ -52,15 +52,13 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
-    const usernameTrimmed = (createData as { username?: string }).username?.trim();
-    if (usernameTrimmed) {
-      const existingUsername = await User.findOne({ username: usernameTrimmed }).lean();
-      if (existingUsername) {
-        return NextResponse.json(
-          { success: false, message: "Username already taken", error: "Username already taken" },
-          { status: 409 }
-        );
-      }
+    const usernameTrimmed = createData.username.trim();
+    const existingUsername = await User.findOne({ username: usernameTrimmed }).lean();
+    if (existingUsername) {
+      return NextResponse.json(
+        { success: false, message: "Username already taken", error: "Username already taken" },
+        { status: 409 }
+      );
     }
 
     const user = await User.create({ ...createData, role: "admin" });
@@ -81,10 +79,9 @@ export async function POST(request: NextRequest) {
         accessToken,
         user: {
           id: sub,
-          name: user.name,
           email: user.email,
           role: user.role,
-          username: (user as { username?: string }).username,
+          username: user.username,
         },
       },
       { status: 201, headers }

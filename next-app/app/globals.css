@@ -15,14 +15,47 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --shadow-blue: 0 0.625rem 0.9375rem -0.1875rem rgba(59, 130, 246, 0.2);
-  --gradient-dark: linear-gradient(160deg, #0c0c10 0%, #0a0a0f 40%, #060612 100%);
-  --gradient-orb-top: radial-gradient(ellipse 90% 60% at 80% -10%, rgba(59, 130, 246, 0.22) 0%, transparent 55%);
-  --gradient-orb-bottom: radial-gradient(ellipse 70% 50% at 15% 105%, rgba(59, 130, 246, 0.15) 0%, transparent 55%);
-  --gradient-orb-center: radial-gradient(ellipse 80% 80% at 50% 50%, rgba(59, 130, 246, 0.06) 0%, transparent 70%);
-  --gradient-orb-top-left: radial-gradient(ellipse 60% 50% at 0% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 55%);
-  --gradient-orb-bottom-right: radial-gradient(ellipse 55% 45% at 100% 95%, rgba(59, 130, 246, 0.14) 0%, transparent 55%);
-  --gradient-orb-violet: radial-gradient(ellipse 65% 55% at 100% 35%, rgba(139, 92, 246, 0.14) 0%, transparent 55%);
-  --gradient-orb-sky: radial-gradient(ellipse 60% 50% at 25% 85%, rgba(56, 189, 248, 0.12) 0%, transparent 55%);
+  --gradient-dark: linear-gradient(
+    160deg,
+    #0c0c10 0%,
+    #0a0a0f 40%,
+    #060612 100%
+  );
+  --gradient-orb-top: radial-gradient(
+    ellipse 90% 60% at 80% -10%,
+    rgba(59, 130, 246, 0.22) 0%,
+    transparent 55%
+  );
+  --gradient-orb-bottom: radial-gradient(
+    ellipse 70% 50% at 15% 105%,
+    rgba(59, 130, 246, 0.15) 0%,
+    transparent 55%
+  );
+  --gradient-orb-center: radial-gradient(
+    ellipse 80% 80% at 50% 50%,
+    rgba(59, 130, 246, 0.06) 0%,
+    transparent 70%
+  );
+  --gradient-orb-top-left: radial-gradient(
+    ellipse 60% 50% at 0% 0%,
+    rgba(99, 102, 241, 0.12) 0%,
+    transparent 55%
+  );
+  --gradient-orb-bottom-right: radial-gradient(
+    ellipse 55% 45% at 100% 95%,
+    rgba(59, 130, 246, 0.14) 0%,
+    transparent 55%
+  );
+  --gradient-orb-violet: radial-gradient(
+    ellipse 65% 55% at 100% 35%,
+    rgba(139, 92, 246, 0.14) 0%,
+    transparent 55%
+  );
+  --gradient-orb-sky: radial-gradient(
+    ellipse 60% 50% at 25% 85%,
+    rgba(56, 189, 248, 0.12) 0%,
+    transparent 55%
+  );
   --accent-blue: rgba(59, 130, 246, 0.15);
   /* shadcn/ui semantic colors (HSL values for Tailwind) */
   --background-hsl: 0 0% 4%;
@@ -75,20 +108,33 @@
   --color-ring: hsl(var(--ring));
 }
 
-body {
+/* Match html to body background so overscroll (rubber-band) shows dark theme instead of white */
+html {
+  margin: 0;
+  min-height: 100%;
+  background-color: var(--background);
   background:
-    var(--gradient-orb-top),
-    var(--gradient-orb-top-left),
-    var(--gradient-orb-violet),
-    var(--gradient-orb-sky),
-    var(--gradient-orb-bottom-right),
-    var(--gradient-orb-bottom),
-    var(--gradient-orb-center),
-    var(--gradient-dark);
+    var(--gradient-orb-top), var(--gradient-orb-top-left),
+    var(--gradient-orb-violet), var(--gradient-orb-sky),
+    var(--gradient-orb-bottom-right), var(--gradient-orb-bottom),
+    var(--gradient-orb-center), var(--gradient-dark);
+  background-attachment: fixed;
+  overscroll-behavior-y: none;
+}
+
+body {
+  margin: 0;
+  background-color: var(--background);
+  background:
+    var(--gradient-orb-top), var(--gradient-orb-top-left),
+    var(--gradient-orb-violet), var(--gradient-orb-sky),
+    var(--gradient-orb-bottom-right), var(--gradient-orb-bottom),
+    var(--gradient-orb-center), var(--gradient-dark);
   background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
   min-height: 100vh;
+  overscroll-behavior-y: none;
 }
 
 /* Gradient text: primary to lighter blue, works on dark background */
@@ -118,7 +164,9 @@ body {
   font-size: 0.875rem;
   font-weight: 500;
   border-radius: var(--radius-lg);
-  transition: left 0.15s ease, top 0.15s ease;
+  transition:
+    left 0.15s ease,
+    top 0.15s ease;
 }
 .skip-link:focus {
   left: 1rem;
@@ -127,7 +175,20 @@ body {
   outline-offset: 2px;
 }
 
-/* Hide scrollbar while keeping scroll behavior (horizontal lists, etc.) */
+/* Hide all scrollbars app-wide while keeping scroll behavior */
+html,
+body,
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* Per-element utility kept for clarity; global rules above make it redundant */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;

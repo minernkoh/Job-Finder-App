@@ -1,9 +1,11 @@
 /**
- * Admin users service: list users with filters/pagination, get user detail with activity counts, create user, update name/email, update role/status, delete user with safeguards.
+ * Admin users service: list users with filters/pagination, get user detail with activity counts, create user, update email/username, update role/status, delete user with safeguards.
  */
 
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
+import { calculatePagination } from "@/lib/pagination";
+import { isValidObjectId } from "@/lib/objectid";
 import { User } from "@/lib/models/User";
 import { AISummary } from "@/lib/models/AISummary";
 import { SavedListing } from "@/lib/models/SavedListing";
@@ -23,9 +25,8 @@ export interface ListUsersParams {
 export interface ListUsersResult {
   users: Array<{
     id: string;
-    name: string;
     email: string;
-    username?: string;
+    username: string;
     role: string;
     status: string;
     createdAt: Date;
@@ -36,37 +37,44 @@ export interface ListUsersResult {
   limit: number;
 }
 
-/** Paginated list of users with optional search (name/email) and filters (role, status). */
+/** Paginated list of users with optional search (username/email) and filters (role, status). */
 export async function listUsers(
-  params: ListUsersParams
+  params: ListUsersParams,
 ): Promise<ListUsersResult> {
   await connectDB();
-  const page = Math.max(1, params.page ?? 1);
-  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
-  const skip = (page - 1) * limit;
+  const { page, limit, skip } = calculatePagination(params);
 
-  const filter: mongoose.FilterQuery<{ name: string; email: string; role: string; status?: string }> = {};
+  const filter: mongoose.FilterQuery<{
+    email: string;
+    username: string;
+    role: string;
+    status?: string;
+  }> = {};
   if (params.role) filter.role = params.role;
   if (params.status) filter.status = params.status;
   if (params.search?.trim()) {
     const term = params.search.trim();
     filter.$or = [
-      { name: { $regex: term, $options: "i" } },
+      { username: { $regex: term, $options: "i" } },
       { email: { $regex: term, $options: "i" } },
     ];
   }
 
   const [users, total] = await Promise.all([
-    User.find(filter).select("-password").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    User.find(filter)
+      .select("-password")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
     User.countDocuments(filter),
   ]);
 
   return {
     users: users.map((u) => ({
       id: u._id.toString(),
-      name: u.name,
       email: u.email,
-      username: (u as { username?: string }).username,
+      username: u.username,
       role: u.role,
       status: (u as { status?: string }).status ?? "active",
       createdAt: u.createdAt,
@@ -80,9 +88,8 @@ export async function listUsers(
 
 export interface UserDetailResult {
   id: string;
-  name: string;
   email: string;
-  username?: string;
+  username: string;
   role: string;
   status: string;
   createdAt: Date;
@@ -94,9 +101,11 @@ export interface UserDetailResult {
 }
 
 /** User by id with summary count, saved count, and last activity timestamps. */
-export async function getUserDetail(userId: string): Promise<UserDetailResult | null> {
+export async function getUserDetail(
+  userId: string,
+): Promise<UserDetailResult | null> {
   await connectDB();
-  if (!mongoose.Types.ObjectId.isValid(userId)) return null;
+  if (!isValidObjectId(userId)) return null;
 
   const user = await User.findById(userId).select("-password").lean();
   if (!user) return null;
@@ -105,15 +114,20 @@ export async function getUserDetail(userId: string): Promise<UserDetailResult | 
   const [summaryCount, savedCount, lastSummary, lastSaved] = await Promise.all([
     AISummary.countDocuments({ userId: id }),
     SavedListing.countDocuments({ userId: id }),
-    AISummary.findOne({ userId: id }).sort({ createdAt: -1 }).select("createdAt").lean(),
-    SavedListing.findOne({ userId: id }).sort({ createdAt: -1 }).select("createdAt").lean(),
+    AISummary.findOne({ userId: id })
+      .sort({ createdAt: -1 })
+      .select("createdAt")
+      .lean(),
+    SavedListing.findOne({ userId: id })
+      .sort({ createdAt: -1 })
+      .select("createdAt")
+      .lean(),
   ]);
 
   return {
     id: user._id.toString(),
-    name: user.name,
     email: user.email,
-    username: (user as { username?: string }).username,
+    username: user.username,
     role: user.role,
     status: (user as { status?: string }).status ?? "active",
     createdAt: user.createdAt,
@@ -133,69 +147,78 @@ export async function countAdmins(): Promise<number> {
 
 /** Create a new user (admin-only). Password is hashed by User model pre-save. Returns new user or duplicate email/username reason. */
 export async function createUser(
-  body: AdminCreateUserBody
+  body: AdminCreateUserBody,
 ): Promise<
-  { success: true; user: { id: string; name: string; email: string; username?: string; role: string } } | { success: false; reason: string }
+  | {
+      success: true;
+      user: { id: string; email: string; username: string; role: string };
+    }
+  | { success: false; reason: string }
 > {
   await connectDB();
   const targetRole = body.role ?? "user";
-  const existing = await User.findOne({ email: body.email, role: targetRole }).lean();
+  const existing = await User.findOne({
+    email: body.email,
+    role: targetRole,
+  }).lean();
   if (existing) {
     return { success: false, reason: "Email already registered for this role" };
   }
-  const usernameTrimmed = body.username?.trim();
-  if (usernameTrimmed) {
-    const existingUsername = await User.findOne({ username: usernameTrimmed }).lean();
-    if (existingUsername) {
-      return { success: false, reason: "Username already taken" };
-    }
+  const usernameTrimmed = body.username.trim();
+  const existingUsername = await User.findOne({
+    username: usernameTrimmed,
+  }).lean();
+  if (existingUsername) {
+    return { success: false, reason: "Username already taken" };
   }
   const user = await User.create(body);
   return {
     success: true,
     user: {
       id: user._id.toString(),
-      name: user.name,
       email: user.email,
-      username: (user as { username?: string }).username,
+      username: user.username,
       role: user.role,
     },
   };
 }
 
-/** Update user name, email, and/or username (admin-only). */
+/** Update user email and/or username (admin-only). */
 export async function updateUserProfile(
   userId: string,
-  body: AdminUpdateUserBody
+  body: AdminUpdateUserBody,
 ): Promise<{ success: false; reason: string } | { success: true }> {
   await connectDB();
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
+  if (!isValidObjectId(userId)) {
     return { success: false, reason: "Invalid user id" };
   }
   const user = await User.findById(userId);
   if (!user) return { success: false, reason: "User not found" };
-  if (body.name != null) user.name = body.name;
   if (body.email != null) {
     const existing = await User.findOne({
       email: body.email,
       role: user.role,
       _id: { $ne: userId },
     }).lean();
-    if (existing) return { success: false, reason: "Email already in use for this role" };
+    if (existing)
+      return { success: false, reason: "Email already in use for this role" };
     user.email = body.email;
   }
   if (body.username !== undefined) {
-    const trimmed = body.username?.trim();
-    if (trimmed) {
-      const existingUsername = await User.findOne({
-        username: trimmed,
-        _id: { $ne: userId },
-      }).lean();
-      if (existingUsername) return { success: false, reason: "Username already taken" };
-      (user as { username?: string }).username = trimmed;
-    } else {
-      (user as { username?: string }).username = undefined;
+    const trimmed = body.username.trim();
+    if (!trimmed) {
+      return {
+        success: false,
+        reason: "Username is required and cannot be cleared",
+      };
     }
+    const existingUsername = await User.findOne({
+      username: trimmed,
+      _id: { $ne: userId },
+    }).lean();
+    if (existingUsername)
+      return { success: false, reason: "Username already taken" };
+    user.username = trimmed;
   }
   await user.save();
   return { success: true };
@@ -204,10 +227,10 @@ export async function updateUserProfile(
 /** Update user role; throws if demoting last admin. */
 export async function updateUserRole(
   userId: string,
-  role: UserRole
+  role: UserRole,
 ): Promise<{ success: false; reason: string } | { success: true }> {
   await connectDB();
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
+  if (!isValidObjectId(userId)) {
     return { success: false, reason: "Invalid user id" };
   }
 
@@ -229,10 +252,10 @@ export async function updateUserRole(
 /** Update user status (active/suspended). */
 export async function updateUserStatus(
   userId: string,
-  status: UserStatus
+  status: UserStatus,
 ): Promise<{ success: false; reason: string } | { success: true }> {
   await connectDB();
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
+  if (!isValidObjectId(userId)) {
     return { success: false, reason: "Invalid user id" };
   }
 
@@ -245,16 +268,12 @@ export async function updateUserStatus(
   return { success: true };
 }
 
-/** Delete user; throws if self-delete or last admin. Cascades: delete AISummary, SavedListing, UserProfile for this user. */
+/** Delete user; allows self-delete. Rejects if last admin. Cascades: delete AISummary, SavedListing, UserProfile, User. */
 export async function deleteUser(
   userId: string,
-  adminId: string
 ): Promise<{ success: false; reason: string } | { success: true }> {
   await connectDB();
-  if (userId === adminId) {
-    return { success: false, reason: "Cannot delete your own account" };
-  }
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
+  if (!isValidObjectId(userId)) {
     return { success: false, reason: "Invalid user id" };
   }
 

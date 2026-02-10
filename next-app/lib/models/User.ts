@@ -1,5 +1,5 @@
 /**
- * Mongoose User model: stores name, email, hashed password, and role (user/admin). Passwords are hashed before save. Admin users are created via /admin signup only.
+ * Mongoose User model: stores email, username, hashed password, and role (user/admin). Passwords are hashed before save. Admin users are created via /admin signup only.
  */
 
 import mongoose, { Schema, Model } from "mongoose";
@@ -9,16 +9,15 @@ import type { User as UserType, UserRole } from "@schemas";
 export interface IUserDocument extends Omit<UserType, "password"> {
   _id: mongoose.Types.ObjectId;
   password: string;
-  username?: string;
+  username: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const UserSchema = new Schema<IUserDocument>(
   {
-    name: { type: String, required: true },
     email: { type: String, required: true },
-    username: { type: String, required: false, unique: true, sparse: true },
+    username: { type: String, required: true, unique: true },
     password: { type: String, required: true, select: false },
     role: {
       type: String,

@@ -6,6 +6,7 @@ import { createHash, randomUUID } from "crypto";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { getEnv } from "@/lib/env";
+import { parseObjectId } from "@/lib/objectid";
 import { Listing, type IListingDocument } from "@/lib/models/Listing";
 import { SearchCache } from "@/lib/models/SearchCache";
 import type { ListingCreate, ListingResult, ListingUpdate } from "@schemas";
@@ -105,6 +106,25 @@ function jobToListingResult(
 }
 
 /** Maps Adzuna job to our Listing document shape. */
+/** Sorts listings by the given sort option. Returns original order if sortBy is empty or unknown. */
+function sortListings(listings: ListingResult[], sortBy?: string): ListingResult[] {
+  if (!sortBy || listings.length <= 1) return listings;
+  const copy = [...listings];
+  switch (sortBy) {
+    case "salary_desc":
+      return copy.sort((a, b) => (b.salaryMax ?? b.salaryMin ?? 0) - (a.salaryMax ?? a.salaryMin ?? 0));
+    case "salary_asc":
+      return copy.sort((a, b) => (a.salaryMin ?? a.salaryMax ?? 0) - (b.salaryMin ?? b.salaryMax ?? 0));
+    case "date_desc":
+      return copy.sort((a, b) => (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0));
+    case "date_asc":
+      return copy.sort((a, b) => (a.postedAt?.getTime() ?? 0) - (b.postedAt?.getTime() ?? 0));
+    default:
+      return copy;
+  }
+}
+
+/** Maps an Adzuna job to our Listing document shape. */
 function normalizeAdzunaJob(
   job: AdzunaJob,
   country: string,
@@ -143,7 +163,7 @@ export async function searchListings(
   const cached = await SearchCache.findOne({ cacheKey }).lean();
   if (cached && cached.expiresAt > new Date()) {
     const docs = await Listing.find({ _id: { $in: cached.listingIds } }).lean();
-    const listings = docs.map(docToListingResult);
+    const listings = sortListings(docs.map(docToListingResult), filters?.sortBy);
     const totalCount =
       typeof (cached as { totalCount?: number }).totalCount === "number"
         ? (cached as { totalCount: number }).totalCount
@@ -193,8 +213,11 @@ export async function searchListings(
     { upsert: true }
   );
 
-  const listings: ListingResult[] = resp.results.map((job, i) =>
-    jobToListingResult(job, String(listingIds[i]), cc)
+  const listings = sortListings(
+    resp.results.map((job, i) =>
+      jobToListingResult(job, String(listingIds[i]), cc)
+    ),
+    filters?.sortBy
   );
 
   return { listings, totalCount: resp.count };
@@ -205,9 +228,7 @@ export async function getListingById(
   id: string
 ): Promise<ListingResult | null> {
   await connectDB();
-  const objId = mongoose.Types.ObjectId.isValid(id)
-    ? new mongoose.Types.ObjectId(id)
-    : null;
+  const objId = parseObjectId(id);
   if (objId) {
     const doc = await Listing.findById(objId).lean();
     if (doc) return docToListingResult(doc);
@@ -243,9 +264,7 @@ export async function updateListingById(
   body: ListingUpdate
 ): Promise<ListingResult | null> {
   await connectDB();
-  const objId = mongoose.Types.ObjectId.isValid(id)
-    ? new mongoose.Types.ObjectId(id)
-    : null;
+  const objId = parseObjectId(id);
   if (!objId) return null;
   const doc = await Listing.findById(objId);
   if (!doc) return null;
@@ -262,9 +281,7 @@ export async function updateListingById(
 /** Deletes a listing by id (admin). Returns true if deleted, false if not found. */
 export async function deleteListingById(id: string): Promise<boolean> {
   await connectDB();
-  const objId = mongoose.Types.ObjectId.isValid(id)
-    ? new mongoose.Types.ObjectId(id)
-    : null;
+  const objId = parseObjectId(id);
   if (!objId) return false;
   const result = await Listing.findByIdAndDelete(objId);
   return result != null;

@@ -4,12 +4,13 @@
 
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
+import { isValidObjectId } from "@/lib/objectid";
 import { ListingView } from "@/lib/models/ListingView";
 
 /** Records a view for a listing. Call when user clicks a listing or opens details. */
 export async function recordView(listingId: string): Promise<void> {
   await connectDB();
-  if (!mongoose.Types.ObjectId.isValid(listingId)) return;
+  if (!isValidObjectId(listingId)) return;
   const objId = new mongoose.Types.ObjectId(listingId);
   await ListingView.create({ listingId: objId, viewedAt: new Date() });
 }

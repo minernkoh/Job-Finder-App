@@ -11,7 +11,6 @@ import {
   MagnifyingGlassIcon,
   ScalesIcon,
   SlidersIcon,
-  BookmarkIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,7 +23,14 @@ import {
   Select,
 } from "@ui/components";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useCallback, useRef, useEffect, useMemo, Suspense } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+  Suspense,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   deleteListingApi,
@@ -35,24 +41,26 @@ import {
 import { AuthModalLink } from "@/components/auth-modal-link";
 import { AppHeader } from "@/components/app-header";
 import { CompareBar } from "@/components/compare-bar";
-import { Logo } from "@/components/logo";
 import { UserMenu } from "@/components/user-menu";
 import { JobDetailPanel } from "@/components/job-detail-panel";
 import { ListingCard } from "@/components/listing-card";
+import { RecommendedListings } from "@/components/recommended-listings";
 import { TrendingListings } from "@/components/trending-listings";
 import { useCompare } from "@/contexts/CompareContext";
 import { useIsLgViewport } from "@/hooks/useIsLgViewport";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { JOB_SEARCH_COUNTRIES } from "@/lib/constants/countries";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
-import { listingKeys, listingsKeys } from "@/lib/query-keys";
+import { listingKeys, listingsKeys, recommendedKeys } from "@/lib/query-keys";
 import { UserOnlyRoute } from "@/components/user-only-route";
 import { cn } from "@ui/components/lib/utils";
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Relevance" },
-  { value: "salary", label: "Salary" },
-  { value: "date", label: "Date" },
+  { value: "salary_desc", label: "Salary: High to Low" },
+  { value: "salary_asc", label: "Salary: Low to High" },
+  { value: "date_desc", label: "Date: Newest First" },
+  { value: "date_asc", label: "Date: Oldest First" },
 ];
 
 /** Suggested job roles for the search dropdown; filtered by what the user types. */
@@ -81,12 +89,8 @@ function BrowseContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
-  const {
-    compareSet,
-    addToCompare,
-    removeFromCompare,
-    isInCompareSet,
-  } = useCompare();
+  const { compareSet, addToCompare, removeFromCompare, isInCompareSet } =
+    useCompare();
   const selectedJobId = searchParams?.get("job") ?? null;
   const isLg = useIsLgViewport();
 
@@ -109,11 +113,8 @@ function BrowseContent() {
   const [hasSearched, setHasSearched] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [stickyBarVisible, setStickyBarVisible] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const stickySearchInputRef = useRef<HTMLInputElement>(null);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
-  const leftColumnScrollRef = useRef<HTMLDivElement>(null);
 
   const filters: ListingsFilters = useMemo(() => {
     const f: ListingsFilters = {};
@@ -125,13 +126,19 @@ function BrowseContent() {
     if (!Number.isNaN(min) && min > 0) f.salaryMin = min;
     if (appliedSortBy) f.sortBy = appliedSortBy;
     return f;
-  }, [appliedLocation, appliedFullTime, appliedPermanent, appliedSalaryMin, appliedSortBy]);
+  }, [
+    appliedLocation,
+    appliedFullTime,
+    appliedPermanent,
+    appliedSalaryMin,
+    appliedSortBy,
+  ]);
 
   const filteredSuggestions = useMemo(() => {
     const q = searchInput.trim().toLowerCase();
     if (!q) return SUGGESTED_ROLES.slice(0, 10);
     return SUGGESTED_ROLES.filter((role) =>
-      role.toLowerCase().includes(q)
+      role.toLowerCase().includes(q),
     ).slice(0, 12);
   }, [searchInput]);
 
@@ -168,7 +175,7 @@ function BrowseContent() {
     setHighlightedIndex(0);
   }, []);
 
-  /** Focus search when user presses '/' (unless they're typing in an input). Focus sticky bar input when sticky bar is visible. */
+  /** Focus main search input when user presses '/' (unless they're typing in an input). */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "/") return;
@@ -180,15 +187,11 @@ function BrowseContent() {
       )
         return;
       e.preventDefault();
-      if (hasSearched && stickyBarVisible) {
-        stickySearchInputRef.current?.focus();
-      } else {
-        searchInputRef.current?.focus();
-      }
+      searchInputRef.current?.focus();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [hasSearched, stickyBarVisible]);
+  }, []);
 
   /** Close suggestions dropdown when clicking outside the search wrapper. */
   useEffect(() => {
@@ -211,14 +214,14 @@ function BrowseContent() {
       appliedCountry,
       page,
       keyword || undefined,
-      Object.keys(filters).length > 0 ? filters : null
+      Object.keys(filters).length > 0 ? filters : null,
     ),
     queryFn: () =>
       fetchListings(
         page,
         keyword || undefined,
         appliedCountry,
-        Object.keys(filters).length > 0 ? filters : undefined
+        Object.keys(filters).length > 0 ? filters : undefined,
       ),
     enabled: hasSearched,
   });
@@ -228,6 +231,7 @@ function BrowseContent() {
     onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ["listings"] });
       queryClient.invalidateQueries({ queryKey: listingKeys(deletedId) });
+      queryClient.invalidateQueries({ queryKey: recommendedKeys.all });
       if (selectedJobId === deletedId) {
         const params = new URLSearchParams(searchParams?.toString() ?? "");
         params.delete("job");
@@ -245,7 +249,7 @@ function BrowseContent() {
       setPage(1);
       setHasSearched(true);
     },
-    [searchInput]
+    [searchInput],
   );
 
   const selectSuggestion = useCallback(
@@ -256,7 +260,7 @@ function BrowseContent() {
       setHasSearched(true);
       setSuggestionsOpen(false);
     },
-    [updateSearchInput]
+    [updateSearchInput],
   );
 
   const handleSearchKeyDown = useCallback(
@@ -274,7 +278,7 @@ function BrowseContent() {
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setHighlightedIndex((i) =>
-          Math.min(i + 1, filteredSuggestions.length - 1)
+          Math.min(i + 1, filteredSuggestions.length - 1),
         );
         return;
       }
@@ -288,15 +292,10 @@ function BrowseContent() {
         selectSuggestion(filteredSuggestions[highlightedIndex]);
       }
     },
-    [
-      suggestionsOpen,
-      filteredSuggestions,
-      highlightedIndex,
-      selectSuggestion,
-    ]
+    [suggestionsOpen, filteredSuggestions, highlightedIndex, selectSuggestion],
   );
 
-  const listings = data?.listings ?? [];
+  const listings = useMemo(() => data?.listings ?? [], [data?.listings]);
   const totalCount = data?.totalCount ?? 0;
 
   /** Build /browse?job=id&... from current search and filters for split-panel selection. */
@@ -323,7 +322,7 @@ function BrowseContent() {
       appliedPermanent,
       appliedSalaryMin,
       appliedSortBy,
-    ]
+    ],
   );
 
   /** When results load with no job in URL, select the first listing only on lg+ so the right panel is populated; on small screens show the list first. */
@@ -343,562 +342,539 @@ function BrowseContent() {
     return `/browse${qs ? `?${qs}` : ""}`;
   }, [showSplitLayout, selectedJobId, searchParams]);
 
-  /** Show sticky nav (logo + search + auth) when user scrolls past the main search area. Use left column scroll in split layout, window scroll otherwise. */
-  useEffect(() => {
-    const threshold = 120;
-    const el = leftColumnScrollRef.current;
-    if (showSplitLayout && el) {
-      const onScroll = () => setStickyBarVisible(el.scrollTop > threshold);
-      onScroll();
-      el.addEventListener("scroll", onScroll, { passive: true });
-      return () => el.removeEventListener("scroll", onScroll);
-    }
-    const onScroll = () => setStickyBarVisible(window.scrollY > threshold);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [showSplitLayout]);
-
   return (
     <>
-      {/* Original nav: hidden when sticky bar is visible (only after user has searched). */}
-      <div
-        className={cn(
-          "transition-all duration-200 ease-out",
-          hasSearched && stickyBarVisible
-            ? "max-h-0 overflow-hidden opacity-0"
-            : "max-h-[5rem]"
-        )}
-      >
+      <div className="max-h-[5rem]">
         <AppHeader user={user} onLogout={logout} />
       </div>
-      {/* Sticky nav on scroll: only after search. Floating bar (logo, search, sign in) when user scrolls past the main search. */}
-      {hasSearched && (
-        <div
-          className={cn(
-            "fixed top-0 left-0 right-0 z-[60] px-4 pt-4 transition-transform duration-200 ease-out",
-            stickyBarVisible ? "translate-y-0" : "-translate-y-full pointer-events-none"
-          )}
-          aria-hidden={!stickyBarVisible}
-        >
-          <div className="mx-auto flex w-full max-w-3xl items-center gap-3 rounded-2xl border border-border/80 bg-background/80 px-4 py-2.5 shadow-lg backdrop-blur-md">
-            <Logo size="sm" className="shrink-0" />
-            <form
-              onSubmit={handleSearch}
-              className="flex min-w-0 flex-1 justify-center"
-              aria-label="Search jobs (sticky)"
-            >
-              <div className="flex w-full max-w-xl min-w-0 overflow-hidden rounded-xl border border-border bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
-                <div className="relative flex min-w-0 flex-1">
-                  <MagnifyingGlassIcon
-                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden
-                  />
-                  <Input
-                    ref={stickySearchInputRef}
-                    type="search"
-                    placeholder="Job title, skills or company"
-                    value={searchInput}
-                    onChange={(e) => updateSearchInput(e.target.value)}
-                    className="h-9 min-w-0 flex-1 rounded-none border-0 border-r-0 bg-transparent pl-10 pr-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-                    aria-label="Search jobs"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  variant="default"
-                  size="xs"
-                  className="h-9 shrink-0 rounded-l-none rounded-r-xl border-0 px-4"
-                  aria-label="Search"
-                >
-                  Search
-                </Button>
-              </div>
-            </form>
-            <div className="shrink-0">
-              {user ? (
-                <UserMenu user={user} onLogout={logout} />
-              ) : (
-                <Button asChild variant="default" size="xs" className="rounded-xl px-4 text-sm">
-                  <AuthModalLink auth="login">Sign In</AuthModalLink>
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
       <div
         className={cn(
           "min-h-screen flex flex-col",
           PAGE_PX,
-          showSplitLayout && "lg:max-h-screen lg:overflow-hidden"
+          showSplitLayout && "lg:max-h-screen lg:overflow-hidden",
         )}
       >
-      {/* Search bar: full-width row below nav; search UI centered. Equal gap above (nav→search) and below (search→main). */}
-      <section
-        className="w-full pt-8 pb-8"
-        aria-label="Perform a job search"
-        ref={searchDropdownRef}
-      >
-        <div className="mx-auto max-w-2xl">
-          <form onSubmit={handleSearch} className="space-y-4">
-            <div className="relative flex flex-col">
-              <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
-                <div className="relative flex min-w-0 flex-1">
-                  <MagnifyingGlassIcon
-                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden
-                  />
-                  <Input
-                    ref={searchInputRef}
-                    id="search-what"
-                    placeholder="Job title, skills or company"
-                    value={searchInput}
-                    onChange={(e) => updateSearchInput(e.target.value)}
-                    onFocus={() => setSuggestionsOpen(true)}
-                    onBlur={() =>
-                      setTimeout(() => setSuggestionsOpen(false), 150)
-                    }
-                    onKeyDown={handleSearchKeyDown}
-                    className="h-9 min-w-0 flex-1 rounded-none border-0 border-r-0 bg-transparent pl-10 pr-9 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-                    aria-label="Search jobs"
-                    aria-expanded={suggestionsOpen}
-                    aria-controls="job-suggestions-listbox"
-                  />
-                  <span
-                    className="pointer-events-none absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground"
-                    aria-hidden
-                  >
-                    /
-                  </span>
-                </div>
-                <Button
-                  type="submit"
-                  variant="default"
-                  size="xs"
-                  className="h-9 shrink-0 rounded-l-none rounded-r-xl border-0 px-4"
-                  aria-label="Search"
-                >
-                  Search
-                </Button>
-              </div>
-              {suggestionsOpen && filteredSuggestions.length > 0 && (
-                <div
-                  id="job-suggestions-listbox"
-                  role="listbox"
-                  aria-label="Suggested roles"
-                  className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-lg scrollbar-hide"
-                >
-                  {filteredSuggestions.map((role, i) => (
-                    <button
-                      key={role}
-                      type="button"
-                      role="option"
-                      aria-selected={highlightedIndex === i}
-                      className={cn(
-                        "w-full px-3 py-2 text-left text-sm rounded-lg",
-                        highlightedIndex === i ? "bg-muted" : "hover:bg-muted"
-                      )}
-                      onClick={() => selectSuggestion(role)}
+        {/* Search bar: full-width row below nav; search UI centered. Equal gap above (nav→search) and below (search→main). */}
+        <section
+          className="w-full pt-8 pb-8"
+          aria-label="Perform a job search"
+          ref={searchDropdownRef}
+        >
+          <div className="mx-auto max-w-2xl">
+            <form onSubmit={handleSearch} className="space-y-4">
+              <div className="relative flex flex-col">
+                <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+                  <div className="relative flex min-w-0 flex-1">
+                    <MagnifyingGlassIcon
+                      className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden
+                    />
+                    <Input
+                      ref={searchInputRef}
+                      id="search-what"
+                      placeholder="Job title, skills or company"
+                      value={searchInput}
+                      onChange={(e) => updateSearchInput(e.target.value)}
+                      onFocus={() => setSuggestionsOpen(true)}
+                      onBlur={() =>
+                        setTimeout(() => setSuggestionsOpen(false), 150)
+                      }
+                      onKeyDown={handleSearchKeyDown}
+                      className="h-9 min-w-0 flex-1 rounded-none border-0 border-r-0 bg-transparent pl-10 pr-9 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                      aria-label="Search jobs"
+                      aria-expanded={suggestionsOpen}
+                      aria-controls="job-suggestions-listbox"
+                    />
+                    <span
+                      className="pointer-events-none absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground"
+                      aria-hidden
                     >
-                      {role}
-                    </button>
+                      /
+                    </span>
+                  </div>
+                  <Button
+                    type="submit"
+                    variant="default"
+                    size="xs"
+                    className="h-9 shrink-0 rounded-l-none rounded-r-xl border-0 px-4"
+                    aria-label="Search"
+                  >
+                    Search
+                  </Button>
+                </div>
+                {suggestionsOpen && filteredSuggestions.length > 0 && (
+                  <div
+                    id="job-suggestions-listbox"
+                    role="listbox"
+                    aria-label="Suggested roles"
+                    className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-lg"
+                  >
+                    {filteredSuggestions.map((role, i) => (
+                      <button
+                        key={role}
+                        type="button"
+                        role="option"
+                        aria-selected={highlightedIndex === i}
+                        className={cn(
+                          "w-full px-3 py-2 text-left text-sm rounded-lg",
+                          highlightedIndex === i
+                            ? "bg-muted"
+                            : "hover:bg-muted",
+                        )}
+                        onClick={() => selectSuggestion(role)}
+                      >
+                        {role}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </form>
+          </div>
+        </section>
+
+        {compareSet.length > 0 && <CompareBar fullWidth={showSplitLayout} />}
+
+        <main
+          id="main-content"
+          className={cn(
+            "mx-auto flex-1 w-full pt-0 pb-8",
+            showSplitLayout
+              ? "flex flex-col lg:flex-row gap-0 min-h-0 w-full max-w-full"
+              : cn(CONTENT_MAX_W, SECTION_GAP),
+          )}
+        >
+          <h1 className="sr-only">Browse jobs</h1>
+          <div
+            className={cn(
+              "min-w-0 flex-1",
+              showSplitLayout &&
+                "lg:max-w-[40%] lg:flex lg:flex-col lg:min-h-0 pr-3 lg:pr-4",
+              showSplitLayout && selectedJobId && "hidden lg:flex",
+            )}
+          >
+            <div
+              className={cn(
+                showSplitLayout &&
+                  "lg:min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-auto lg:rounded-2xl lg:space-y-6 lg:pl-1 lg:pr-1",
+              )}
+            >
+              {!hasSearched && (
+                <>
+                  <RecommendedListings
+                    userRole={user?.role}
+                    onDeleteListing={
+                      user?.role === "admin"
+                        ? (listingId) => deleteListingMutation.mutate(listingId)
+                        : undefined
+                    }
+                  />
+                </>
+              )}
+
+              {!hasSearched && !user && (
+                <section
+                  aria-label="Why sign in"
+                  className="mx-auto max-w-2xl space-y-6 rounded-xl border border-border bg-muted/40 p-6 text-center shadow-blue ring-1 ring-primary/20 sm:p-8"
+                >
+                  <h2 className="text-2xl font-semibold text-foreground">
+                    Find your next role,{" "}
+                    <span className="text-gradient-hero">faster</span>
+                  </h2>
+                  <p className="text-base text-muted-foreground">
+                    Sign in to compare jobs, use your resume for better matches,
+                    and get AI summaries for job listings.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <Card variant="default" className="border-border">
+                      <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <ScalesIcon className="size-5 text-primary" />
+                        </div>
+                        <h3 className="font-medium text-foreground">
+                          Compare jobs
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Select up to 3 listings and compare them side by side.
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card variant="default" className="border-border">
+                      <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <SparkleIcon className="size-5 text-primary" />
+                        </div>
+                        <h3 className="font-medium text-foreground">
+                          AI summaries
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          TLDR and requirements in seconds.
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card variant="default" className="border-border">
+                      <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <FileTextIcon className="size-5 text-primary" />
+                        </div>
+                        <h3 className="font-medium text-foreground">
+                          Resume parser
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Upload or paste your resume; we extract skills for
+                          better job matches.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="flex justify-center">
+                    <Button
+                      asChild
+                      variant="default"
+                      size="default"
+                      className="h-11 min-w-[10rem]"
+                      iconRight={<ArrowRightIcon weight="bold" />}
+                    >
+                      <AuthModalLink auth="signup" redirect="/browse">
+                        Get Started
+                      </AuthModalLink>
+                    </Button>
+                  </div>
+                </section>
+              )}
+
+              {hasSearched && isLoading && (
+                <div className="flex flex-col gap-3">
+                  {[...Array(5)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-28 animate-pulse rounded-xl bg-muted"
+                    />
                   ))}
                 </div>
               )}
-            </div>
-          </form>
-        </div>
-      </section>
 
-      {hasSearched && <CompareBar fullWidth={showSplitLayout} />}
-
-      <main
-        id="main-content"
-        className={cn(
-          "mx-auto flex-1 w-full pt-0 pb-8",
-          showSplitLayout
-            ? "flex flex-col lg:flex-row gap-0 min-h-0 w-full max-w-full"
-            : cn(CONTENT_MAX_W, SECTION_GAP)
-        )}
-      >
-        <h1 className="sr-only">Browse jobs</h1>
-        <div
-          className={cn(
-            "min-w-0 flex-1",
-            showSplitLayout &&
-              "lg:max-w-[40%] lg:flex lg:flex-col lg:min-h-0 pr-4 lg:pr-6",
-            showSplitLayout && selectedJobId && "hidden lg:flex"
-          )}
-        >
-          <div
-            ref={leftColumnScrollRef}
-            className={cn(
-              showSplitLayout &&
-                "lg:min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-auto lg:space-y-6 lg:pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            )}
-          >
-        {!hasSearched && user && (
-          <section
-            aria-label="Empty state"
-            className="flex max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center mx-auto"
-          >
-            <MagnifyingGlassIcon
-              className="size-12 text-muted-foreground"
-              aria-hidden
-            />
-            <p className="text-muted-foreground">
-              Search above to get started. Enter a job title, skills, or company to find listings.
-            </p>
-          </section>
-        )}
-
-        {!hasSearched && !user && (
-          <section
-            aria-label="Why sign in"
-            className="mx-auto max-w-2xl space-y-6 rounded-xl border border-border bg-muted/40 p-6 text-center shadow-blue ring-1 ring-primary/20 sm:p-8"
-          >
-            <h2 className="text-2xl font-semibold text-foreground">
-              Find your next role,{" "}
-              <span className="text-gradient-hero">faster</span>
-            </h2>
-            <p className="text-base text-muted-foreground">
-              Sign in to compare jobs, use your resume for better matches, and get AI summaries.
-            </p>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Card variant="default" className="border-border">
-                <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <ScalesIcon className="size-5 text-primary" />
-                  </div>
-                  <h3 className="font-medium text-foreground">Compare jobs</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Select up to 3 listings and compare them side by side.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card variant="default" className="border-border">
-                <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <SparkleIcon className="size-5 text-primary" />
-                  </div>
-                  <h3 className="font-medium text-foreground">AI summaries</h3>
-                  <p className="text-sm text-muted-foreground">
-                    TLDR and requirements in seconds.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card variant="default" className="border-border">
-                <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <FileTextIcon className="size-5 text-primary" />
-                  </div>
-                  <h3 className="font-medium text-foreground">Resume parser</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Upload or paste your resume; we extract skills for better job matches.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="flex justify-center">
-              <Button
-                asChild
-                variant="default"
-                size="default"
-                className="h-11 min-w-[10rem]"
-                iconRight={<ArrowRightIcon weight="bold" />}
-              >
-                <AuthModalLink auth="signup" redirect="/browse">
-                  Get Started
-                </AuthModalLink>
-              </Button>
-            </div>
-          </section>
-        )}
-
-        {hasSearched && isLoading && (
-          <div className="flex flex-col gap-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
-            ))}
-          </div>
-        )}
-
-        {hasSearched && isError && (
-          <p className="text-destructive" role="alert">
-            {error instanceof Error ? error.message : "Failed to load listings"}
-          </p>
-        )}
-
-        {hasSearched && !isLoading && !isError && (
-          <>
-            <section aria-label="Results" className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">
-                  {totalCount} result{totalCount !== 1 ? "s" : ""}
+              {hasSearched && isError && (
+                <p className="text-destructive" role="alert">
+                  {error instanceof Error
+                    ? error.message
+                    : "Failed to load listings"}
                 </p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFiltersOpen((o) => !o)}
-                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                    aria-expanded={filtersOpen}
-                    aria-controls="results-filters"
-                  >
-                    <SlidersIcon className="size-4 shrink-0" />
-                    Filters
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <Label
-                      htmlFor="results-sort"
-                      className="text-xs text-muted-foreground"
-                    >
-                      Sort by
-                    </Label>
-                    <Select
-                      id="results-sort"
-                      value={sortBy}
-                      onChange={(v) => setSortBy(v)}
-                      options={SORT_OPTIONS}
-                      aria-label="Sort results"
-                      fullWidth={false}
-                      className="min-w-[8rem]"
-                    />
-                  </div>
-                </div>
-              </div>
-              {filtersOpen && (
-                <div
-                  id="results-filters"
-                  className="flex flex-wrap items-end gap-4 rounded-lg border border-border bg-muted/30 p-4"
-                  role="region"
-                  aria-label="Filters"
-                >
-                  <div>
-                    <Label
-                      htmlFor="search-country"
-                      className="text-xs text-muted-foreground"
-                    >
-                      Country
-                    </Label>
-                    <Select
-                      id="search-country"
-                      value={country}
-                      onChange={(v) => setCountry(v)}
-                      options={JOB_SEARCH_COUNTRIES.map((c) => ({
-                        value: c.code,
-                        label: c.label,
-                      }))}
-                      aria-label="Country"
-                      fullWidth={false}
-                      className="mt-1 min-w-[8rem]"
-                    />
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor="filter-location"
-                      className="text-xs text-muted-foreground"
-                    >
-                      Location
-                    </Label>
-                    <Input
-                      id="filter-location"
-                      type="text"
-                      placeholder="e.g. Singapore, Central"
-                      value={locationInput}
-                      onChange={(e) => setLocationInput(e.target.value)}
-                      className="mt-1 w-40"
-                      aria-label="Location"
-                    />
-                  </div>
-                  <label className="flex cursor-pointer items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={fullTime}
-                      onChange={(e) => setFullTime(e.target.checked)}
-                      className="h-4 w-4 rounded border-border"
-                      aria-label="Full-time only"
-                    />
-                    <span className="text-muted-foreground">Full-time</span>
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={permanent}
-                      onChange={(e) => setPermanent(e.target.checked)}
-                      className="h-4 w-4 rounded border-border"
-                      aria-label="Permanent only"
-                    />
-                    <span className="text-muted-foreground">Permanent</span>
-                  </label>
-                  <div>
-                    <Label
-                      htmlFor="filter-salary"
-                      className="text-xs text-muted-foreground"
-                    >
-                      Min salary
-                    </Label>
-                    <Input
-                      id="filter-salary"
-                      type="number"
-                      min={0}
-                      placeholder="e.g. 50000"
-                      value={salaryMin}
-                      onChange={(e) => setSalaryMin(e.target.value)}
-                      className="mt-1 w-28"
-                      aria-label="Minimum salary"
-                    />
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleResetFilters}
-                      aria-label="Reset filters"
-                    >
-                      Reset
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="default"
-                      size="sm"
-                      onClick={handleApplyFilters}
-                      aria-label="Apply filters"
-                    >
-                      Apply
-                    </Button>
-                  </div>
-                </div>
               )}
-              {listings.length === 0 ? (
-                <div
-                  className="flex flex-col items-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center"
-                  role="status"
-                  aria-label="No results"
-                >
-                  <BriefcaseIcon
-                    className="size-12 text-muted-foreground"
-                    aria-hidden
-                  />
-                  <p className="text-muted-foreground">
-                    No listings match your search.
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Try different keywords or filters.
-                  </p>
-                </div>
-              ) : (
+
+              {hasSearched && !isLoading && !isError && (
                 <>
-                  <div className="flex flex-col gap-3">
-                    {listings.map((listing) => (
-                      <ListingCard
-                        key={listing.id}
-                        listing={listing}
-                        href={buildJobHref(listing.id)}
-                        isSelected={selectedJobId === listing.id}
-                        isSaved={savedIds.has(listing.id)}
-                        onView={() => recordListingView(listing.id)}
-                        onSave={
-                          user ? () => saveMutation.mutate(listing) : undefined
-                        }
-                        onUnsave={
-                          user
-                            ? () => unsaveMutation.mutate(listing.id)
-                            : undefined
-                        }
-                        onAddToCompare={
-                          isInCompareSet(listing.id)
-                            ? () => removeFromCompare(listing.id)
-                            : () => addToCompare({ id: listing.id, title: listing.title })
-                        }
-                        isInCompareSet={isInCompareSet(listing.id)}
-                        compareSetSize={compareSet.length}
-                        userRole={user?.role}
-                        onDeleteListing={
-                          user?.role === "admin"
-                            ? (listingId) => deleteListingMutation.mutate(listingId)
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </div>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <section aria-label="Results" className="space-y-4">
+                        {/* Toolbar aligned with right panel (JobDetailPanel) header: single line, sticky, same border/padding */}
+                        <div className="sticky top-0 z-10 -mx-4 -mt-6 flex shrink-0 flex-nowrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-3 sm:px-6">
+                      <p className="shrink-0 text-sm text-muted-foreground">
+                        {totalCount} result{totalCount !== 1 ? "s" : ""}
+                      </p>
+                      <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFiltersOpen((o) => !o)}
+                          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          aria-expanded={filtersOpen}
+                          aria-controls="results-filters"
+                        >
+                          <SlidersIcon className="size-4 shrink-0" />
+                          Filters
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <Label
+                            htmlFor="results-sort"
+                            className="text-xs text-muted-foreground"
+                          >
+                            Sort by
+                          </Label>
+                          <Select
+                            id="results-sort"
+                            value={sortBy}
+                            onChange={(v) => setSortBy(v)}
+                            options={SORT_OPTIONS}
+                            aria-label="Sort results"
+                            fullWidth={false}
+                            className="min-w-[10rem]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    {filtersOpen && (
+                      <div
+                        id="results-filters"
+                        className="flex flex-col gap-4 rounded-lg border border-border bg-muted/30 p-4"
+                        role="region"
+                        aria-label="Filters"
+                      >
+                        <div className="flex flex-wrap items-end gap-4">
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor="search-country"
+                              className="text-xs text-muted-foreground"
+                            >
+                              Country
+                            </Label>
+                            <Select
+                              id="search-country"
+                              value={country}
+                              onChange={(v) => setCountry(v)}
+                              options={JOB_SEARCH_COUNTRIES.map((c) => ({
+                                value: c.code,
+                                label: c.label,
+                              }))}
+                              aria-label="Country"
+                              fullWidth={false}
+                              className="min-w-[10rem]"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor="filter-location"
+                              className="text-xs text-muted-foreground"
+                            >
+                              Location
+                            </Label>
+                            <Input
+                              id="filter-location"
+                              type="text"
+                              placeholder="e.g. Singapore, Central"
+                              value={locationInput}
+                              onChange={(e) => setLocationInput(e.target.value)}
+                              className="w-40"
+                              aria-label="Location"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <span
+                              className="block text-xs text-muted-foreground"
+                              aria-hidden
+                            >
+                              Job type
+                            </span>
+                            <div className="flex items-center gap-4 pt-0.5">
+                              <label className="flex cursor-pointer items-center gap-2 py-1 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={fullTime}
+                                  onChange={(e) =>
+                                    setFullTime(e.target.checked)
+                                  }
+                                  className="h-4 w-4 rounded border-border"
+                                  aria-label="Full-time only"
+                                />
+                                <span className="text-muted-foreground">
+                                  Full-time
+                                </span>
+                              </label>
+                              <label className="flex cursor-pointer items-center gap-2 py-1 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={permanent}
+                                  onChange={(e) =>
+                                    setPermanent(e.target.checked)
+                                  }
+                                  className="h-4 w-4 rounded border-border"
+                                  aria-label="Permanent only"
+                                />
+                                <span className="text-muted-foreground">
+                                  Permanent
+                                </span>
+                              </label>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor="filter-salary"
+                              className="text-xs text-muted-foreground"
+                            >
+                              Min salary
+                            </Label>
+                            <Input
+                              id="filter-salary"
+                              type="number"
+                              min={0}
+                              placeholder="e.g. 50000"
+                              value={salaryMin}
+                              onChange={(e) => setSalaryMin(e.target.value)}
+                              className="w-32"
+                              aria-label="Minimum salary"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-border pt-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleResetFilters}
+                            aria-label="Reset filters"
+                          >
+                            Reset
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="sm"
+                            onClick={handleApplyFilters}
+                            aria-label="Apply filters"
+                          >
+                            Apply
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {listings.length === 0 ? (
+                      <div
+                        className="flex flex-col items-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center"
+                        role="status"
+                        aria-label="No results"
+                      >
+                        <BriefcaseIcon
+                          className="size-12 text-muted-foreground"
+                          aria-hidden
+                        />
+                        <p className="text-muted-foreground">
+                          No listings match your search.
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Try different keywords or filters.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex flex-col gap-3">
+                          {listings.map((listing) => (
+                            <ListingCard
+                              key={listing.id}
+                              listing={listing}
+                              href={buildJobHref(listing.id)}
+                              isSelected={selectedJobId === listing.id}
+                              isSaved={savedIds.has(listing.id)}
+                              onView={() => recordListingView(listing.id)}
+                              onSave={
+                                user
+                                  ? () => saveMutation.mutate(listing)
+                                  : undefined
+                              }
+                              onUnsave={
+                                user
+                                  ? () => unsaveMutation.mutate(listing.id)
+                                  : undefined
+                              }
+                              onAddToCompare={
+                                isInCompareSet(listing.id)
+                                  ? () => removeFromCompare(listing.id)
+                                  : () =>
+                                      addToCompare({
+                                        id: listing.id,
+                                        title: listing.title,
+                                      })
+                              }
+                              isInCompareSet={isInCompareSet(listing.id)}
+                              compareSetSize={compareSet.length}
+                              userRole={user?.role}
+                              onDeleteListing={
+                                user?.role === "admin"
+                                  ? (listingId) =>
+                                      deleteListingMutation.mutate(listingId)
+                                  : undefined
+                              }
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {listings.length >= 20 && (
+                      <div className="flex justify-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={page <= 1}
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage((p) => p + 1)}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    )}
+                      </section>
+                    </CardContent>
+                  </Card>
                 </>
               )}
-              {listings.length >= 20 && (
-                <div className="flex justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
+              {!hasSearched && (
+                <TrendingListings
+                  userRole={user?.role}
+                  onDeleteListing={
+                    user?.role === "admin"
+                      ? (listingId) => deleteListingMutation.mutate(listingId)
+                      : undefined
+                  }
+                />
               )}
-            </section>
-          </>
-        )}
-        {!hasSearched && (
-          <TrendingListings
-            userRole={user?.role}
-            onDeleteListing={
-              user?.role === "admin"
-                ? (listingId) => deleteListingMutation.mutate(listingId)
-                : undefined
-            }
-          />
-        )}
+            </div>
           </div>
-        </div>
 
-        {showSplitLayout && selectedJobId && (
-          <aside className="flex flex-1 flex-col min-w-0 pl-4 lg:pl-6">
-            <Card variant="default" className="flex flex-1 flex-col min-h-0 overflow-hidden border-border">
-              <JobDetailPanel
-                listingId={selectedJobId}
-                listingIdsForNav={listings.map((l) => l.id)}
-                basePath="/browse"
-                backToListingsHref={backToListingsHref}
-                onAddToCompare={
-                  isInCompareSet(selectedJobId)
-                    ? () => removeFromCompare(selectedJobId)
-                    : () => {
-                        const selectedListing = listings.find((l) => l.id === selectedJobId);
-                        if (selectedListing) addToCompare({ id: selectedListing.id, title: selectedListing.title });
-                      }
-                }
-                isInCompareSet={isInCompareSet(selectedJobId)}
-                compareSetFull={compareSet.length >= 3}
-                onDeleteListing={
-                  user?.role === "admin"
-                    ? (listingId) => deleteListingMutation.mutate(listingId)
-                    : undefined
-                }
-              />
-            </Card>
-          </aside>
-        )}
-        {showSplitLayout && !selectedJobId && (
-          <aside className="hidden lg:flex flex-1 flex-col min-w-0 pl-4 lg:pl-6">
-            <Card variant="default" className="flex flex-1 flex-col min-h-0 border-border">
-              <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">
-                Select a job
-              </div>
-            </Card>
-          </aside>
-        )}
-      </main>
+          {showSplitLayout && selectedJobId && (
+            <aside className="flex flex-1 flex-col min-w-0">
+              <Card
+                variant="default"
+                className="flex flex-1 flex-col min-h-0 overflow-hidden border-border"
+              >
+                <JobDetailPanel
+                  listingId={selectedJobId}
+                  listingIdsForNav={listings.map((l) => l.id)}
+                  basePath="/browse"
+                  backToListingsHref={backToListingsHref}
+                  onAddToCompare={
+                    isInCompareSet(selectedJobId)
+                      ? () => removeFromCompare(selectedJobId)
+                      : () => {
+                          const selectedListing = listings.find(
+                            (l) => l.id === selectedJobId,
+                          );
+                          if (selectedListing)
+                            addToCompare({
+                              id: selectedListing.id,
+                              title: selectedListing.title,
+                            });
+                        }
+                  }
+                  isInCompareSet={isInCompareSet(selectedJobId)}
+                  compareSetFull={compareSet.length >= 3}
+                  onDeleteListing={
+                    user?.role === "admin"
+                      ? (listingId) => deleteListingMutation.mutate(listingId)
+                      : undefined
+                  }
+                />
+              </Card>
+            </aside>
+          )}
+          {showSplitLayout && !selectedJobId && (
+            <aside className="hidden lg:flex flex-1 flex-col min-w-0">
+              <Card
+                variant="default"
+                className="flex flex-1 flex-col min-h-0 border-border"
+              >
+                <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">
+                  Select a job
+                </div>
+              </Card>
+            </aside>
+          )}
+        </main>
       </div>
     </>
   );

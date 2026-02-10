@@ -10,7 +10,6 @@ import { useCompare } from "@/contexts/CompareContext";
 import { UserOnlyRoute } from "@/components/user-only-route";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
-import { CompareBar } from "@/components/compare-bar";
 import { savedListingToListingResult } from "@/lib/api/saved";
 import { ListingCard } from "@/components/listing-card";
 import { useSavedListings } from "@/hooks/useSavedListings";
@@ -18,22 +17,11 @@ import { fetchProfile, updateProfile, suggestSkills, parseResume, parseResumeFil
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { SkillsEditor } from "@/components/skills-editor";
-import { Card, CardContent } from "@ui/components";
+import { Button, Card, CardContent, Input, Label } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
+import { dedupeSkills } from "@/lib/skills";
 
-/** Deduplicates and trims skill strings (case-insensitive). */
-function dedupeSkills(skills: string[]): string[] {
-  const seen = new Set<string>();
-  return skills
-    .map((s) => s.trim())
-    .filter((s) => {
-      if (!s) return false;
-      const key = s.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
+const YEARS_OF_EXPERIENCE_MAX = 70;
 
 /** Inner content: header, compare bar, resume/skills left, saved listings right (two columns on lg). */
 function ProfileContent() {
@@ -53,6 +41,10 @@ function ProfileContent() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [lastParseAssessment, setLastParseAssessment] = useState<string | null>(null);
+  const [lastParseSuggestedSkills, setLastParseSuggestedSkills] = useState<string[]>([]);
+  /** Local draft for years of experience; null means use profile value. */
+  const [draftYears, setDraftYears] = useState<string | null>(null);
   const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
 
   const isResumeFile = (f: File) => {
@@ -71,6 +63,8 @@ function ProfileContent() {
   });
   const profileSkills = useMemo(() => profile?.skills ?? [], [profile?.skills]);
   const skills = draftSkills ?? profileSkills;
+  const yearsDisplayValue =
+    draftYears !== null ? draftYears : (profile?.yearsOfExperience != null ? String(profile.yearsOfExperience) : "");
 
   const updateSkills = useCallback(
     (updater: (prev: string[]) => string[]) => {
@@ -90,8 +84,9 @@ function ProfileContent() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (skills: string[]) => updateProfile({ skills }),
+    mutationFn: (payload: { skills: string[]; yearsOfExperience?: number | null }) => updateProfile(payload),
     onSuccess: () => {
+      setDraftYears(null);
       queryClient.invalidateQueries({ queryKey: ["profile"] });
     },
   });
@@ -100,12 +95,14 @@ function ProfileContent() {
     mutationFn: (input: string | File) =>
       typeof input === "string" ? parseResume(input) : parseResumeFile(input),
     onSuccess: (data) => {
-      const newSkills = data?.skills ?? [];
-      updateSkills((prev) => dedupeSkills([...prev, ...newSkills]));
       setResumeText("");
       setSelectedFile(null);
       setFileError(null);
-      // Invalidate so other consumers see updated profile; sync effect will run but we've already merged locally.
+      setLastParseAssessment(data?.resumeAssessment ?? null);
+      setLastParseSuggestedSkills(
+        dedupeSkills([...(data?.skills ?? []), ...(data?.suggestedSkills ?? [])])
+      );
+      if (data?.yearsOfExperience != null) setDraftYears(String(data.yearsOfExperience));
       queryClient.invalidateQueries({ queryKey: ["profile"] });
     },
   });
@@ -126,6 +123,11 @@ function ProfileContent() {
     [updateSkills]
   );
 
+  const removeAllSkills = useCallback(() => {
+    setDraftSkills([]);
+    updateMutation.mutate({ skills: [] });
+  }, [updateMutation]);
+
   const handleAddCustom = useCallback(() => {
     addToMySkills(customSkill);
     setCustomSkill("");
@@ -133,8 +135,13 @@ function ProfileContent() {
 
   const handleSaveProfile = useCallback(() => {
     const nextSkills = dedupeSkills(skills);
-    updateMutation.mutate(nextSkills);
-  }, [skills, updateMutation]);
+    const rawYears = yearsDisplayValue.trim();
+    const yearsOfExperience: number | null =
+      rawYears === ""
+        ? null
+        : Math.min(YEARS_OF_EXPERIENCE_MAX, Math.max(0, parseInt(rawYears, 10) || 0));
+    updateMutation.mutate({ skills: nextSkills, yearsOfExperience });
+  }, [skills, yearsDisplayValue, updateMutation]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -180,13 +187,27 @@ function ProfileContent() {
   return (
     <div className="min-h-screen flex flex-col">
       <AppHeader user={user} onLogout={logout} />
-      <CompareBar />
 
       <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
         <h1 className="sr-only">Profile</h1>
-        <div className="min-w-0 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 lg:items-start">
+        <div className="min-w-0 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 lg:items-stretch">
           <section aria-label="Resume and skills" className="space-y-3 min-w-0">
             <h2 className="eyebrow">Resume &amp; skills</h2>
+            <div className="space-y-2">
+              <Label htmlFor="profile-years" className="text-sm">
+                Years of experience
+              </Label>
+              <Input
+                id="profile-years"
+                type="number"
+                min={0}
+                max={YEARS_OF_EXPERIENCE_MAX}
+                placeholder="Optional"
+                value={yearsDisplayValue}
+                onChange={(e) => setDraftYears(e.target.value)}
+                className="w-24"
+              />
+            </div>
             <SkillsEditor
               idPrefix="profile"
               introText="Add skills manually or from your resume for job match and search."
@@ -222,6 +243,7 @@ function ProfileContent() {
               }}
               skills={skills}
               onRemoveSkill={removeFromMySkills}
+              onRemoveAllSkills={removeAllSkills}
               emptySkillsMessage="No skills yet. Use current role + Suggest, add custom, or paste/upload resume above."
               showSaveBlock={!isLoadingProfile}
               onSave={handleSaveProfile}
@@ -234,13 +256,18 @@ function ProfileContent() {
                   : null
               }
               saveButtonLabel="Save profile"
+              resumeAssessment={lastParseAssessment}
+              resumeSuggestedSkills={lastParseSuggestedSkills.filter(
+                (s) => !skills.some((sk) => sk.toLowerCase() === s.toLowerCase())
+              )}
+              onAddResumeSuggestedSkill={addToMySkills}
             />
           </section>
 
-          <section aria-label="Saved listings" className="space-y-4 min-w-0">
+          <section aria-label="Saved listings" className="space-y-4 min-w-0 flex flex-col min-h-0">
             <h2 className="eyebrow">Saved listings</h2>
             {isLoadingSaved && (
-              <Card variant="default" className="border-border">
+              <Card variant="default" className="border-border flex-1 min-h-[26rem]">
                 <CardContent className="p-4">
                   <div className="flex flex-col gap-4">
                     {[...Array(4)].map((_, i) => (
@@ -255,21 +282,20 @@ function ProfileContent() {
             )}
 
             {!isLoadingSaved && savedListings.length === 0 && (
-              <Card variant="default" className="border-border">
-                <CardContent className="p-4">
-                  <p className="text-muted-foreground">
-                    You haven&apos;t saved any listings yet.{" "}
-                    <Link href="/browse" className="text-primary hover:underline">
-                      Browse jobs
-                    </Link>{" "}
-                    to save your favorites.
+              <Card variant="default" className="border-border flex-1 min-h-[26rem] flex flex-col">
+                <CardContent className="p-6 pt-8 flex flex-col flex-1 justify-start items-center gap-4">
+                  <p className="text-muted-foreground text-center mb-0">
+                    You haven&apos;t saved any listings yet. Browse jobs to save your favorites.
                   </p>
+                  <Button asChild variant="default" size="sm" className="w-fit">
+                    <Link href="/browse">Browse jobs</Link>
+                  </Button>
                 </CardContent>
               </Card>
             )}
 
             {!isLoadingSaved && savedListings.length > 0 && (
-              <Card variant="default" className="border-border">
+              <Card variant="default" className="border-border flex-1 min-h-0 flex flex-col">
                 <CardContent className="p-4">
                   <div className="flex flex-col gap-4">
                     {savedListings.map((s) => {

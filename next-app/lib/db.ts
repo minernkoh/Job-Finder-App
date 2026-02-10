@@ -4,12 +4,13 @@
  */
 
 import mongoose from "mongoose";
+import { User } from "@/lib/models/User";
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
   throw new Error(
-    "Please define MONGODB_URI in .env (e.g. mongodb://localhost:27017/jobpulse)"
+    "Please define MONGODB_URI in .env (e.g. mongodb://localhost:27017/jobfinder)"
   );
 }
 
@@ -36,5 +37,6 @@ export async function connectDB(): Promise<typeof mongoose> {
   if (cached.conn) return cached.conn;
   if (!cached.promise) cached.promise = mongoose.connect(MONGODB_URI!);
   cached.conn = await cached.promise;
+  await User.syncIndexes();
   return cached.conn;
 }

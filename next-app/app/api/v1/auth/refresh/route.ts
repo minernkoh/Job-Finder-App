@@ -1,5 +1,6 @@
 /**
  * Refresh API: reads refresh token from HttpOnly cookie, issues new access and refresh tokens, sets new cookie.
+ * Note: Returns { accessToken } (not wrapped in { success, data }) so the frontend can use res.data.accessToken.
  */
 
 import { NextRequest, NextResponse } from "next/server";

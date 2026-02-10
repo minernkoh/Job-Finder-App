@@ -5,7 +5,6 @@
 import { createHash } from "crypto";
 import mongoose from "mongoose";
 import { generateObject } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import {
   AISummarySchema,
   type AISummary,
@@ -15,14 +14,17 @@ import {
 import { connectDB } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import {
+  executeWithGeminiFallback,
+  retryWithBackoff,
+} from "@/lib/ai/gemini";
+import { isValidObjectId } from "@/lib/objectid";
+import {
   AISummary as AISummaryModel,
   type IAISummaryDocument,
 } from "@/lib/models/AISummary";
 import { getListingById } from "./listings.service";
 import { getProfileByUserId } from "./resume.service";
 
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 1000;
 const ADZUNA_FETCH_TIMEOUT_MS = 10_000;
 
 /** Strips HTML tags and normalizes whitespace; caps at 30k chars for prompt limit. */
@@ -39,107 +41,119 @@ function hashInputText(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex").slice(0, 32);
 }
 
-/** Gets Gemini model; throws if GEMINI_API_KEY is not set. */
-function getGeminiModel() {
-  const env = getEnv();
-  if (!env.GEMINI_API_KEY?.trim()) {
-    throw new Error("AI summarization is not configured");
-  }
-  const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY });
-  return google("gemini-2.5-flash");
-}
-
-/** Generates a structured summary from job description text using Gemini with retries. Optionally includes jdMatch when userSkills are provided. */
+/** Generates a structured summary from job description text using Gemini with retries. Optionally includes jdMatch when userSkills are provided; jobTitle/company anchor role when provided; yearsOfExperience considered for match. */
 export async function generateSummaryWithRetry(
   inputText: string,
-  options?: { fromAdzunaPage?: boolean; userSkills?: string[] }
+  options?: {
+    fromAdzunaPage?: boolean;
+    userSkills?: string[];
+    jobTitle?: string;
+    company?: string;
+    yearsOfExperience?: number;
+  },
 ): Promise<AISummary> {
-  const model = getGeminiModel();
   const fromAdzunaPage = options?.fromAdzunaPage === true;
   const userSkills = options?.userSkills ?? [];
   const hasUserSkills = userSkills.length > 0;
-  const intro =
-    fromAdzunaPage
-      ? "You are scanning the job description of the Adzuna job posting below. The content may include some page layout or navigation; focus on the main job description and summarize it into a structured summary."
-      : "You are a job summary assistant for the Singapore job market. Summarize the following job description into a structured summary.";
+  const yearsOfExperience = options?.yearsOfExperience;
+  const jobTitle = options?.jobTitle?.trim();
+  const company = options?.company?.trim();
+  const roleContext =
+    jobTitle != null && jobTitle !== ""
+      ? `Job title: ${jobTitle}${company ? ` | Company: ${company}` : ""}\n\n`
+      : "";
+
+  const intro = fromAdzunaPage
+    ? "You are scanning the job description of the Adzuna job posting below. The content may include some page layout or navigation; focus on the main job description and summarize it into a structured summary."
+    : "You are a job summary assistant for the Singapore job market. Summarize the following job description into a structured summary.";
+  const experienceLine =
+    yearsOfExperience != null
+      ? ` The candidate has ${yearsOfExperience} year(s) of professional experience. When the job description mentions experience requirements (e.g. "5+ years", "3–5 years"), consider this when setting matchScore and include an experience gap in missingSkills if the job asks for more years than the candidate has.`
+      : "";
   const jdMatchRules = hasUserSkills
     ? `
-- The candidate's skills are: ${userSkills.join(", ")}. Compare the job description to these skills and output "jdMatch" with:
-  - matchScore: number 0-100 (how well the job matches the candidate's skills).
-  - matchedSkills: array of skills from the candidate list that appear relevant to the job.
-  - missingSkills: array of skills the job requires or prefers that are not in the candidate list (or empty if well matched).`
+- The candidate's skills are: ${userSkills.join(", ")}.${experienceLine} Compare the job description to these skills and output "jdMatch" with:
+  - matchScore: number 0-100 (how well the job matches the candidate's skills for this specific role).
+  - matchedSkills: array of skills from the candidate list that are actually required or clearly relevant for this job role.
+  - missingSkills: array of skills the job requires or prefers that are not in the candidate list (or empty if well matched). Include experience-related gaps here when the job requires more years than the candidate has.
+- Consider the job title/role when scoring. Relevance is for this specific role only. Include in matchedSkills only candidate skills that are actually required or clearly relevant for this job role. Do not list a candidate skill as matched just because the job description mentions a related word (e.g. do not match "JavaScript" for an Art Director role unless the role explicitly requires development/technical skills).
+- If the job role is clearly unrelated to the candidate's skills (e.g. Art Director vs software engineering), set matchScore low (e.g. 0–30), leave matchedSkills empty or minimal, and set missingSkills to the main skills/experience the job actually requires.`
     : "";
   const prompt = `${intro}
 
 Rules:
-- Provide a short tldr (2-3 sentences).
-- Extract key responsibilities, requirements, and nice-to-haves as arrays of strings.
+- The tldr must describe only the job (role, main duties, key requirements). Do not state whether the candidate is a good fit or has suitable skills; do not address the candidate in the tldr. Provide a short tldr in at most 2-3 short sentences.
+- Extract at most 4-5 key responsibilities and at most 4-5 requirements (most important first). Omit nice-to-haves or fold into requirements if needed.
 - If salary in SGD is mentioned, put it in salarySgd (e.g. "SGD 5,000 - 7,000").
 - Add caveats for missing or unclear information.${jdMatchRules}
 - Output must match the schema exactly (tldr required; other fields optional).
 
-Job description:
+${roleContext}Job description:
 ${inputText.slice(0, 30000)}`;
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const { object } = await generateObject({
-        model,
-        schema: AISummarySchema,
-        prompt,
-      });
-      return object as AISummary;
-    } catch (err) {
-      lastError = err;
-      if (attempt < MAX_RETRIES - 1) {
-        const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-  }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Summary generation failed. Please try again.");
+  const { object } = await retryWithBackoff(
+    () =>
+      executeWithGeminiFallback((model) =>
+        generateObject({ model, schema: AISummarySchema, prompt }),
+      ),
+    { fallbackMessage: "Summary generation failed. Please try again." },
+  );
+  return object as AISummary;
 }
 
-/** Resolves create-summary input to text and whether it came from fetching the Adzuna job page. */
+/** Resolves create-summary input to text, optional Adzuna flag, and when input is listingId also returns jobTitle and company for prompt context. */
 async function resolveInputText(input: {
   text?: string;
   url?: string;
   listingId?: string;
-}): Promise<{ text: string; fromAdzunaPage?: boolean }> {
+}): Promise<{
+  text: string;
+  fromAdzunaPage?: boolean;
+  jobTitle?: string;
+  company?: string;
+}> {
   if (input.text?.trim()) return { text: input.text.trim() };
 
   if (input.listingId) {
     const listing = await getListingById(input.listingId);
     if (!listing) throw new Error("Listing not found");
-    const fallbackParts = [listing.title, listing.company, listing.description].filter(Boolean);
+    const fallbackParts = [
+      listing.title,
+      listing.company,
+      listing.description,
+    ].filter(Boolean);
     const fallback = fallbackParts.join("\n\n") || listing.title;
+    const jobTitle = listing.title?.trim() || undefined;
+    const company = listing.company?.trim() || undefined;
 
     if (!listing.sourceUrl?.trim()) {
-      return { text: fallback, fromAdzunaPage: false };
+      return { text: fallback, fromAdzunaPage: false, jobTitle, company };
     }
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), ADZUNA_FETCH_TIMEOUT_MS);
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        ADZUNA_FETCH_TIMEOUT_MS,
+      );
       const res = await fetch(listing.sourceUrl, {
         headers: { "User-Agent": "JobFinderBot/1.0" },
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
       if (!res.ok) {
-        return { text: fallback, fromAdzunaPage: false };
+        return { text: fallback, fromAdzunaPage: false, jobTitle, company };
       }
       const html = await res.text();
       const extracted = extractTextFromHtml(html).trim();
       return {
         text: extracted || fallback,
         fromAdzunaPage: !!extracted,
+        jobTitle,
+        company,
       };
     } catch {
-      return { text: fallback, fromAdzunaPage: false };
+      return { text: fallback, fromAdzunaPage: false, jobTitle, company };
     }
   }
 
@@ -175,7 +189,7 @@ function docToSummary(doc: IAISummaryDocument): AISummary & { id: string } {
 
 /** Throws if userId is not a valid MongoDB ObjectId (so route can return 401). */
 function toObjectIdOrThrow(userId: string): mongoose.Types.ObjectId {
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
+  if (!isValidObjectId(userId)) {
     throw new Error("Invalid user");
   }
   return new mongoose.Types.ObjectId(userId);
@@ -184,9 +198,10 @@ function toObjectIdOrThrow(userId: string): mongoose.Types.ObjectId {
 /** Returns existing summary by inputTextHash within TTL, or generates and saves a new one. */
 export async function getOrCreateSummary(
   userId: string,
-  input: { text?: string; url?: string; listingId?: string }
+  input: { text?: string; url?: string; listingId?: string },
 ): Promise<AISummary & { id: string }> {
-  const { text, fromAdzunaPage } = await resolveInputText(input);
+  const { text, fromAdzunaPage, jobTitle, company } =
+    await resolveInputText(input);
   const inputTextHash = hashInputText(text);
   const env = getEnv();
   const ttlSeconds = env.AI_SUMMARY_CACHE_TTL ?? 604800;
@@ -212,6 +227,9 @@ export async function getOrCreateSummary(
   const generated = await generateSummaryWithRetry(text, {
     fromAdzunaPage,
     userSkills,
+    jobTitle,
+    company,
+    yearsOfExperience: profile?.yearsOfExperience,
   });
   const parsed = AISummarySchema.safeParse(generated);
   const safe = parsed.success
@@ -240,12 +258,12 @@ export async function getOrCreateSummary(
                 ? (safe.jdMatch as { matchScore: number }).matchScore
                 : undefined,
             matchedSkills: Array.isArray(
-              (safe.jdMatch as { matchedSkills?: unknown }).matchedSkills
+              (safe.jdMatch as { matchedSkills?: unknown }).matchedSkills,
             )
               ? (safe.jdMatch as { matchedSkills: string[] }).matchedSkills
               : undefined,
             missingSkills: Array.isArray(
-              (safe.jdMatch as { missingSkills?: unknown }).missingSkills
+              (safe.jdMatch as { missingSkills?: unknown }).missingSkills,
             )
               ? (safe.jdMatch as { missingSkills: string[] }).missingSkills
               : undefined,
@@ -258,10 +276,10 @@ export async function getOrCreateSummary(
 
 /** Returns a summary by id or null if not found. */
 export async function getSummaryById(
-  id: string
+  id: string,
 ): Promise<(AISummary & { id: string }) | null> {
   await connectDB();
-  if (!mongoose.Types.ObjectId.isValid(id)) return null;
+  if (!isValidObjectId(id)) return null;
   const doc = await AISummaryModel.findById(id).lean();
   if (!doc) return null;
   return docToSummary(doc as IAISummaryDocument);
@@ -270,11 +288,11 @@ export async function getSummaryById(
 /** Returns a summary by id only if owned by userId; otherwise null. */
 export async function getSummaryByIdForUser(
   userId: string,
-  id: string
+  id: string,
 ): Promise<(AISummary & { id: string }) | null> {
   await connectDB();
   const uid = toObjectIdOrThrow(userId);
-  if (!mongoose.Types.ObjectId.isValid(id)) return null;
+  if (!isValidObjectId(id)) return null;
   const doc = await AISummaryModel.findOne({ _id: id, userId: uid }).lean();
   if (!doc) return null;
   return docToSummary(doc as IAISummaryDocument);
@@ -283,11 +301,11 @@ export async function getSummaryByIdForUser(
 /** Deletes a summary if the user owns it. Returns true if deleted, false if not found or not owner. */
 export async function deleteSummary(
   userId: string,
-  id: string
+  id: string,
 ): Promise<boolean> {
   await connectDB();
   const uid = toObjectIdOrThrow(userId);
-  if (!mongoose.Types.ObjectId.isValid(id)) return false;
+  if (!isValidObjectId(id)) return false;
   const result = await AISummaryModel.deleteOne({ _id: id, userId: uid });
   return result.deletedCount === 1;
 }
@@ -297,7 +315,7 @@ function jobBlock(
   index: number,
   title: string,
   company: string,
-  description: string
+  description: string,
 ): string {
   const snippet = description
     .replace(/<[^>]+>/g, " ")
@@ -311,15 +329,23 @@ Description:
 ${snippet}`;
 }
 
-/** Generates a unified comparison summary for 2–3 listings using Gemini. */
+/** Options for comparison summary: candidate context so the recommendation is based on their skills and experience. */
+export interface ComparisonSummaryOptions {
+  userSkills?: string[];
+  currentRole?: string;
+  yearsOfExperience?: number;
+}
+
+/** Generates a unified comparison summary for 2–3 listings using Gemini. Optionally uses candidate skills/role for a "better fit for you" recommendation. */
 export async function generateComparisonSummary(
-  listingIds: string[]
+  listingIds: string[],
+  options?: ComparisonSummaryOptions,
 ): Promise<ComparisonSummary> {
   if (listingIds.length < 2 || listingIds.length > 3) {
     throw new Error("Exactly 2 or 3 listing IDs are required");
   }
   const listings = await Promise.all(
-    listingIds.map((id) => getListingById(id))
+    listingIds.map((id) => getListingById(id)),
   );
   for (let i = 0; i < listings.length; i++) {
     if (!listings[i]) {
@@ -327,14 +353,25 @@ export async function generateComparisonSummary(
     }
   }
   const blocks = listings.map((l, i) =>
-    jobBlock(
-      i + 1,
-      l!.title,
-      l!.company,
-      l!.description ?? ""
-    )
+    jobBlock(i + 1, l!.title, l!.company, l!.description ?? ""),
   );
-  const model = getGeminiModel();
+  const userSkills = options?.userSkills ?? [];
+  const currentRole = options?.currentRole;
+  const yearsOfExperience = options?.yearsOfExperience;
+  const hasCandidateContext =
+    userSkills.length > 0 ||
+    (currentRole != null && currentRole.trim() !== "") ||
+    yearsOfExperience != null;
+  const candidateContext = hasCandidateContext
+    ? `
+The candidate's context (use this to recommend which job is the better fit for them):
+- Skills: ${userSkills.length > 0 ? userSkills.join(", ") : "Not provided"}
+${currentRole != null && currentRole.trim() !== "" ? `- Current or target role: ${currentRole.trim()}` : ""}
+${yearsOfExperience != null ? `- Years of experience: ${yearsOfExperience}` : ""}
+
+Given this candidate's skills and experience, which listing is the better fit? Set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation based on this candidate's skills and experience.`
+    : `
+If one listing is clearly a better fit for a typical candidate, set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation.`;
   const prompt = `You are a job comparison assistant for the Singapore job market. Compare the following ${listings.length} job listings and produce a unified comparison that summarizes similarities and differences.
 
 ${blocks.join("\n\n")}
@@ -344,27 +381,15 @@ Rules:
 - Provide "similarities": an array of 3–6 short points describing what is similar across these listings (e.g. all require X, all mention Y, similar industry).
 - Provide "differences": an array of 3–6 short points describing key differences (e.g. seniority level, salary range, remote vs on-site, different tech stacks).
 - Optionally list 3–6 "comparisonPoints" (additional comparison points if needed).
-- If one listing is clearly a better fit for a typical candidate, set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation. Use the job order (Job 1, Job 2, Job 3) – the IDs are: ${listingIds.join(", ")}. recommendedListingId must be one of: ${listingIds.join(", ")}.
+- Use the job order (Job 1, Job 2, Job 3) – the IDs are: ${listingIds.join(", ")}. recommendedListingId must be one of: ${listingIds.join(", ")}.${candidateContext}
 - Output must match the schema exactly.`;
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const { object } = await generateObject({
-        model,
-        schema: ComparisonSummarySchema,
-        prompt,
-      });
-      return object as ComparisonSummary;
-    } catch (err) {
-      lastError = err;
-      if (attempt < MAX_RETRIES - 1) {
-        const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-  }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Comparison generation failed. Please try again.");
+  const { object } = await retryWithBackoff(
+    () =>
+      executeWithGeminiFallback((model) =>
+        generateObject({ model, schema: ComparisonSummarySchema, prompt }),
+      ),
+    { fallbackMessage: "Comparison generation failed. Please try again." },
+  );
+  return object as ComparisonSummary;
 }

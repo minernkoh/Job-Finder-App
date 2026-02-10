@@ -12,7 +12,12 @@ import {
   type ListingsFilters,
 } from "@/lib/services/listings.service";
 
-const SORT_BY_ALLOWLIST = ["salary", "date"] as const;
+const SORT_BY_ALLOWLIST = [
+  "salary_desc",
+  "salary_asc",
+  "date_desc",
+  "date_asc",
+] as const;
 
 function parseBool(value: string | null): boolean {
   if (value == null) return false;

@@ -14,11 +14,17 @@ import {
   fetchListing,
   updateListingApi,
 } from "@/lib/api/listings";
-import { AdminPageShell } from "@/components/admin-page-shell";
+import { PageShell } from "@/components/page-shell";
 import { InlineError, InlineLoading } from "@/components/page-state";
 import { TablePagination } from "@/components/table-pagination";
 import type { ListingCreate, ListingResult, ListingUpdate } from "@schemas";
-import { Button, Card, CardContent, CardHeader, CardTitle } from "@ui/components";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@ui/components";
 import { ListingForm } from "@/components/listing-form";
 
 interface ListingRow {
@@ -59,7 +65,8 @@ export default function AdminListingsPage() {
   const limit = 20;
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState<ListingCreate>(defaultCreateForm);
+  const [createForm, setCreateForm] =
+    useState<ListingCreate>(defaultCreateForm);
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -80,7 +87,7 @@ export default function AdminListingsPage() {
       params.set("page", String(page));
       params.set("limit", String(limit));
       const res = await apiClient.get<{ success: boolean; data: ListResponse }>(
-        `/api/v1/admin/listings?${params.toString()}`
+        `/api/v1/admin/listings?${params.toString()}`,
       );
       if (res.data.success && res.data.data) setData(res.data.data);
       else setError("Failed to load listings");
@@ -123,7 +130,9 @@ export default function AdminListingsPage() {
       })
       .catch((err) => {
         if (!cancelled)
-          setEditError(err instanceof Error ? err.message : "Failed to load listing");
+          setEditError(
+            err instanceof Error ? err.message : "Failed to load listing",
+          );
       });
     return () => {
       cancelled = true;
@@ -190,7 +199,7 @@ export default function AdminListingsPage() {
   };
 
   return (
-    <AdminPageShell
+    <PageShell
       title="Listings"
       headerAction={
         <Button
@@ -199,7 +208,7 @@ export default function AdminListingsPage() {
           onClick={() => setCreateOpen((o) => !o)}
           iconRight={<PlusIcon size={18} weight="bold" />}
         >
-          {createOpen ? "Cancel" : "Create listing"}
+          {createOpen ? "Cancel" : "Create Listing"}
         </Button>
       }
     >
@@ -215,14 +224,12 @@ export default function AdminListingsPage() {
             <ListingForm
               mode="create"
               value={createForm}
-              onChange={(patch) =>
-                setCreateForm((f) => ({ ...f, ...patch }))
-              }
+              onChange={(patch) => setCreateForm((f) => ({ ...f, ...patch }))}
               onSubmit={handleCreateSubmit}
               submitLabel="Create"
               submitting={createSubmitting}
               error={createError}
-              fieldIdPrefix="create-"
+              idPrefix="create-"
             />
           </CardContent>
         </Card>
@@ -232,11 +239,7 @@ export default function AdminListingsPage() {
         <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Edit listing</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setEditId(null)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setEditId(null)}>
               Close
             </Button>
           </CardHeader>
@@ -251,15 +254,13 @@ export default function AdminListingsPage() {
                 country: editForm.country ?? "sg",
                 sourceUrl: editForm.sourceUrl ?? "",
               }}
-              onChange={(patch) =>
-                setEditForm((f) => ({ ...f, ...patch }))
-              }
+              onChange={(patch) => setEditForm((f) => ({ ...f, ...patch }))}
               onSubmit={handleEditSubmit}
               onCancel={() => setEditId(null)}
               submitLabel="Save"
               submitting={editSubmitting}
               error={editError}
-              fieldIdPrefix="edit-"
+              idPrefix="edit-"
             />
           </CardContent>
         </Card>
@@ -303,10 +304,7 @@ export default function AdminListingsPage() {
                   </thead>
                   <tbody>
                     {data.listings.map((l) => (
-                      <tr
-                        key={l.id}
-                        className="border-b border-border/50"
-                      >
+                      <tr key={l.id} className="border-b border-border/50">
                         <td
                           className="max-w-xs truncate py-2 pr-2 text-foreground"
                           title={l.title}
@@ -383,6 +381,6 @@ export default function AdminListingsPage() {
           )}
         </CardContent>
       </Card>
-    </AdminPageShell>
+    </PageShell>
   );
 }

@@ -3,7 +3,6 @@
  */
 
 import { generateObject } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import mongoose from "mongoose";
 import {
   type DashboardMetrics,
@@ -14,27 +13,20 @@ import {
   type RecentUser,
 } from "@schemas";
 import { connectDB } from "@/lib/db";
+import {
+  executeWithGeminiFallback,
+  retryWithBackoff,
+} from "@/lib/ai/gemini";
 import { getEnv } from "@/lib/env";
 import { User } from "@/lib/models/User";
 import { AISummary } from "@/lib/models/AISummary";
 import { SavedListing } from "@/lib/models/SavedListing";
+import { Listing } from "@/lib/models/Listing";
 import { ListingView } from "@/lib/models/ListingView";
 
 const SUMMARY_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 1000;
 
 let summaryCache: { summary: string; expiresAt: number } | null = null;
-
-/** Returns Gemini model for dashboard summary, or null if GEMINI_API_KEY is not set. */
-function getGeminiModelForDashboard(): ReturnType<
-  ReturnType<typeof createGoogleGenerativeAI>
-> | null {
-  const env = getEnv();
-  if (!env.GEMINI_API_KEY?.trim()) return null;
-  const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY });
-  return google("gemini-2.5-flash");
-}
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -124,27 +116,43 @@ export async function getDashboardPopularListings(): Promise<PopularListingItem[
     { $limit: 20 },
   ]);
   const saveMap = new Map(saveCounts.map((s) => [s._id.toString(), s.count]));
-  return viewCounts.map((v) => ({
-    listingId: v._id.toString(),
-    viewCount: v.count,
-    saveCount: saveMap.get(v._id.toString()) ?? 0,
-  }));
+  const listingIds = viewCounts.map((v) => v._id);
+  const listings = await Listing.find({ _id: { $in: listingIds } })
+    .select("title")
+    .lean();
+  const titleMap = new Map(
+    listings.map((l) => {
+      const doc = l as { _id: mongoose.Types.ObjectId; title?: string };
+      const title = doc.title?.trim();
+      return [doc._id.toString(), title ? title : undefined];
+    })
+  );
+  return viewCounts
+    .map((v) => {
+      const idStr = v._id.toString();
+      return {
+        listingId: idStr,
+        title: titleMap.get(idStr),
+        viewCount: v.count,
+        saveCount: saveMap.get(idStr) ?? 0,
+      };
+    })
+    .filter((item) => item.title != null && item.title.length > 0);
 }
 
 const RECENT_USERS_LIMIT = 15;
 
-/** Returns the most recently created users (id, username, name, createdAt) for the dashboard. */
+/** Returns the most recently created users (id, username, createdAt) for the dashboard. */
 export async function getDashboardRecentUsers(): Promise<RecentUser[]> {
   await connectDB();
   const docs = await User.find()
-    .select("username name createdAt")
+    .select("username createdAt")
     .sort({ createdAt: -1 })
     .limit(RECENT_USERS_LIMIT)
     .lean();
   return docs.map((u) => ({
     id: (u as { _id: mongoose.Types.ObjectId })._id.toString(),
-    username: (u as { username?: string }).username,
-    name: (u as { name: string }).name,
+    username: (u as { username: string }).username,
     createdAt: (u as { createdAt: Date }).createdAt,
   }));
 }
@@ -153,8 +161,8 @@ export async function getDashboardRecentUsers(): Promise<RecentUser[]> {
 export async function generateDashboardSummary(
   metrics: DashboardMetrics
 ): Promise<string> {
-  const model = getGeminiModelForDashboard();
-  if (!model) {
+  const env = getEnv();
+  if (!env.GEMINI_API_KEY?.trim()) {
     return "Summary unavailable; configure GEMINI_API_KEY.";
   }
 
@@ -163,22 +171,59 @@ export async function generateDashboardSummary(
 Metrics (JSON):
 ${JSON.stringify(metrics, null, 2)}`;
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const { object } = await generateObject({
-        model,
-        schema: DashboardSummarySchema,
-        prompt,
-      });
-      return object.summary;
-    } catch {
-      if (attempt < MAX_RETRIES - 1) {
-        const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
+  try {
+    const { object } = await retryWithBackoff(
+      () =>
+        executeWithGeminiFallback((model) =>
+          generateObject({ model, schema: DashboardSummarySchema, prompt }),
+        ),
+      {
+        fallbackMessage:
+          "Summary temporarily unavailable; please try again later.",
+      },
+    );
+    return object.summary;
+  } catch {
+    return "Summary temporarily unavailable; please try again later.";
   }
-  return "Summary temporarily unavailable; please try again later.";
+}
+
+/** Returns metrics, user growth, popular listings, and recent users only (no AI summary). Use for fast initial dashboard load. */
+export async function getDashboardWithoutSummary(): Promise<
+  Omit<AdminDashboardResponse, "summary">
+> {
+  const [metrics, userGrowth, popularListings, recentUsers] = await Promise.all([
+    getDashboardMetrics(),
+    getDashboardUserGrowth(),
+    getDashboardPopularListings(),
+    getDashboardRecentUsers(),
+  ]);
+  return {
+    metrics,
+    userGrowth,
+    popularListings,
+    recentUsers,
+  };
+}
+
+/** Returns only the AI-generated dashboard summary; uses in-memory cache unless skipCache is true. Fetches metrics for the prompt. */
+export async function getDashboardSummaryOnly(options?: {
+  skipCache?: boolean;
+}): Promise<string> {
+  const now = Date.now();
+  const useCache =
+    !options?.skipCache && summaryCache && summaryCache.expiresAt > now;
+
+  if (useCache) {
+    return summaryCache!.summary;
+  }
+  const metrics = await getDashboardMetrics();
+  const summary = await generateDashboardSummary(metrics);
+  summaryCache = {
+    summary,
+    expiresAt: now + SUMMARY_CACHE_TTL_MS,
+  };
+  return summary;
 }
 
 /** Returns metrics, user growth, popular listings, recent users, and AI summary; uses in-memory cache for summary unless skipCache is true. */

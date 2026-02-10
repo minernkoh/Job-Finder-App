@@ -10,17 +10,15 @@ export type UserRole = z.infer<typeof UserRole>;
 export const UserStatus = z.enum(["active", "suspended"]);
 export type UserStatus = z.infer<typeof UserStatus>;
 
-/** Optional username: 3–30 chars, alphanumeric, underscore, hyphen. Uniqueness enforced in backend. */
+/** Required username for entity: 3–30 chars, alphanumeric, underscore, hyphen. Uniqueness enforced in backend. In PATCH bodies use UsernameSchema.optional() so the field may be omitted; when sent it cannot be cleared. */
 export const UsernameSchema = z
   .string()
+  .trim()
   .min(3, "Username must be at least 3 characters")
   .max(30, "Username must be at most 30 characters")
-  .regex(/^[a-zA-Z0-9_-]+$/, "Username may only contain letters, numbers, underscore, and hyphen")
-  .optional()
-  .transform((v) => (typeof v === "string" && v.trim() === "" ? undefined : v));
+  .regex(/^[a-zA-Z0-9_-]+$/, "Username may only contain letters, numbers, underscore, and hyphen");
 
 export const UserSchema = z.object({
-  name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email"),
   username: UsernameSchema,
   password: z
@@ -35,9 +33,9 @@ export const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>;
 
-/** For login request body (email + password; optional role to disambiguate when same email has admin and user accounts). */
+/** For login request body: login is email or username; optional role to disambiguate when same email has admin and user accounts. */
 export const LoginSchema = z.object({
-  email: z.string().email("Invalid email"),
+  login: z.string().min(1, "Email or username is required"),
   password: z.string().min(1, "Password is required"),
   role: UserRole.optional(),
 });
@@ -51,7 +49,7 @@ export const UserCreateSchema = UserSchema.omit({
 }).required({ password: true });
 export type UserCreate = z.infer<typeof UserCreateSchema>;
 
-/** For admin registration request body (name, email, password + adminSecret; role set by backend). */
+/** For admin registration request body (email, password, username + adminSecret; role set by backend). */
 export const AdminRegisterSchema = UserCreateSchema.extend({
   adminSecret: z.string().min(1, "Admin secret is required"),
 });
@@ -59,9 +57,8 @@ export type AdminRegister = z.infer<typeof AdminRegisterSchema>;
 
 /** For PATCH user (partial update; all fields optional, same validations as create when present). */
 export const UserUpdateSchema = z.object({
-  name: z.string().min(1, "Name is required").optional(),
   email: z.string().email("Invalid email").optional(),
-  username: UsernameSchema,
+  username: UsernameSchema.optional(),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters")
@@ -92,9 +89,8 @@ export const AdminUsersQuerySchema = z.object({
 });
 export type AdminUsersQuery = z.infer<typeof AdminUsersQuerySchema>;
 
-/** Body for admin POST create user (name, email, password, role). */
+/** Body for admin POST create user (email, username, password, role). */
 export const AdminCreateUserBodySchema = z.object({
-  name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email"),
   username: UsernameSchema,
   password: z.string().min(8, "Password must be at least 8 characters"),
@@ -102,10 +98,9 @@ export const AdminCreateUserBodySchema = z.object({
 });
 export type AdminCreateUserBody = z.infer<typeof AdminCreateUserBodySchema>;
 
-/** Body for admin PATCH user (name, email, username). */
+/** Body for admin PATCH user (email, username). */
 export const AdminUpdateUserBodySchema = z.object({
-  name: z.string().min(1, "Name is required").optional(),
   email: z.string().email("Invalid email").optional(),
-  username: UsernameSchema,
+  username: UsernameSchema.optional(),
 });
 export type AdminUpdateUserBody = z.infer<typeof AdminUpdateUserBodySchema>;

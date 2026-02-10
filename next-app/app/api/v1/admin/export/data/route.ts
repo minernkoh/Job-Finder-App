@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
       const users = await User.find({}).select("-password").limit(limit).lean();
       data = users.map((u) => ({
         id: u._id.toString(),
-        name: u.name,
         email: u.email,
+        username: u.username,
         role: u.role,
         status: (u as { status?: string }).status,
         createdAt: u.createdAt,

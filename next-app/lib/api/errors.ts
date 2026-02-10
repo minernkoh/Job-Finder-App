@@ -33,14 +33,27 @@ export function toErrorResponse(
 }
 
 /**
+ * Returns the first Zod issue message for use in API error payloads. Falls back to defaultMessage if no issues.
+ */
+export function validationMessageFromZod(
+  zodError: z.ZodError,
+  defaultMessage = "Invalid input"
+): string {
+  const first = zodError.issues[0];
+  return first?.message ? String(first.message) : defaultMessage;
+}
+
+/**
  * Builds a 400 JSON response for Zod validation failures. Use when safeParse fails so all routes return the same shape.
+ * The message is set to the first Zod error message so clients can show it via getErrorMessage.
  */
 export function validationErrorResponse(
   zodError: z.ZodError,
   message = "Invalid input"
 ): NextResponse {
+  const displayMessage = validationMessageFromZod(zodError, message);
   return NextResponse.json(
-    { success: false, message, errors: zodError.flatten() },
+    { success: false, message: displayMessage, errors: zodError.flatten() },
     { status: 400 }
   );
 }

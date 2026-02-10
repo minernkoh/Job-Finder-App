@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { TrashIcon } from "@phosphor-icons/react";
 import { apiClient } from "@/lib/api/client";
-import { AdminPageShell } from "@/components/admin-page-shell";
+import { PageShell } from "@/components/page-shell";
 import { InlineError, InlineLoading } from "@/components/page-state";
 import { TablePagination } from "@/components/table-pagination";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@ui/components";
@@ -15,7 +15,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "
 interface SummaryRow {
   id: string;
   userId: string;
-  userName?: string;
+  userName: string;
   tldr: string;
   createdAt: string;
   hasSalarySgd: boolean;
@@ -84,7 +84,7 @@ export default function AdminSummariesPage() {
   };
 
   return (
-    <AdminPageShell title="Summaries">
+    <PageShell title="Summaries">
       <Card>
         <CardHeader>
           <CardTitle>All summaries</CardTitle>
@@ -126,7 +126,7 @@ export default function AdminSummariesPage() {
                           {s.tldr}
                         </td>
                         <td className="py-2 pr-2 text-muted-foreground text-xs">
-                          {s.userName ?? s.userId}
+                          {s.userName || s.userId}
                         </td>
                         <td className="py-2 pr-2 text-foreground">
                           {new Date(s.createdAt).toLocaleDateString()}
@@ -158,6 +158,6 @@ export default function AdminSummariesPage() {
           )}
         </CardContent>
       </Card>
-    </AdminPageShell>
+    </PageShell>
   );
 }

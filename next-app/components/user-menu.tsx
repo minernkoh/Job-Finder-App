@@ -14,10 +14,10 @@ interface UserMenuProps {
   onLogout: () => void;
 }
 
-/** Derives the first letter to show in the avatar (name, then email, else '?'). */
+/** Derives the first letter to show in the avatar (username, then email, else '?'). */
 function getInitial(user: AuthUser): string {
   return (
-    user.name?.charAt(0)?.toUpperCase() ??
+    user.username?.charAt(0)?.toUpperCase() ??
     user.email?.charAt(0)?.toUpperCase() ??
     "?"
   );
@@ -92,7 +92,7 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
         className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground outline-none transition-colors hover:bg-muted/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-haspopup="true"
         aria-expanded={open}
-        aria-label={`User menu for ${user.name ?? user.email}`}
+        aria-label={`User menu for ${user.username ?? user.email}`}
         onClick={() => setOpen((o) => !o)}
       >
         {initial}

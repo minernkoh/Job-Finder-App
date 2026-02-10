@@ -58,14 +58,16 @@ export function ListingCard({
 }: ListingCardProps) {
   const cardHref = href ?? `/browse?job=${listing.id}`;
   const compareSetFull = compareSetSize >= 3;
-  const canAddToCompare =
-    onAddToCompare && (isInCompareSet || !compareSetFull);
+  const canAddToCompare = onAddToCompare && (isInCompareSet || !compareSetFull);
   const isAdmin = userRole === "admin";
 
   const handleDelete = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (typeof window !== "undefined" && window.confirm("Delete this listing? This cannot be undone.")) {
+    if (
+      typeof window !== "undefined" &&
+      window.confirm("Delete this listing? This cannot be undone.")
+    ) {
       onDeleteListing?.(listing.id);
     }
   };
@@ -76,7 +78,8 @@ export function ListingCard({
       variant="default"
       className={cn(
         "cursor-pointer",
-        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+        isSelected &&
+          "ring-2 ring-primary ring-offset-2 ring-offset-background",
       )}
     >
       <Link
@@ -115,14 +118,18 @@ export function ListingCard({
                   compareSetFull && !isInCompareSet
                     ? "You can compare up to 3 jobs. Remove one to add another."
                     : isInCompareSet
-                      ? "Remove from comparison"
+                      ? "Remove"
                       : "Add to compare"
                 }
-                aria-label={isInCompareSet ? "Remove from comparison" : "Add to compare"}
+                aria-label={
+                  isInCompareSet ? "Remove from comparison" : "Add to compare"
+                }
               >
                 <ArrowsLeftRightIcon
                   size={16}
-                  className={isInCompareSet ? "text-primary" : "text-muted-foreground"}
+                  className={
+                    isInCompareSet ? "text-primary" : "text-muted-foreground"
+                  }
                 />
               </Button>
             )}
@@ -158,7 +165,10 @@ export function ListingCard({
                   title="Edit listing"
                   aria-label="Edit listing"
                 >
-                  <PencilSimpleIcon size={16} className="text-muted-foreground" />
+                  <PencilSimpleIcon
+                    size={16}
+                    className="text-muted-foreground"
+                  />
                 </Link>
                 {onDeleteListing && (
                   <Button
@@ -186,7 +196,7 @@ export function ListingCard({
             const salary = formatSalaryRange(
               listing.salaryMin,
               listing.salaryMax,
-              listing.country
+              listing.country,
             );
             return salary ? (
               <p className="text-sm font-medium text-foreground">{salary}</p>
@@ -200,9 +210,7 @@ export function ListingCard({
           {(() => {
             const posted = formatPostedDate(listing.postedAt);
             return posted ? (
-              <p className="text-xs text-muted-foreground">
-                Posted {posted}
-              </p>
+              <p className="text-xs text-muted-foreground">Posted {posted}</p>
             ) : null;
           })()}
         </CardContent>

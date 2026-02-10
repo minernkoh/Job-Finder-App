@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** Creates a new user (name, email, password, role). Returns 201 with user or 409 if email exists. */
+/** Creates a new user (email, username, password, role). Returns 201 with user or 409 if email exists. */
 export async function POST(request: NextRequest) {
   try {
     const result = await requireAdmin(request);

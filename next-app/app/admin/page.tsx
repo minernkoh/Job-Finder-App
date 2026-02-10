@@ -4,17 +4,10 @@
 
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import {
-  ArrowRightIcon,
-  ArrowClockwiseIcon,
-  BookmarkIcon,
-  EyeIcon,
-  FileTextIcon,
-  UsersIcon,
-  UsersThreeIcon,
-} from "@phosphor-icons/react";
+import { ArrowRightIcon, ArrowClockwiseIcon } from "@phosphor-icons/react";
 import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
@@ -44,16 +37,17 @@ interface DashboardData {
     savesLast7Days: number;
     activeUsersLast7Days?: number;
   };
-  summary: string;
+  summary?: string;
   userGrowth: Array<{ date: string; count: number }>;
   popularListings: Array<{
     listingId: string;
+    title?: string;
     viewCount: number;
     saveCount: number;
   }>;
   recentUsers: Array<{
     id: string;
-    username?: string;
+    username: string;
     name: string;
     createdAt: string;
   }>;
@@ -61,30 +55,45 @@ interface DashboardData {
 
 interface AuthResponse {
   accessToken: string;
-  user: { id: string; name: string; email: string; role: "admin" | "user"; username?: string };
+  user: { id: string; email: string; role: "admin" | "user"; username: string };
 }
 
-/** Admin dashboard: metrics cards and AI summary; fetches on mount and supports refresh. */
+/** Admin dashboard: metrics cards and AI summary; loads dashboard first then summary for fast initial paint. */
 function AdminDashboard() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshingSummary, setRefreshingSummary] = useState(false);
 
-  const fetchDashboard = async (refresh = false) => {
-    const isRefresh = refresh;
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const fetchSummary = async (skipCache: boolean) => {
+    setRefreshingSummary(true);
+    try {
+      const url = skipCache
+        ? "/api/v1/admin/dashboard/summary?refresh=1"
+        : "/api/v1/admin/dashboard/summary";
+      const res = await apiClient.get<{
+        success: boolean;
+        data: { summary: string };
+      }>(url);
+      if (res.data.success && res.data.data?.summary !== undefined) {
+        setData((prev) =>
+          prev ? { ...prev, summary: res.data.data!.summary } : null
+        );
+      }
+    } finally {
+      setRefreshingSummary(false);
+    }
+  };
+
+  const fetchDashboard = async () => {
+    setLoading(true);
     setError(null);
     try {
-      const url = refresh
-        ? "/api/v1/admin/dashboard?refresh=1"
-        : "/api/v1/admin/dashboard";
       const res = await apiClient.get<{
         success: boolean;
         data: DashboardData;
-      }>(url);
+      }>("/api/v1/admin/dashboard?includeSummary=0");
       if (res.data.success && res.data.data) {
         setData(res.data.data);
       } else {
@@ -94,13 +103,17 @@ function AdminDashboard() {
       setError(getErrorMessage(err, "Dashboard unavailable"));
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchDashboard();
   }, []);
+
+  useEffect(() => {
+    if (!data || data.summary !== undefined) return;
+    fetchSummary(false);
+  }, [data]);
 
   if (loading && !data) {
     return (
@@ -127,33 +140,46 @@ function AdminDashboard() {
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold text-foreground">
-            Admin dashboard
+            Admin Dashboard
           </h1>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchDashboard(true)}
-            disabled={refreshing}
+            onClick={() => fetchSummary(true)}
+            disabled={refreshingSummary}
             iconRight={
-              refreshing ? undefined : (
+              refreshingSummary ? undefined : (
                 <ArrowClockwiseIcon className="size-4" weight="regular" />
               )
             }
           >
-            {refreshing ? "Refreshing…" : "Refresh summary"}
+            {refreshingSummary ? "Refreshing…" : "Refresh summary"}
           </Button>
         </div>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Card>
+          <CardHeader>
+            <CardTitle>Dashboard summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm leading-relaxed text-foreground">
+              {(() => {
+                if (data?.summary !== undefined && data.summary !== "")
+                  return data.summary;
+                if (refreshingSummary) return "Refreshing…";
+                if (data?.summary === "") return "—";
+                return "Loading summary…";
+              })()}
+            </p>
+          </CardContent>
+        </Card>
+
+        <section className="grid grid-cols-1 gap-6 md:grid-cols-5 md:gap-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Total users
               </CardTitle>
-              <UsersIcon
-                className="size-4 text-muted-foreground"
-                weight="regular"
-              />
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold">{m?.totalUsers ?? "—"}</span>
@@ -165,14 +191,10 @@ function AdminDashboard() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Avg AI summaries per user
               </CardTitle>
-              <FileTextIcon
-                className="size-4 text-muted-foreground"
-                weight="regular"
-              />
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold">
@@ -188,14 +210,10 @@ function AdminDashboard() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Avg listing views per user
               </CardTitle>
-              <EyeIcon
-                className="size-4 text-muted-foreground"
-                weight="regular"
-              />
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold">
@@ -211,14 +229,10 @@ function AdminDashboard() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Avg saves per user
               </CardTitle>
-              <BookmarkIcon
-                className="size-4 text-muted-foreground"
-                weight="regular"
-              />
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold">
@@ -234,14 +248,10 @@ function AdminDashboard() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Active users
               </CardTitle>
-              <UsersThreeIcon
-                className="size-4 text-muted-foreground"
-                weight="regular"
-              />
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold">
@@ -254,18 +264,7 @@ function AdminDashboard() {
           </Card>
         </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Dashboard summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-relaxed text-foreground">
-              {data?.summary ?? "—"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-4">
           <Card>
             <CardHeader>
               <CardTitle>User growth (last 7 days)</CardTitle>
@@ -299,7 +298,7 @@ function AdminDashboard() {
                   {data.recentUsers.map((u) => (
                     <li key={u.id} className="flex justify-between gap-2">
                       <span className="truncate text-foreground">
-                        {u.username ?? u.name ?? u.id}
+                        {u.username}
                       </span>
                       <span className="text-muted-foreground text-xs shrink-0">
                         {new Date(u.createdAt).toLocaleDateString()}
@@ -320,16 +319,19 @@ function AdminDashboard() {
               {data?.popularListings && data.popularListings.length > 0 ? (
                 <ul className="space-y-1 text-sm">
                   {data.popularListings.slice(0, 10).map((p) => (
-                    <li
-                      key={p.listingId}
-                      className="flex justify-between font-mono text-xs"
-                    >
-                      <span className="truncate text-muted-foreground">
-                        {p.listingId}
-                      </span>
-                      <span className="text-foreground">
-                        views: {p.viewCount}, saves: {p.saveCount}
-                      </span>
+                    <li key={p.listingId}>
+                      <Link
+                        href={`/browse/${p.listingId}`}
+                        title={p.title ?? p.listingId}
+                        className="flex justify-between rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span className="truncate text-muted-foreground">
+                          {p.title ?? p.listingId}
+                        </span>
+                        <span className="shrink-0 font-mono text-xs text-foreground">
+                          views: {p.viewCount}, saves: {p.saveCount}
+                        </span>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -341,12 +343,6 @@ function AdminDashboard() {
             </CardContent>
           </Card>
         </div>
-
-        <div className="flex justify-end">
-          <Button variant="ghost" onClick={() => router.push("/browse")}>
-            Go to jobs
-          </Button>
-        </div>
       </div>
     </div>
   );
@@ -357,7 +353,6 @@ function AdminForm() {
   const router = useRouter();
   const [tab, setTab] = useState<AuthTab>("login");
   const { setToken, setUser, isLoading } = useAuth();
-  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -368,11 +363,16 @@ function AdminForm() {
   async function handleAdminSignup(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const trimmedUsername = username.trim();
+    if (trimmedUsername.length < 3) {
+      setError("Username must be at least 3 characters");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await apiClient.post<AuthResponse>(
         "/api/v1/auth/admin/register",
-        { name, email, password, adminSecret, username: username?.trim() || undefined },
+        { email, password, adminSecret, username: trimmedUsername },
         { withCredentials: true },
       );
       setToken(res.data.accessToken);
@@ -392,7 +392,7 @@ function AdminForm() {
     try {
       const res = await apiClient.post<AuthResponse>(
         "/api/v1/auth/login",
-        { email, password, role: "admin" },
+        { login: email, password, role: "admin" },
         { withCredentials: true },
       );
       if (res.data.user.role !== "admin") {
@@ -412,6 +412,7 @@ function AdminForm() {
   return (
     <AuthCard
       title="Admin Log In"
+      compact
       onClose={() => router.push("/browse")}
       footer={
         <p className="text-center text-sm text-muted-foreground">
@@ -451,8 +452,6 @@ function AdminForm() {
             onEmailChange={(e) => setEmail(e.target.value)}
             password={password}
             onPasswordChange={(e) => setPassword(e.target.value)}
-            name={name}
-            onNameChange={(e) => setName(e.target.value)}
             username={username}
             onUsernameChange={(e) => setUsername(e.target.value)}
             disabled={submitting || isLoading}

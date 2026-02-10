@@ -8,8 +8,10 @@ import { requireAuth } from "@/lib/auth/request";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
 import { getEnv } from "@/lib/env";
 import {
+  DOCX_EXTRACT_ERROR_MESSAGE,
   extractTextFromDocx,
   extractTextFromPdf,
+  PDF_EXTRACT_ERROR_MESSAGE,
   parseResumeWithRetry,
   upsertProfileForUser,
 } from "@/lib/services/resume.service";
@@ -108,9 +110,9 @@ export async function POST(request: NextRequest) {
 
     const result = await parseResumeWithRetry(text);
     await upsertProfileForUser(payload.sub, {
-      skills: result.skills,
       jobTitles: result.jobTitles,
       resumeSummary: result.resumeSummary,
+      ...(result.yearsOfExperience != null ? { yearsOfExperience: result.yearsOfExperience } : {}),
     });
     return NextResponse.json({ success: true, data: result });
   } catch (err) {
@@ -123,8 +125,8 @@ export async function POST(request: NextRequest) {
     }
     if (
       message === "File must be 5MB or smaller" ||
-      message === "Could not extract text from PDF" ||
-      message === "Could not extract text from DOCX" ||
+      message === PDF_EXTRACT_ERROR_MESSAGE ||
+      message === DOCX_EXTRACT_ERROR_MESSAGE ||
       message === "Only PDF or DOCX files up to 5MB are supported."
     ) {
       return NextResponse.json({ success: false, message }, { status: 400 });

@@ -1,10 +1,10 @@
 /**
- * AccountSettingsForm: reusable form for name, email, and optional password change. Used by profile and admin settings pages.
+ * AccountSettingsForm: reusable form for email, username, and optional password change. Used by profile and admin settings pages.
  */
 
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { updateUser } from "@/lib/api/users";
 import { useMutation } from "@tanstack/react-query";
 import { Button, Card, CardContent, Input, Label } from "@ui/components";
@@ -13,59 +13,65 @@ import type { AuthUser } from "@/contexts/AuthContext";
 export interface AccountSettingsFormProps {
   /** Current user; form is disabled when null. */
   user: AuthUser | null;
-  /** Called after a successful update with the new name, email, and username (e.g. to sync auth context). */
-  onSuccess?: (data: { name: string; email: string; username?: string }) => void;
+  /** Called after a successful update with the new email and username (e.g. to sync auth context). */
+  onSuccess?: (data: { email: string; username: string }) => void;
   /** Optional id prefix for form fields to avoid duplicate ids when multiple instances exist. */
   idPrefix?: string;
 }
 
-/** Renders a vertical account form (name, email, optional new password) with a centered Save changes button. */
-export function AccountSettingsForm({
+/** Inner form content; keyed by user.id so state resets when user changes. */
+function AccountSettingsFormInner({
   user,
   onSuccess,
-  idPrefix = "settings",
-}: AccountSettingsFormProps) {
-  const [accountName, setAccountName] = useState(user?.name ?? "");
-  const [accountEmail, setAccountEmail] = useState(user?.email ?? "");
-  const [accountUsername, setAccountUsername] = useState(user?.username ?? "");
+  idPrefix,
+}: {
+  user: AuthUser;
+  onSuccess?: (data: { email: string; username: string }) => void;
+  idPrefix: string;
+}) {
+  const [accountEmail, setAccountEmail] = useState(user.email);
+  const [accountUsername, setAccountUsername] = useState(user.username ?? "");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  useEffect(() => {
-    if (user) {
-      setAccountName(user.name);
-      setAccountEmail(user.email);
-      setAccountUsername(user.username ?? "");
-    }
-  }, [user?.id, user?.name, user?.email, user?.username]);
-
   const accountMutation = useMutation({
-    mutationFn: (payload: { name?: string; email?: string; username?: string; password?: string }) =>
-      user ? updateUser(user.id, payload) : Promise.reject(new Error("Not signed in")),
+    mutationFn: (payload: {
+      email?: string;
+      username?: string;
+      password?: string;
+    }) =>
+      user
+        ? updateUser(user.id, payload)
+        : Promise.reject(new Error("Not signed in")),
     onSuccess: (data) => {
-      onSuccess?.({ name: data.name, email: data.email, username: data.username });
+      onSuccess?.({ email: data.email, username: data.username });
       setNewPassword("");
       setConfirmPassword("");
     },
   });
 
   const handleSave = useCallback(() => {
-    const name = accountName.trim();
     const email = accountEmail.trim();
-    if (!name || !email) return;
-    const payload: { name?: string; email?: string; username?: string; password?: string } = {
-      name,
+    const usernameTrimmed = accountUsername.trim();
+    if (!email) return;
+    if (usernameTrimmed.length < 3) return;
+    const payload: { email?: string; username?: string; password?: string } = {
       email,
-      username: accountUsername.trim() || undefined,
+      username: usernameTrimmed,
     };
     if (newPassword || confirmPassword) {
       if (newPassword.length < 8 || newPassword !== confirmPassword) return;
       payload.password = newPassword;
     }
     accountMutation.mutate(payload);
-  }, [accountName, accountEmail, accountUsername, newPassword, confirmPassword, accountMutation]);
+  }, [
+    accountEmail,
+    accountUsername,
+    newPassword,
+    confirmPassword,
+    accountMutation,
+  ]);
 
-  const nameId = `${idPrefix}-account-name`;
   const emailId = `${idPrefix}-account-email`;
   const usernameId = `${idPrefix}-account-username`;
   const newPwId = `${idPrefix}-new-password`;
@@ -76,23 +82,18 @@ export function AccountSettingsForm({
       <CardContent className="p-4">
         <div className="flex flex-col gap-4">
           <div className="grid gap-2">
-            <Label htmlFor={nameId}>Name</Label>
-            <Input
-              id={nameId}
-              value={accountName}
-              onChange={(e) => setAccountName(e.target.value)}
-              placeholder="Your name"
-              className="w-full"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor={usernameId}>Username (optional)</Label>
+            <Label htmlFor={usernameId}>Username</Label>
+            <p className="text-xs text-muted-foreground">
+              Used to sign in and identify you.
+            </p>
             <Input
               id={usernameId}
               value={accountUsername}
               onChange={(e) => setAccountUsername(e.target.value)}
               placeholder="3–30 chars, letters, numbers, _ -"
               className="w-full"
+              minLength={3}
+              maxLength={30}
               autoComplete="username"
             />
           </div>
@@ -150,5 +151,32 @@ export function AccountSettingsForm({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** Renders a vertical account form (email, username, optional new password) with a centered Save changes button. */
+export function AccountSettingsForm({
+  user,
+  onSuccess,
+  idPrefix = "settings",
+}: AccountSettingsFormProps) {
+  if (!user) {
+    return (
+      <Card variant="default" className="border-border">
+        <CardContent className="p-4">
+          <p className="text-sm text-muted-foreground">
+            Sign in to update your account.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <AccountSettingsFormInner
+      key={user.id}
+      user={user}
+      onSuccess={onSuccess}
+      idPrefix={idPrefix}
+    />
   );
 }

@@ -1,5 +1,5 @@
 /**
- * Current user API: returns the authenticated user's profile (id, name, email, role). Requires Bearer token.
+ * Current user API: returns the authenticated user's profile (id, email, username, role). Requires Bearer token.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -25,11 +25,13 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      id: user._id.toString(),
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      username: (user as { username?: string }).username,
+      success: true,
+      data: {
+        id: user._id.toString(),
+        email: user.email,
+        role: user.role,
+        username: user.username,
+      },
     });
   } catch (e) {
     return toErrorResponse(e, "Failed to get user");

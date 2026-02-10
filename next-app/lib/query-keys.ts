@@ -38,6 +38,7 @@ export function listingKeys(id: string): readonly [string, string] {
 }
 
 export const trendingKeys = { all: ["trending"] as const };
+export const recommendedKeys = { all: ["recommended"] as const };
 
 export function categoriesKeys(
   country: string

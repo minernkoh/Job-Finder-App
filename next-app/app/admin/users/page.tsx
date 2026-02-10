@@ -6,10 +6,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { MagnifyingGlassIcon, PlusIcon } from "@phosphor-icons/react";
+import { MagnifyingGlassIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { apiClient } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
-import { AdminPageShell } from "@/components/admin-page-shell";
+import { useAuth } from "@/contexts/AuthContext";
+import { PageShell } from "@/components/page-shell";
 import { InlineError, InlineLoading } from "@/components/page-state";
 import { TablePagination } from "@/components/table-pagination";
 import { FormField } from "@/components/form-field";
@@ -17,9 +18,8 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "
 
 interface UserRow {
   id: string;
-  name: string;
   email: string;
-  username?: string;
+  username: string;
   role: string;
   status: string;
   createdAt: string;
@@ -34,7 +34,6 @@ interface ListResponse {
 }
 
 const defaultCreateForm = {
-  name: "",
   email: "",
   username: "",
   password: "",
@@ -55,6 +54,12 @@ export default function AdminUsersPage() {
   const [createForm, setCreateForm] = useState(defaultCreateForm);
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const { user: currentUser } = useAuth();
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -85,14 +90,18 @@ export default function AdminUsersPage() {
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError(null);
+    const usernameTrimmed = createForm.username.trim();
+    if (usernameTrimmed.length < 3) {
+      setCreateError("Username must be at least 3 characters");
+      return;
+    }
     setCreateSubmitting(true);
     try {
-      const res = await apiClient.post<{ success: boolean; data: { id: string; name: string; email: string; username?: string; role: string } }>(
+      const res = await apiClient.post<{ success: boolean; data: { id: string; email: string; username: string; role: string } }>(
         "/api/v1/admin/users",
         {
-          name: createForm.name.trim(),
           email: createForm.email.trim(),
-          username: createForm.username?.trim() || undefined,
+          username: usernameTrimmed,
           password: createForm.password,
           role: createForm.role,
         }
@@ -111,8 +120,28 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleDeleteConfirm = async (userId: string) => {
+    setDeleteError(null);
+    setDeleteSubmitting(true);
+    try {
+      const res = await apiClient.delete<{ success: boolean; message?: string }>(
+        `/api/v1/admin/users/${userId}`
+      );
+      if (res.data.success) {
+        setDeleteConfirmId(null);
+        await fetchUsers();
+      } else {
+        setDeleteError(res.data.message ?? "Failed to delete user");
+      }
+    } catch (e) {
+      setDeleteError(getErrorMessage(e, "Failed to delete user"));
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  };
+
   return (
-    <AdminPageShell
+    <PageShell
       title="Users"
       headerAction={
         <Button
@@ -136,16 +165,6 @@ export default function AdminUsersPage() {
           <CardContent>
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               {createError && <InlineError message={createError} />}
-              <FormField id="create-name" label="Name" required>
-                <Input
-                  id="create-name"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="Full name"
-                  required
-                  disabled={createSubmitting}
-                />
-              </FormField>
               <FormField id="create-email" label="Email" required>
                 <Input
                   id="create-email"
@@ -157,12 +176,15 @@ export default function AdminUsersPage() {
                   disabled={createSubmitting}
                 />
               </FormField>
-              <FormField id="create-username" label="Username (optional)">
+              <FormField id="create-username" label="Username" required>
                 <Input
                   id="create-username"
                   value={createForm.username}
                   onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))}
                   placeholder="3–30 chars, letters, numbers, _ -"
+                  required
+                  minLength={3}
+                  maxLength={30}
                   disabled={createSubmitting}
                 />
               </FormField>
@@ -211,7 +233,7 @@ export default function AdminUsersPage() {
                 <MagnifyingGlassIcon className="size-4 text-muted-foreground" weight="regular" />
                 <Input
                   id="search"
-                  placeholder="Name or email..."
+                  placeholder="Username or email..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && setPage(1)}
@@ -244,6 +266,7 @@ export default function AdminUsersPage() {
         </CardHeader>
         <CardContent>
           {error && <InlineError message={error} />}
+          {deleteError && <InlineError message={deleteError} />}
           {loading && !data && <InlineLoading />}
           {data && (
             <>
@@ -251,7 +274,6 @@ export default function AdminUsersPage() {
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="pb-2 pr-2 font-medium text-muted-foreground">Name</th>
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">Username</th>
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">Email</th>
                       <th className="pb-2 pr-2 font-medium text-muted-foreground">Role</th>
@@ -262,17 +284,61 @@ export default function AdminUsersPage() {
                   <tbody>
                     {data.users.map((u) => (
                       <tr key={u.id} className="border-b border-border/50">
-                        <td className="py-2 pr-2 text-foreground">{u.name}</td>
-                        <td className="py-2 pr-2 text-muted-foreground text-xs">{u.username ?? "—"}</td>
+                        <td className="py-2 pr-2 text-foreground">{u.username}</td>
                         <td className="py-2 pr-2 text-foreground">{u.email}</td>
                         <td className="py-2 pr-2 text-foreground">{u.role}</td>
                         <td className="py-2 pr-2 text-foreground">{u.status}</td>
                         <td className="py-2">
-                          <Link href={`/admin/users/${u.id}`}>
-                            <Button variant="ghost" size="sm">
-                              View
-                            </Button>
-                          </Link>
+                          <div className="flex items-center gap-1">
+                            <Link href={`/admin/users/${u.id}`}>
+                              <Button variant="ghost" size="sm">
+                                View
+                              </Button>
+                            </Link>
+                            {currentUser?.id === u.id ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-muted-foreground"
+                                disabled
+                                title="Cannot delete your own account"
+                              >
+                                <TrashIcon size={16} />
+                              </Button>
+                            ) : deleteConfirmId === u.id ? (
+                              <span className="flex items-center gap-1">
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  disabled={deleteSubmitting}
+                                  onClick={() => handleDeleteConfirm(u.id)}
+                                >
+                                  {deleteSubmitting ? "Deleting…" : "Confirm"}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={deleteSubmitting}
+                                  onClick={() => {
+                                    setDeleteConfirmId(null);
+                                    setDeleteError(null);
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </span>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setDeleteConfirmId(u.id)}
+                                title="Delete user"
+                              >
+                                <TrashIcon size={16} />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -289,6 +355,6 @@ export default function AdminUsersPage() {
           )}
         </CardContent>
       </Card>
-    </AdminPageShell>
+    </PageShell>
   );
 }

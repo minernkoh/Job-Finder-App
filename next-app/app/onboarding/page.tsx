@@ -11,26 +11,14 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { AppHeader } from "@/components/app-header";
 import { fetchProfile, updateProfile, suggestSkills, parseResume, parseResumeFile } from "@/lib/api/profile";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@ui/components";
+import { Button, Input, Label } from "@ui/components";
 import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { PageShell } from "@/components/page-shell";
 import { SkillsEditor } from "@/components/skills-editor";
 import { cn } from "@ui/components/lib/utils";
+import { dedupeSkills } from "@/lib/skills";
 
-/** Deduplicates and trims skill strings (case-insensitive). */
-function dedupeSkills(skills: string[]): string[] {
-  const seen = new Set<string>();
-  return skills
-    .map((s) => s.trim())
-    .filter((s) => {
-      if (!s) return false;
-      const key = s.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
-
+const YEARS_OF_EXPERIENCE_MAX = 70;
 type Tab = "manual" | "resume";
 
 /** Inner onboarding content: manual (role + suggest + pills) or resume; Continue saves and redirects. */
@@ -50,6 +38,9 @@ function OnboardingContent() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [lastParseSuggestedSkills, setLastParseSuggestedSkills] = useState<string[]>([]);
+  const [lastParseAssessment, setLastParseAssessment] = useState<string | null>(null);
+  const [onboardingYears, setOnboardingYears] = useState("");
 
   const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
   const isResumeFile = (f: File) => {
@@ -84,7 +75,7 @@ function OnboardingContent() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (skills: string[]) => updateProfile({ skills }),
+    mutationFn: (payload: { skills: string[]; yearsOfExperience?: number | null }) => updateProfile(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       router.replace(redirectTo);
@@ -95,11 +86,14 @@ function OnboardingContent() {
     mutationFn: (input: string | File) =>
       typeof input === "string" ? parseResume(input) : parseResumeFile(input),
     onSuccess: (data) => {
-      const newSkills = data?.skills ?? [];
-      setMySkills((prev) => dedupeSkills([...prev, ...newSkills]));
       setResumeText("");
       setSelectedFile(null);
       setFileError(null);
+      setLastParseAssessment(data?.resumeAssessment ?? null);
+      setLastParseSuggestedSkills(
+        dedupeSkills([...(data?.skills ?? []), ...(data?.suggestedSkills ?? [])])
+      );
+      if (data?.yearsOfExperience != null) setOnboardingYears(String(data.yearsOfExperience));
     },
   });
 
@@ -127,8 +121,13 @@ function OnboardingContent() {
   const handleContinue = useCallback(() => {
     const skills = dedupeSkills(mySkills);
     if (skills.length === 0) return;
-    updateMutation.mutate(skills);
-  }, [mySkills, updateMutation]);
+    const rawYears = onboardingYears.trim();
+    const yearsOfExperience: number | null =
+      rawYears === ""
+        ? null
+        : Math.min(YEARS_OF_EXPERIENCE_MAX, Math.max(0, parseInt(rawYears, 10) || 0));
+    updateMutation.mutate({ skills, yearsOfExperience });
+  }, [mySkills, onboardingYears, updateMutation]);
 
   const handleSkip = useCallback(() => {
     router.replace(redirectTo);
@@ -211,6 +210,22 @@ function OnboardingContent() {
             Add skills manually or from your resume. We use them to show match scores on job listings.
           </p>
 
+          <div className="space-y-2">
+            <Label htmlFor="onboarding-years" className="text-sm">
+              Years of experience (optional)
+            </Label>
+            <Input
+              id="onboarding-years"
+              type="number"
+              min={0}
+              max={YEARS_OF_EXPERIENCE_MAX}
+              placeholder="Optional"
+              value={onboardingYears}
+              onChange={(e) => setOnboardingYears(e.target.value)}
+              className="w-24"
+            />
+          </div>
+
           <div className="flex gap-2 border-b border-border" role="tablist">
             <button
               type="button"
@@ -272,7 +287,7 @@ function OnboardingContent() {
             <div id="onboarding-resume" role="tabpanel" aria-labelledby="tab-resume" className="space-y-4">
               <SkillsEditor
                 idPrefix="onboarding-resume"
-                introText="Upload a PDF or DOCX or paste resume text. We extract skills and add them to your list."
+                introText="Upload a PDF or DOCX or paste resume text. We extract skills from your resume; choose which ones to add below."
                 showRoleBlock={false}
                 roleValue=""
                 onRoleChange={() => {}}
@@ -307,8 +322,13 @@ function OnboardingContent() {
                 }}
                 skills={mySkills}
                 onRemoveSkill={removeFromMySkills}
-                emptySkillsMessage="No skills extracted yet. Upload or paste a resume above."
+                emptySkillsMessage="No skills yet. Parse a resume above, then click skills to add them."
                 yourSkillsHeading="Your skills (from resume + manual)"
+                resumeAssessment={lastParseAssessment}
+                resumeSuggestedSkills={lastParseSuggestedSkills.filter(
+                  (s) => !mySkills.some((sk) => sk.toLowerCase() === s.toLowerCase())
+                )}
+                onAddResumeSuggestedSkill={addToMySkills}
               />
             </div>
           )}
