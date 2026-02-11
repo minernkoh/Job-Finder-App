@@ -74,10 +74,10 @@ export async function generateSummaryWithRetry(
     ? `
 - Your skills are: ${userSkills.join(", ")}.${experienceLine} Compare the job description to these skills and output "jdMatch" with:
   - matchScore: number 0-100 (how well the job matches your skills for this specific role).
-  - matchedSkills: array of skills from your list that are actually required or clearly relevant for this job role.
+  - matchedSkills: array of skills from your list that are actually required or clearly relevant for this job role. When there are no matching skills, output matchedSkills as an empty array [] (do not omit it).
   - missingSkills: array of skills the job requires or prefers that are not in your skills list (or empty if well matched). Include experience-related gaps here when the job requires more years than you have.
 - Consider the job title/role when scoring. Relevance is for this specific role only. Include in matchedSkills only skills from your list that are actually required or clearly relevant for this job role. Do not list one of your skills as matched just because the job description mentions a related word (e.g. do not match "JavaScript" for an Art Director role unless the role explicitly requires development/technical skills).
-- If the job role is clearly unrelated to your skills (e.g. Art Director vs software engineering), set matchScore low (e.g. 0–30), leave matchedSkills empty or minimal, and set missingSkills to the main skills/experience the job actually requires.`
+- If the job role is clearly unrelated to your skills (e.g. Art Director vs software engineering), set matchScore low (e.g. 0–30), set matchedSkills to [], and set missingSkills to the main skills/experience the job actually requires.`
     : "";
   const prompt = `${intro}
 
@@ -196,10 +196,40 @@ function toObjectIdOrThrow(userId: string): mongoose.Types.ObjectId {
   return new mongoose.Types.ObjectId(userId);
 }
 
+/** Returns existing summary for a listing by inputTextHash + userId, or null if not found. Does not create or generate. */
+export async function getSummaryForListing(
+  userId: string,
+  listingId: string,
+): Promise<(AISummary & { id: string }) | null> {
+  const { text } = await resolveInputText({ listingId });
+  const inputTextHash = hashInputText(text);
+  const env = getEnv();
+  const ttlSeconds = env.AI_SUMMARY_CACHE_TTL ?? 604800;
+  const since = new Date(Date.now() - ttlSeconds * 1000);
+
+  await connectDB();
+  const uid = toObjectIdOrThrow(userId);
+  const doc = await AISummaryModel.findOne({
+    inputTextHash,
+    userId: uid,
+    updatedAt: { $gte: since },
+  })
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  if (!doc) return null;
+  return docToSummary(doc as IAISummaryDocument);
+}
+
 /** Returns existing summary by inputTextHash within TTL, or generates and saves a new one. */
 export async function getOrCreateSummary(
   userId: string,
-  input: { text?: string; url?: string; listingId?: string },
+  input: {
+    text?: string;
+    url?: string;
+    listingId?: string;
+    forceRegenerate?: boolean;
+  },
 ): Promise<AISummary & { id: string }> {
   const { text, fromAdzunaPage, jobTitle, company } =
     await resolveInputText(input);
@@ -210,16 +240,19 @@ export async function getOrCreateSummary(
 
   await connectDB();
   const uid = toObjectIdOrThrow(userId);
-  const existing = await AISummaryModel.findOne({
-    inputTextHash,
-    userId: uid,
-    updatedAt: { $gte: since },
-  })
-    .sort({ updatedAt: -1 })
-    .lean();
 
-  if (existing) {
-    return docToSummary(existing as IAISummaryDocument);
+  if (input.forceRegenerate !== true) {
+    const existing = await AISummaryModel.findOne({
+      inputTextHash,
+      userId: uid,
+      updatedAt: { $gte: since },
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    if (existing) {
+      return docToSummary(existing as IAISummaryDocument);
+    }
   }
 
   const profile = await getProfileByUserId(userId);

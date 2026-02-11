@@ -26,7 +26,7 @@ export function TrendingListings({
   const { user } = useAuth();
   const { data: listings = [], isLoading } = useQuery({
     queryKey: trendingKeys.all,
-    queryFn: () => fetchTrending(5, 24),
+    queryFn: () => fetchTrending(5, 168), // last 7 days
     staleTime: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
   const { savedIds, saveMutation, unsaveMutation } = useSavedListings();

@@ -53,34 +53,40 @@ export function ListingCarousel({
       aria-label={ariaLabel ?? undefined}
     >
       <h2 className="eyebrow mb-3">{title}</h2>
-      <div className="scrollbar-hide flex min-w-0 w-full min-h-[12rem] gap-3 overflow-x-auto overflow-y-visible px-4 pt-3 pb-4">
-        {listings.map((listing, index) => (
-          <motion.div
-            key={listing.id}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{
-              ...EASE_TRANSITION,
-              ...staggerDelay(index),
-            }}
-            className="min-w-[280px] max-w-[320px] flex-1 shrink-0"
-          >
-            <ListingCard
-              listing={listing}
-              href={hrefForListing?.(listing)}
-              showTrendingBadge={showTrendingBadge}
-              onView={() => recordListingView(listing.id)}
-              onSave={onSave ? () => onSave(listing) : undefined}
-              onUnsave={onUnsave ? () => onUnsave(listing.id) : undefined}
-              isSaved={savedIds.has(listing.id)}
-              onAddToCompare={onAddToCompare?.(listing)}
-              isInCompareSet={isInCompareSet(listing.id)}
-              compareSetSize={compareSetSize}
-              userRole={userRole}
-              onDeleteListing={onDeleteListing}
-            />
-          </motion.div>
-        ))}
+      {/* Breakout wrapper: full viewport width so first/last cards are not cropped by padded main content. */}
+      <div className="relative left-1/2 w-screen -translate-x-1/2">
+        {/* Left padding matches main content left edge so the first card aligns with the section title. */}
+        <div className="scrollbar-hide min-w-0 w-full min-h-[12rem] overflow-x-scroll overflow-y-hidden pl-[max(1rem,calc(1rem+(100vw-2rem-72rem)/2))] sm:pl-[max(1.5rem,calc(1.5rem+(100vw-3rem-72rem)/2))] pr-6 pt-3 pb-4 [scroll-padding-inline:1rem]">
+          <div className="flex gap-3 shrink-0 w-max">
+            {listings.map((listing, index) => (
+              <motion.div
+                key={listing.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{
+                  ...EASE_TRANSITION,
+                  ...staggerDelay(index),
+                }}
+                className="min-w-[17.5rem] max-w-[20rem] shrink-0"
+              >
+                <ListingCard
+                  listing={listing}
+                  href={hrefForListing?.(listing)}
+                  showTrendingBadge={showTrendingBadge}
+                  onView={() => recordListingView(listing.id)}
+                  onSave={onSave ? () => onSave(listing) : undefined}
+                  onUnsave={onUnsave ? () => onUnsave(listing.id) : undefined}
+                  isSaved={savedIds.has(listing.id)}
+                  onAddToCompare={onAddToCompare?.(listing)}
+                  isInCompareSet={isInCompareSet(listing.id)}
+                  compareSetSize={compareSetSize}
+                  userRole={userRole}
+                  onDeleteListing={onDeleteListing}
+                />
+              </motion.div>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -94,6 +94,7 @@ function Button({
   iconRight,
   children,
   disabled,
+  type,
   ...props
 }: ButtonProps) {
   const Comp = asChild ? Slot : "button";
@@ -105,6 +106,7 @@ function Button({
       data-slot="button"
       data-variant={variant}
       data-size={size}
+      type={asChild ? undefined : (type ?? "button")}
       className={cn(
         hasIconRight && "group",
         buttonVariants({ variant, size, className })

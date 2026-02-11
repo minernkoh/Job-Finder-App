@@ -1,9 +1,11 @@
 /**
  * Page shell: consistent layout with title, optional header action, and children.
- * Used by admin pages and user-facing pages (settings, summarize, compare, onboarding).
+ * Used by admin pages and user-facing pages (settings, summarize, compare).
  */
 
 "use client";
+
+import { GAP_LG } from "@/lib/layout";
 
 interface PageShellProps {
   title: string;
@@ -19,7 +21,7 @@ export function PageShell({
   headerAction,
 }: PageShellProps) {
   return (
-    <div className="space-y-6">
+    <div className={GAP_LG}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
         {headerAction}

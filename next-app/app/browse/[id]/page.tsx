@@ -64,7 +64,6 @@ function BrowseJobPageContent() {
           <JobDetailPanel
             listingId={id}
             basePath="/browse"
-            backToListingsHref="/browse"
             onAddToCompare={
               isInCompareSet(id)
                 ? () => removeFromCompare(id)

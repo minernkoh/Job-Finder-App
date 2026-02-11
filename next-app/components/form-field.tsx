@@ -5,6 +5,7 @@
 "use client";
 
 import { Label } from "@ui/components";
+import { InlineError } from "@/components/page-state";
 
 interface FormFieldProps {
   id: string;
@@ -29,11 +30,7 @@ export function FormField({
         {required && !String(label).endsWith(" *") ? " *" : null}
       </Label>
       {children}
-      {error != null && error !== "" && (
-        <p className="text-destructive text-sm" role="alert">
-          {error}
-        </p>
-      )}
+      {error != null && error !== "" && <InlineError message={error} />}
     </div>
   );
 }

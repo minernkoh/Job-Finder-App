@@ -4,24 +4,17 @@
 
 import { XIcon } from "@phosphor-icons/react";
 import { Card, CardContent } from "@ui/components";
+import { CARD_PADDING_AUTH } from "@/lib/layout";
+import { EYEBROW_CLASS } from "@/lib/styles";
 
 /** Same close button style as auth modal for consistency. */
 export const authCloseButtonClass =
   "rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors";
 
-/** Shared width for auth modal and auth card: full width on small screens, fixed min on sm+ to avoid content-hugging. */
-export const authModalWidthClass =
-  "w-full min-w-0 sm:min-w-[42rem] max-w-2xl";
-
-/** Narrower width for the auth modal only (overlay); auth card pages keep authModalWidthClass. */
-export const authModalNarrowWidthClass =
-  "w-full min-w-0 sm:min-w-[24rem] max-w-md";
-
-/** Shared min height for auth modal and auth card content so all auth modals/cards are the same size. */
-export const authModalMinHeightClass = "min-h-[22rem]";
-
-/** Fixed-ish height for modal content so login and signup appear identical. */
-export const authModalHeightClass = "min-h-[28rem]";
+/** Narrow width for auth modal card; matches AuthCard layout. */
+export const authModalNarrowWidthClass = "w-full max-w-lg";
+/** Min height for auth modal content; matches AuthCard CardContent. */
+export const authModalHeightClass = "min-h-[22rem]";
 
 interface AuthCardProps {
   title: string;
@@ -35,8 +28,6 @@ interface AuthCardProps {
   hideTitle?: boolean;
   /** Optional close button (same look as auth modal); e.g. navigate back. */
   onClose?: () => void;
-  /** When true, use narrower width and less top space (e.g. for admin auth). */
-  compact?: boolean;
 }
 
 /** Renders a centered card with title and optional footer; used by login, register, and admin auth pages. */
@@ -48,18 +39,13 @@ export function AuthCard({
   backLink,
   hideTitle = false,
   onClose,
-  compact = false,
 }: AuthCardProps) {
-  const widthClass = compact ? authModalNarrowWidthClass : authModalWidthClass;
-  const layoutClass = compact
-    ? "flex min-h-screen flex-col items-center justify-start pt-6 gap-4 bg-background p-4"
-    : "flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-4";
   return (
-    <div className={layoutClass}>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-4">
       {backLink != null && backLink}
-      <Card variant="elevated" className={`${widthClass} overflow-hidden`}>
+      <Card variant="elevated" className="w-full max-w-lg overflow-hidden">
         {onClose != null && (
-          <div className="flex min-h-[3rem] items-center justify-end pr-2 py-2">
+          <div className="flex min-h-[3rem] items-center justify-end border-b border-border pr-2 py-2">
             <button
               type="button"
               onClick={onClose}
@@ -70,12 +56,10 @@ export function AuthCard({
             </button>
           </div>
         )}
-        <CardContent
-          className={`${compact ? authModalMinHeightClass : authModalHeightClass} space-y-6 p-10`}
-        >
+        <CardContent className={`min-h-[22rem] space-y-6 ${CARD_PADDING_AUTH}`}>
           {!hideTitle && (
             <div className="space-y-1 text-center">
-              {eyebrow != null && <p className="eyebrow">{eyebrow}</p>}
+              {eyebrow != null && <p className={EYEBROW_CLASS}>{eyebrow}</p>}
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                 {title}
               </h1>

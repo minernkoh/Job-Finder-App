@@ -21,6 +21,18 @@ export function getErrorMessage(err: unknown, fallback: string): string {
 }
 
 /**
+ * Asserts that an API response has success: true and defined data. Throws with response.message or fallbackError otherwise.
+ */
+export function assertApiSuccess<T>(
+  response: { success: boolean; data?: T; message?: string },
+  fallbackError: string
+): asserts response is { success: true; data: T } {
+  if (!response.success || response.data === undefined) {
+    throw new Error(response.message ?? fallbackError);
+  }
+}
+
+/**
  * Builds a JSON error response from a caught error. Uses err.message if err is an Error, otherwise defaultMessage. Default status is 500.
  */
 export function toErrorResponse(

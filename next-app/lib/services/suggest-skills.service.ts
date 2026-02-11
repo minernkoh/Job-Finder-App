@@ -1,5 +1,5 @@
 /**
- * Suggest-skills service: use Gemini to suggest skills for a given job role. Used by onboarding and profile.
+ * Suggest-skills service: use Gemini to suggest skills for a given job role. Used by profile.
  */
 
 import { generateObject } from "ai";

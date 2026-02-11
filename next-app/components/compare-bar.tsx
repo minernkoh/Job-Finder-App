@@ -8,8 +8,9 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowsLeftRightIcon, XIcon } from "@phosphor-icons/react";
 import { Button, Card } from "@ui/components";
+import { cn } from "@ui/components/lib/utils";
 import { useCompare } from "@/contexts/CompareContext";
-import { CONTENT_MAX_W, PAGE_PX } from "@/lib/layout";
+import { COMPARE_BAR_MB, CONTENT_MAX_W, PAGE_PX } from "@/lib/layout";
 import { EASE_TRANSITION } from "@/lib/animations";
 
 interface CompareBarProps {
@@ -34,7 +35,7 @@ export function CompareBar({ fullWidth }: CompareBarProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -12 }}
       transition={EASE_TRANSITION}
-      className={`sticky top-0 z-40 py-2 mb-6 ${PAGE_PX}`}
+      className={cn("sticky top-0 z-40 py-2", COMPARE_BAR_MB, PAGE_PX)}
     >
       <Card
         variant="default"
@@ -44,7 +45,7 @@ export function CompareBar({ fullWidth }: CompareBarProps) {
             : `mx-auto w-full border-border ${CONTENT_MAX_W}`
         }
       >
-        <div className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-4">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-2">
           <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
             <div className="flex items-center gap-2 text-sm text-foreground">
               <ArrowsLeftRightIcon size={18} className="text-primary" />

@@ -3,7 +3,8 @@
  */
 
 import { apiClient } from "./client";
-import { getErrorMessage } from "./errors";
+import { assertApiSuccess, getErrorMessage } from "./errors";
+import type { ApiResponse } from "./types";
 
 export interface UserUpdateBody {
   email?: string;
@@ -26,13 +27,11 @@ export async function updateUser(
   body: UserUpdateBody
 ): Promise<UserResponse> {
   try {
-    const res = await apiClient.patch<{
-      success: boolean;
-      data?: UserResponse;
-      message?: string;
-    }>(`/api/v1/users/${userId}`, body);
-    if (!res.data.success || !res.data.data)
-      throw new Error(res.data.message ?? "Failed to update user");
+    const res = await apiClient.patch<ApiResponse<UserResponse>>(
+      `/api/v1/users/${userId}`,
+      body
+    );
+    assertApiSuccess(res.data, "Failed to update user");
     return res.data.data;
   } catch (err: unknown) {
     throw new Error(getErrorMessage(err, "Failed to update user"));
@@ -45,7 +44,8 @@ export async function deleteOwnAccount(userId: string): Promise<void> {
     const res = await apiClient.delete<{ success: boolean; message?: string }>(
       `/api/v1/users/${userId}`
     );
-    if (!res.data.success) throw new Error(res.data.message ?? "Failed to delete account");
+    if (!res.data.success)
+      throw new Error(res.data.message ?? "Failed to delete account");
   } catch (err: unknown) {
     throw new Error(getErrorMessage(err, "Failed to delete account"));
   }

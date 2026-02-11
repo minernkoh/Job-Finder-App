@@ -8,6 +8,8 @@ import { useState } from "react";
 import type { AISummary } from "@schemas";
 import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
+import { CARD_PADDING_DEFAULT } from "@/lib/layout";
+import { EYEBROW_MB } from "@/lib/styles";
 
 /** Summary shape for display: at least tldr; other fields optional so compare column can pass partial data. */
 export type AISummaryCardSummary = Pick<AISummary, "tldr"> &
@@ -55,7 +57,7 @@ export function AISummaryCard({
       <p className="text-foreground">{summary.tldr}</p>
       {responsibilitiesShown.length > 0 && (
         <div>
-          <h3 className={cn("eyebrow", "mb-1")}>Key responsibilities</h3>
+          <h3 className={cn("eyebrow", EYEBROW_MB)}>Key responsibilities</h3>
           <ul className={listClass}>
             {responsibilitiesShown.map((r, i) => (
               <li key={i}>{r}</li>
@@ -76,7 +78,7 @@ export function AISummaryCard({
       )}
       {requirementsShown.length > 0 && (
         <div>
-          <h3 className={cn("eyebrow", "mb-1")}>Requirements</h3>
+          <h3 className={cn("eyebrow", EYEBROW_MB)}>Requirements</h3>
           <ul className={listClass}>
             {requirementsShown.map((r, i) => (
               <li key={i}>{r}</li>
@@ -102,23 +104,22 @@ export function AISummaryCard({
         </p>
       )}
       {summary.jdMatch && (
-        <div className="space-y-1">
+        <div className="rounded-lg bg-primary/10 p-3 text-foreground">
           <p className="text-foreground">
-            <span className="eyebrow">Match to your skills: </span>
+            <span className="eyebrow font-bold">Match to your skills: </span>
             {typeof summary.jdMatch.matchScore === "number" && (
               <span className="font-medium">{summary.jdMatch.matchScore}%</span>
             )}
           </p>
-          {summary.jdMatch.matchedSkills &&
-            summary.jdMatch.matchedSkills.length > 0 && (
-              <p className="text-foreground text-xs">
-                <span className="eyebrow">Matched: </span>
-                {summary.jdMatch.matchedSkills.join(", ")}
-              </p>
-            )}
+          <p className="mt-1 text-xs text-foreground">
+            <span className="eyebrow">Matched: </span>
+            {summary.jdMatch.matchedSkills && summary.jdMatch.matchedSkills.length > 0
+              ? summary.jdMatch.matchedSkills.join(", ")
+              : "None"}
+          </p>
           {summary.jdMatch.missingSkills &&
             summary.jdMatch.missingSkills.length > 0 && (
-              <p className="text-muted-foreground text-xs">
+              <p className="mt-0.5 text-muted-foreground text-xs">
                 <span className="eyebrow">Missing: </span>
                 {summary.jdMatch.missingSkills.join(", ")}
               </p>
@@ -138,8 +139,11 @@ export function AISummaryCard({
     return content;
   }
   return (
-    <Card variant="elevated" className="text-sm">
-      <CardContent className="p-4 space-y-4">{content}</CardContent>
+    <Card
+      variant="elevated"
+      className="text-sm shadow-[0_0_20px_rgba(90,70,200,0.15)]"
+    >
+      <CardContent className={cn(CARD_PADDING_DEFAULT, "space-y-4 sm:space-y-5")}>{content}</CardContent>
     </Card>
   );
 }

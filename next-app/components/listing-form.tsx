@@ -109,7 +109,7 @@ export function ListingForm({
           {submitting ? (mode === "create" ? "Creating…" : "Saving…") : submitLabel}
         </Button>
         {onCancel != null && (
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          <Button type="button" variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
         )}

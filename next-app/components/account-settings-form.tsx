@@ -7,6 +7,10 @@
 import { toast } from "sonner";
 import { useState, useCallback } from "react";
 import { updateUser } from "@/lib/api/users";
+import {
+  validatePassword,
+  validateUsername,
+} from "@/lib/validation";
 import { useMutation } from "@tanstack/react-query";
 import { Button, Card, CardContent, Input, Label } from "@ui/components";
 import type { AuthUser } from "@/contexts/AuthContext";
@@ -54,15 +58,26 @@ function AccountSettingsFormInner({
 
   const handleSave = useCallback(() => {
     const email = accountEmail.trim();
-    const usernameTrimmed = accountUsername.trim();
     if (!email) return;
-    if (usernameTrimmed.length < 3) return;
+    const usernameResult = validateUsername(accountUsername);
+    if (!usernameResult.valid) {
+      toast.error(usernameResult.error ?? "Invalid username");
+      return;
+    }
     const payload: { email?: string; username?: string; password?: string } = {
       email,
-      username: usernameTrimmed,
+      username: accountUsername.trim(),
     };
     if (newPassword || confirmPassword) {
-      if (newPassword.length < 8 || newPassword !== confirmPassword) return;
+      const passwordResult = validatePassword(newPassword);
+      if (!passwordResult.valid) {
+        toast.error(passwordResult.error ?? "Invalid password");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        toast.error("Passwords do not match");
+        return;
+      }
       payload.password = newPassword;
     }
     accountMutation.mutate(payload);

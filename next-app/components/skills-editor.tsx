@@ -1,5 +1,5 @@
 /**
- * Shared skills editor: role + suggest, custom skill, optional resume upload/paste, and skills list. Used by Profile and Onboarding to keep behavior and layout in sync.
+ * Shared skills editor: role + suggest, custom skill, optional resume upload/paste, and skills list. Used by Profile to edit skills.
  */
 
 "use client";
@@ -13,6 +13,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { cn } from "@ui/components/lib/utils";
+import { CARD_PADDING_COMPACT } from "@/lib/layout";
 
 export interface SkillsEditorResumeProps {
   selectedFile: File | null;
@@ -33,7 +34,7 @@ export interface SkillsEditorResumeProps {
 }
 
 export interface SkillsEditorProps {
-  /** Prefix for input ids (e.g. "profile", "onboarding"). */
+  /** Prefix for input ids (e.g. "profile"). */
   idPrefix: string;
   /** Optional intro paragraph. */
   introText?: string;
@@ -48,7 +49,7 @@ export interface SkillsEditorProps {
   customSkill: string;
   onCustomSkillChange: (v: string) => void;
   onAddCustom: () => void;
-  /** Show "Or add a skill manually" block (e.g. hide on onboarding resume tab). */
+  /** Show "Or add a skill manually" block (e.g. hide on resume-only tab). */
   showCustomBlock?: boolean;
   /** Show resume upload + paste + parse block. */
   showResumeBlock: boolean;
@@ -72,6 +73,14 @@ export interface SkillsEditorProps {
   resumeSuggestedSkills?: string[];
   /** Called when user adds a suggested skill from resume parse. */
   onAddResumeSuggestedSkill?: (skill: string) => void;
+  /** Optional years of experience value (controlled). */
+  yearsValue?: string;
+  /** Called when years input changes. */
+  onYearsChange?: (v: string) => void;
+  /** Optional label (default: "Years of experience"). */
+  yearsLabel?: string;
+  /** Optional id for the input (default: `${idPrefix}-years`). */
+  yearsInputId?: string;
 }
 
 /** Renders role input, suggest pills, custom skill, optional resume block, and skills list with optional save. */
@@ -104,43 +113,65 @@ export function SkillsEditor({
   resumeAssessment,
   resumeSuggestedSkills = [],
   onAddResumeSuggestedSkill,
+  yearsValue,
+  onYearsChange,
+  yearsLabel,
+  yearsInputId,
 }: SkillsEditorProps) {
   const fileInputId = `${idPrefix}-resume-file`;
+  const yearsId = yearsInputId ?? `${idPrefix}-years`;
 
   return (
     <Card variant="default" className="border-border">
-      <CardContent className="p-4 space-y-3">
+      <CardContent className={cn(CARD_PADDING_COMPACT, "space-y-3")}>
         {introText && (
           <p className="text-sm text-muted-foreground">{introText}</p>
         )}
-        {showRoleBlock && (
+        {showRoleBlock && yearsValue !== undefined && onYearsChange && (
           <>
-            <div className="space-y-2">
-              <Label htmlFor={`${idPrefix}-role`} className="text-sm">
-                Current Role
-              </Label>
-              <div className="flex gap-2 items-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor={`${idPrefix}-role`} className="text-sm">
+                  Current Role
+                </Label>
                 <Input
                   id={`${idPrefix}-role`}
                   type="text"
                   placeholder="e.g. Software Engineer"
                   value={roleValue}
                   onChange={(e) => onRoleChange(e.target.value)}
-                  className="flex-1 h-9"
+                  className="w-full h-9 min-w-0"
                   aria-label="Current role"
                 />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="default"
-                  className="h-9 min-w-0 px-4"
-                  disabled={!roleValue.trim() || suggestPending}
-                  onClick={onSuggest}
-                  aria-label="Suggest skills"
-                >
-                  <SparkleIcon className="mr-1.5 size-4" aria-hidden />
-                  {suggestPending ? "Suggesting…" : "Suggest skills"}
-                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={yearsId} className="text-sm">
+                  {yearsLabel ?? "Years of experience"}
+                </Label>
+                <div className="flex gap-2 items-center">
+                  <Input
+                    id={yearsId}
+                    type="number"
+                    min={0}
+                    max={70}
+                    placeholder="Optional"
+                    value={yearsValue}
+                    onChange={(e) => onYearsChange(e.target.value)}
+                    className="w-24 h-9 shrink-0"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="default"
+                    className="h-9 min-w-0 px-4 shrink-0"
+                    disabled={!roleValue.trim() || suggestPending}
+                    onClick={onSuggest}
+                    aria-label="Suggest skills"
+                  >
+                    <SparkleIcon className="mr-1.5 size-4" aria-hidden />
+                    {suggestPending ? "Suggesting…" : "Suggest skills"}
+                  </Button>
+                </div>
               </div>
             </div>
             {suggestedSkills.length > 0 && (
@@ -161,6 +192,72 @@ export function SkillsEditor({
               </div>
             )}
           </>
+        )}
+        {showRoleBlock && (yearsValue === undefined || !onYearsChange) && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor={`${idPrefix}-role`} className="text-sm">
+                Current Role
+              </Label>
+              <Input
+                id={`${idPrefix}-role`}
+                type="text"
+                placeholder="e.g. Software Engineer"
+                value={roleValue}
+                onChange={(e) => onRoleChange(e.target.value)}
+                className="w-full h-9 min-w-0"
+                aria-label="Current role"
+              />
+            </div>
+            <div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="default"
+                className="h-9 min-w-0 px-4"
+                disabled={!roleValue.trim() || suggestPending}
+                onClick={onSuggest}
+                aria-label="Suggest skills"
+              >
+                <SparkleIcon className="mr-1.5 size-4" aria-hidden />
+                {suggestPending ? "Suggesting…" : "Suggest skills"}
+              </Button>
+            </div>
+            {suggestedSkills.length > 0 && (
+              <div className="space-y-1">
+                <p className="eyebrow">Suggested skills — click to add</p>
+                <div className="flex flex-wrap gap-2">
+                  {suggestedSkills.map((skill) => (
+                    <button
+                      key={skill}
+                      type="button"
+                      onClick={() => onAddSuggestedSkill(skill)}
+                      className="rounded-full px-3 py-1 text-sm bg-muted border border-border hover:bg-muted/80 text-foreground"
+                    >
+                      {skill}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        {!showRoleBlock && yearsValue !== undefined && onYearsChange && (
+          <div className="space-y-2">
+            <Label htmlFor={yearsId} className="text-sm">
+              {yearsLabel ?? "Years of experience"}
+            </Label>
+            <Input
+              id={yearsId}
+              type="number"
+              min={0}
+              max={70}
+              placeholder="Optional"
+              value={yearsValue}
+              onChange={(e) => onYearsChange(e.target.value)}
+              className="w-24"
+            />
+          </div>
         )}
         {showCustomBlock && (
           <div className="space-y-2">
@@ -313,9 +410,7 @@ export function SkillsEditor({
         )}
         {resumeSuggestedSkills.length > 0 && onAddResumeSuggestedSkill && (
           <div className="space-y-1 pt-2 border-t border-border">
-            <p className="eyebrow">
-              Skills from resume — click to add
-            </p>
+            <p className="eyebrow">Skills from resume — click to add</p>
             <div className="flex flex-wrap gap-2">
               {resumeSuggestedSkills.map((skill) => (
                 <button

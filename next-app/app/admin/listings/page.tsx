@@ -4,8 +4,9 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react";
 import { apiClient } from "@/lib/api/client";
 import {
@@ -17,6 +18,12 @@ import {
 import { PageShell } from "@/components/page-shell";
 import { InlineError, InlineLoading } from "@/components/page-state";
 import { TablePagination } from "@/components/table-pagination";
+import {
+  AdminTable,
+  adminTableBodyCellActionsClass,
+  adminTableBodyCellClass,
+  adminTableBodyRowClass,
+} from "@/components/admin-table";
 import type { ListingCreate, ListingResult, ListingUpdate } from "@schemas";
 import {
   Button,
@@ -24,8 +31,14 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "@ui/components";
 import { ListingForm } from "@/components/listing-form";
+import { adminListingsKeys } from "@/lib/query-keys";
 
 interface ListingRow {
   id: string;
@@ -54,15 +67,41 @@ const defaultCreateForm: ListingCreate = {
   sourceUrl: "",
 };
 
+/** Builds pathname + search string without the edit param (for closing edit modal). */
+function stripEditParam(pathname: string, searchParams: URLSearchParams): string {
+  const next = new URLSearchParams(searchParams);
+  next.delete("edit");
+  const q = next.toString();
+  return q ? `${pathname}?${q}` : pathname;
+}
+
 export default function AdminListingsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const editParam = searchParams?.get("edit") ?? null;
 
-  const [data, setData] = useState<ListResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const limit = 20;
+  const queryClient = useQueryClient();
+
+  const {
+    data,
+    isLoading: loading,
+    error: fetchError,
+    refetch: refetchListings,
+  } = useQuery({
+    queryKey: adminListingsKeys(page, limit),
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      const res = await apiClient.get<{ success: boolean; data: ListResponse }>(
+        `/api/v1/admin/listings?${params.toString()}`
+      );
+      if (!res.data.success || !res.data.data) throw new Error("Failed to load listings");
+      return res.data.data;
+    },
+  });
+  const error = fetchError instanceof Error ? fetchError.message : null;
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] =
@@ -79,30 +118,14 @@ export default function AdminListingsPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  const fetchListings = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set("page", String(page));
-      params.set("limit", String(limit));
-      const res = await apiClient.get<{ success: boolean; data: ListResponse }>(
-        `/api/v1/admin/listings?${params.toString()}`,
-      );
-      if (res.data.success && res.data.data) setData(res.data.data);
-      else setError("Failed to load listings");
-    } catch {
-      setError("Request failed");
-    } finally {
-      setLoading(false);
+  /** When true, the next editParam/editId sync effect run should skip (used after successful save so modal stays closed). */
+  const skipNextEditParamSync = useRef(false);
+
+  useEffect(() => {
+    if (skipNextEditParamSync.current) {
+      skipNextEditParamSync.current = false;
+      return;
     }
-  }, [page]);
-
-  useEffect(() => {
-    fetchListings();
-  }, [fetchListings]);
-
-  useEffect(() => {
     if (editParam && !editId) setEditId(editParam);
   }, [editParam, editId]);
 
@@ -155,7 +178,7 @@ export default function AdminListingsPage() {
       });
       setCreateForm(defaultCreateForm);
       setCreateOpen(false);
-      await fetchListings();
+      await queryClient.invalidateQueries({ queryKey: ["admin", "listings"] });
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Failed to create");
     } finally {
@@ -178,8 +201,10 @@ export default function AdminListingsPage() {
         country: editForm.country || undefined,
         sourceUrl: editForm.sourceUrl?.trim() || undefined,
       });
+      clearEditParam();
+      skipNextEditParamSync.current = true;
       setEditId(null);
-      await fetchListings();
+      await queryClient.invalidateQueries({ queryKey: ["admin", "listings"] });
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to update");
     } finally {
@@ -187,12 +212,26 @@ export default function AdminListingsPage() {
     }
   };
 
+  const clearEditParam = useCallback(() => {
+    router.replace(stripEditParam(pathname ?? "/admin/listings", searchParams ?? new URLSearchParams()));
+  }, [pathname, router, searchParams]);
+
+  const handleEditOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        setEditId(null);
+        clearEditParam();
+      }
+    },
+    [clearEditParam]
+  );
+
   const handleDeleteConfirm = async (id: string) => {
     setDeleteSubmitting(true);
     try {
       await deleteListingApi(id);
       setDeleteConfirmId(null);
-      await fetchListings();
+      await queryClient.invalidateQueries({ queryKey: ["admin", "listings"] });
     } finally {
       setDeleteSubmitting(false);
     }
@@ -205,45 +244,44 @@ export default function AdminListingsPage() {
         <Button
           variant="default"
           size="sm"
-          onClick={() => setCreateOpen((o) => !o)}
+          onClick={() => setCreateOpen(true)}
           iconRight={<PlusIcon size={18} weight="bold" />}
         >
-          {createOpen ? "Cancel" : "Create Listing"}
+          Create Listing
         </Button>
       }
     >
-      {createOpen && (
-        <Card className="border-border">
-          <CardHeader>
-            <CardTitle>New listing</CardTitle>
-            <p className="text-muted-foreground text-sm">
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New listing</DialogTitle>
+            <DialogDescription>
               Add a manual job listing. Required: title and company.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <ListingForm
-              mode="create"
-              value={createForm}
-              onChange={(patch) => setCreateForm((f) => ({ ...f, ...patch }))}
-              onSubmit={handleCreateSubmit}
-              submitLabel="Create"
-              submitting={createSubmitting}
-              error={createError}
-              idPrefix="create-"
-            />
-          </CardContent>
-        </Card>
-      )}
+            </DialogDescription>
+          </DialogHeader>
+          <ListingForm
+            mode="create"
+            value={createForm}
+            onChange={(patch) => setCreateForm((f) => ({ ...f, ...patch }))}
+            onSubmit={handleCreateSubmit}
+            onCancel={() => setCreateOpen(false)}
+            submitLabel="Create"
+            submitting={createSubmitting}
+            error={createError}
+            idPrefix="create-"
+          />
+        </DialogContent>
+      </Dialog>
 
-      {editId && editListing && (
-        <Card className="border-border">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Edit listing</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setEditId(null)}>
-              Close
-            </Button>
-          </CardHeader>
-          <CardContent>
+      <Dialog open={!!editId} onOpenChange={handleEditOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit listing</DialogTitle>
+            <DialogDescription>
+              Update the job listing details below.
+            </DialogDescription>
+          </DialogHeader>
+          {editListing && (
             <ListingForm
               mode="edit"
               value={{
@@ -256,15 +294,19 @@ export default function AdminListingsPage() {
               }}
               onChange={(patch) => setEditForm((f) => ({ ...f, ...patch }))}
               onSubmit={handleEditSubmit}
-              onCancel={() => setEditId(null)}
+              onCancel={() => handleEditOpenChange(false)}
               submitLabel="Save"
               submitting={editSubmitting}
               error={editError}
               idPrefix="edit-"
             />
-          </CardContent>
-        </Card>
-      )}
+          )}
+          {editId && !editListing && editError && (
+            <InlineError message={editError} />
+          )}
+          {editId && !editListing && !editError && <InlineLoading />}
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
@@ -278,99 +320,87 @@ export default function AdminListingsPage() {
           {loading && !data && <InlineLoading />}
           {data && (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="pb-2 pr-2 font-medium text-muted-foreground">
-                        Title
-                      </th>
-                      <th className="pb-2 pr-2 font-medium text-muted-foreground">
-                        Company
-                      </th>
-                      <th className="pb-2 pr-2 font-medium text-muted-foreground">
-                        Location
-                      </th>
-                      <th className="pb-2 pr-2 font-medium text-muted-foreground">
-                        Country
-                      </th>
-                      <th className="pb-2 pr-2 font-medium text-muted-foreground">
-                        Expires
-                      </th>
-                      <th className="pb-2 pr-2 font-medium text-muted-foreground">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.listings.map((l) => (
-                      <tr key={l.id} className="border-b border-border/50">
-                        <td
-                          className="max-w-xs truncate py-2 pr-2 text-foreground"
-                          title={l.title}
-                        >
-                          {l.title}
-                        </td>
-                        <td className="py-2 pr-2 text-foreground">
-                          {l.company}
-                        </td>
-                        <td className="py-2 pr-2 text-muted-foreground">
-                          {l.location ?? "—"}
-                        </td>
-                        <td className="py-2 pr-2 text-foreground">
-                          {l.country}
-                        </td>
-                        <td className="py-2 pr-2 text-muted-foreground text-xs">
-                          {new Date(l.expiresAt).toLocaleDateString()}
-                        </td>
-                        <td className="py-2 pr-2">
-                          <div className="flex items-center gap-1">
+              <AdminTable
+                headers={[
+                  "Title",
+                  "Company",
+                  "Location",
+                  "Country",
+                  "Expires",
+                  "Actions",
+                ]}
+              >
+                {data.listings.map((l) => (
+                  <tr key={l.id} className={adminTableBodyRowClass}>
+                    <td
+                      className={`max-w-xs truncate ${adminTableBodyCellClass}`}
+                      title={l.title}
+                    >
+                      {l.title}
+                    </td>
+                    <td className={adminTableBodyCellClass}>{l.company}</td>
+                    <td
+                      className={`${adminTableBodyCellClass} text-muted-foreground`}
+                    >
+                      {l.location ?? "—"}
+                    </td>
+                    <td className={adminTableBodyCellClass}>{l.country}</td>
+                    <td
+                      className={`${adminTableBodyCellClass} text-muted-foreground text-xs`}
+                    >
+                      {new Date(l.expiresAt).toLocaleDateString()}
+                    </td>
+                    <td className={adminTableBodyCellActionsClass}>
+                      <div className="flex items-center justify-end gap-0.5">
                             <Button
                               variant="ghost"
                               size="sm"
                               className="text-muted-foreground"
-                              onClick={() => setEditId(l.id)}
+                              onClick={() => {
+                                setEditId(l.id);
+                                const next = new URLSearchParams(searchParams?.toString() ?? "");
+                                next.set("edit", l.id);
+                                router.replace(`${pathname ?? "/admin/listings"}?${next.toString()}`);
+                              }}
                               title="Edit"
                             >
-                              <PencilSimpleIcon size={16} />
+                          <PencilSimpleIcon className="size-4" weight="regular" />
+                        </Button>
+                        {deleteConfirmId === l.id ? (
+                          <span className="flex items-center gap-1">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              disabled={deleteSubmitting}
+                              onClick={() => handleDeleteConfirm(l.id)}
+                            >
+                              {deleteSubmitting ? "Deleting…" : "Confirm"}
                             </Button>
-                            {deleteConfirmId === l.id ? (
-                              <span className="flex items-center gap-1">
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  disabled={deleteSubmitting}
-                                  onClick={() => handleDeleteConfirm(l.id)}
-                                >
-                                  {deleteSubmitting ? "Deleting…" : "Confirm"}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={deleteSubmitting}
-                                  onClick={() => setDeleteConfirmId(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </span>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => setDeleteConfirmId(l.id)}
-                                title="Delete"
-                              >
-                                <TrashIcon size={16} />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={deleteSubmitting}
+                              onClick={() => setDeleteConfirmId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </span>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleteConfirmId(l.id)}
+                            title="Delete"
+                          >
+                            <TrashIcon className="size-4" weight="regular" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </AdminTable>
               <TablePagination
                 total={data.total}
                 page={data.page}

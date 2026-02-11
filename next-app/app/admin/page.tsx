@@ -412,7 +412,6 @@ function AdminForm() {
   return (
     <AuthCard
       title="Admin Log In"
-      compact
       onClose={() => router.push("/browse")}
       footer={
         <p className="text-center text-sm text-muted-foreground">

@@ -14,11 +14,24 @@ import { AppHeader } from "@/components/app-header";
 import { savedListingToListingResult } from "@/lib/api/saved";
 import { ListingCard } from "@/components/listing-card";
 import { useSavedListings } from "@/hooks/useSavedListings";
-import { fetchProfile, updateProfile, suggestSkills, parseResume, parseResumeFile } from "@/lib/api/profile";
+import {
+  fetchProfile,
+  updateProfile,
+  suggestSkills,
+  parseResume,
+  parseResumeFile,
+} from "@/lib/api/profile";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
+import {
+  CARD_PADDING_COMPACT,
+  CONTENT_MAX_W,
+  EMPTY_STATE_PADDING,
+  GAP_MD,
+  PAGE_PX,
+  SECTION_GAP,
+} from "@/lib/layout";
 import { SkillsEditor } from "@/components/skills-editor";
-import { Button, Card, CardContent, Input, Label } from "@ui/components";
+import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { dedupeSkills } from "@/lib/skills";
 
@@ -28,11 +41,7 @@ const YEARS_OF_EXPERIENCE_MAX = 70;
 function ProfileContent() {
   const { user, logout } = useAuth();
   const { savedListings, isLoadingSaved, unsaveMutation } = useSavedListings();
-  const {
-    compareSet,
-    addToCompare,
-    isInCompareSet,
-  } = useCompare();
+  const { compareSet, addToCompare, isInCompareSet } = useCompare();
   const queryClient = useQueryClient();
   const [currentRole, setCurrentRole] = useState("");
   const [suggestedSkills, setSuggestedSkills] = useState<string[]>([]);
@@ -42,8 +51,12 @@ function ProfileContent() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [lastParseAssessment, setLastParseAssessment] = useState<string | null>(null);
-  const [lastParseSuggestedSkills, setLastParseSuggestedSkills] = useState<string[]>([]);
+  const [lastParseAssessment, setLastParseAssessment] = useState<string | null>(
+    null,
+  );
+  const [lastParseSuggestedSkills, setLastParseSuggestedSkills] = useState<
+    string[]
+  >([]);
   /** Local draft for years of experience; null means use profile value. */
   const [draftYears, setDraftYears] = useState<string | null>(null);
   const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
@@ -53,7 +66,8 @@ function ProfileContent() {
     return (
       f.type === "application/pdf" ||
       name.endsWith(".pdf") ||
-      f.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      f.type ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
       name.endsWith(".docx")
     );
   };
@@ -65,7 +79,11 @@ function ProfileContent() {
   const profileSkills = useMemo(() => profile?.skills ?? [], [profile?.skills]);
   const skills = draftSkills ?? profileSkills;
   const yearsDisplayValue =
-    draftYears !== null ? draftYears : (profile?.yearsOfExperience != null ? String(profile.yearsOfExperience) : "");
+    draftYears !== null
+      ? draftYears
+      : profile?.yearsOfExperience != null
+        ? String(profile.yearsOfExperience)
+        : "";
 
   const updateSkills = useCallback(
     (updater: (prev: string[]) => string[]) => {
@@ -74,7 +92,7 @@ function ProfileContent() {
         return updater(base);
       });
     },
-    [profileSkills]
+    [profileSkills],
   );
 
   const suggestMutation = useMutation({
@@ -85,7 +103,10 @@ function ProfileContent() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { skills: string[]; yearsOfExperience?: number | null }) => updateProfile(payload),
+    mutationFn: (payload: {
+      skills: string[];
+      yearsOfExperience?: number | null;
+    }) => updateProfile(payload),
     onSuccess: () => {
       setDraftYears(null);
       queryClient.invalidateQueries({ queryKey: ["profile"] });
@@ -102,9 +123,13 @@ function ProfileContent() {
       setFileError(null);
       setLastParseAssessment(data?.resumeAssessment ?? null);
       setLastParseSuggestedSkills(
-        dedupeSkills([...(data?.skills ?? []), ...(data?.suggestedSkills ?? [])])
+        dedupeSkills([
+          ...(data?.skills ?? []),
+          ...(data?.suggestedSkills ?? []),
+        ]),
       );
-      if (data?.yearsOfExperience != null) setDraftYears(String(data.yearsOfExperience));
+      if (data?.yearsOfExperience != null)
+        setDraftYears(String(data.yearsOfExperience));
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       toast.success("Resume parsed");
     },
@@ -116,14 +141,14 @@ function ProfileContent() {
       if (!s) return;
       updateSkills((prev) => dedupeSkills([...prev, s]));
     },
-    [updateSkills]
+    [updateSkills],
   );
 
   const removeFromMySkills = useCallback(
     (index: number) => {
       updateSkills((prev) => prev.filter((_, i) => i !== index));
     },
-    [updateSkills]
+    [updateSkills],
   );
 
   const removeAllSkills = useCallback(() => {
@@ -142,7 +167,10 @@ function ProfileContent() {
     const yearsOfExperience: number | null =
       rawYears === ""
         ? null
-        : Math.min(YEARS_OF_EXPERIENCE_MAX, Math.max(0, parseInt(rawYears, 10) || 0));
+        : Math.min(
+            YEARS_OF_EXPERIENCE_MAX,
+            Math.max(0, parseInt(rawYears, 10) || 0),
+          );
     updateMutation.mutate({ skills: nextSkills, yearsOfExperience });
   }, [skills, yearsDisplayValue, updateMutation]);
 
@@ -191,33 +219,31 @@ function ProfileContent() {
     <div className="min-h-screen flex flex-col">
       <AppHeader user={user} onLogout={logout} />
 
-      <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
+      <main
+        id="main-content"
+        className={cn(
+          "mx-auto flex-1 w-full py-8",
+          CONTENT_MAX_W,
+          SECTION_GAP,
+          PAGE_PX,
+        )}
+      >
         <h1 className="sr-only">Profile</h1>
         <div className="min-w-0 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 lg:items-stretch">
-          <section aria-label="Resume and skills" className="space-y-3 min-w-0">
+          <section aria-label="Resume and skills" className={cn("space-y-3 min-w-0")}>
             <h2 className="eyebrow">Resume &amp; skills</h2>
-            <div className="space-y-2">
-              <Label htmlFor="profile-years" className="text-sm">
-                Years of experience
-              </Label>
-              <Input
-                id="profile-years"
-                type="number"
-                min={0}
-                max={YEARS_OF_EXPERIENCE_MAX}
-                placeholder="Optional"
-                value={yearsDisplayValue}
-                onChange={(e) => setDraftYears(e.target.value)}
-                className="w-24"
-              />
-            </div>
             <SkillsEditor
               idPrefix="profile"
               introText="Add skills manually or from your resume for job match and search."
+              yearsValue={yearsDisplayValue}
+              onYearsChange={setDraftYears}
+              yearsLabel="Years of experience"
               showRoleBlock
               roleValue={currentRole}
               onRoleChange={setCurrentRole}
-              onSuggest={() => currentRole.trim() && suggestMutation.mutate(currentRole.trim())}
+              onSuggest={() =>
+                currentRole.trim() && suggestMutation.mutate(currentRole.trim())
+              }
               suggestPending={suggestMutation.isPending}
               suggestedSkills={suggestedSkills}
               onAddSuggestedSkill={addToMySkills}
@@ -237,9 +263,9 @@ function ProfileContent() {
                 onParse: handleParseSubmit,
                 parsePending: parseMutation.isPending,
                 parseError: parseMutation.isError
-                  ? (parseMutation.error instanceof Error
-                      ? parseMutation.error.message
-                      : "Failed to parse resume")
+                  ? parseMutation.error instanceof Error
+                    ? parseMutation.error.message
+                    : "Failed to parse resume"
                   : null,
                 onFileChange: handleFileChange,
                 onDrop: handleDrop,
@@ -261,17 +287,24 @@ function ProfileContent() {
               saveButtonLabel="Save profile"
               resumeAssessment={lastParseAssessment}
               resumeSuggestedSkills={lastParseSuggestedSkills.filter(
-                (s) => !skills.some((sk) => sk.toLowerCase() === s.toLowerCase())
+                (s) =>
+                  !skills.some((sk) => sk.toLowerCase() === s.toLowerCase()),
               )}
               onAddResumeSuggestedSkill={addToMySkills}
             />
           </section>
 
-          <section aria-label="Saved listings" className="space-y-4 min-w-0 flex flex-col min-h-0">
+          <section
+            aria-label="Saved listings"
+            className={cn(GAP_MD, "min-w-0 flex flex-col min-h-0")}
+          >
             <h2 className="eyebrow">Saved listings</h2>
             {isLoadingSaved && (
-              <Card variant="default" className="border-border flex-1 min-h-[26rem]">
-                <CardContent className="p-4">
+              <Card
+                variant="default"
+                className="border-border flex-1 min-h-[26rem]"
+              >
+                <CardContent className={CARD_PADDING_COMPACT}>
                   <div className="flex flex-col gap-4">
                     {[...Array(4)].map((_, i) => (
                       <div
@@ -285,10 +318,14 @@ function ProfileContent() {
             )}
 
             {!isLoadingSaved && savedListings.length === 0 && (
-              <Card variant="default" className="border-border flex-1 min-h-[26rem] flex flex-col">
-                <CardContent className="p-6 pt-8 flex flex-col flex-1 justify-start items-center gap-4">
+              <Card
+                variant="default"
+                className="border-border flex-1 min-h-[26rem] flex flex-col"
+              >
+                <CardContent className={cn(EMPTY_STATE_PADDING, "flex flex-col flex-1 justify-start items-center gap-4")}>
                   <p className="text-muted-foreground text-center mb-0">
-                    You haven&apos;t saved any listings yet. Browse jobs to save your favorites.
+                    You haven&apos;t saved any listings yet. Browse jobs to save
+                    your favorites.
                   </p>
                   <Button asChild variant="default" size="sm" className="w-fit">
                     <Link href="/browse">Browse jobs</Link>
@@ -298,25 +335,33 @@ function ProfileContent() {
             )}
 
             {!isLoadingSaved && savedListings.length > 0 && (
-              <Card variant="default" className="border-border flex-1 min-h-0 flex flex-col">
-                <CardContent className="p-4">
-                  <div className="flex flex-col gap-4">
-                    {savedListings.map((s) => {
-                    const listing = savedListingToListingResult(s);
-                    return (
-                      <ListingCard
-                        key={s.id}
-                        listing={listing}
-                        href={`/browse?job=${listing.id}`}
-                        isSaved
-                        onUnsave={() => unsaveMutation.mutate(s.listingId)}
-                        onView={() => {}}
-                        onAddToCompare={() => addToCompare({ id: listing.id, title: listing.title })}
-                        isInCompareSet={isInCompareSet(listing.id)}
-                        compareSetSize={compareSet.length}
-                      />
-                    );
-                  })}
+              <Card
+                variant="default"
+                className="border-border flex-1 min-h-0 flex flex-col"
+              >
+<CardContent className={CARD_PADDING_COMPACT}>
+                <div className="flex flex-col gap-4">
+                  {savedListings.map((s) => {
+                      const listing = savedListingToListingResult(s);
+                      return (
+                        <ListingCard
+                          key={s.id}
+                          listing={listing}
+                          href={`/browse?job=${listing.id}`}
+                          isSaved
+                          onUnsave={() => unsaveMutation.mutate(s.listingId)}
+                          onView={() => {}}
+                          onAddToCompare={() =>
+                            addToCompare({
+                              id: listing.id,
+                              title: listing.title,
+                            })
+                          }
+                          isInCompareSet={isInCompareSet(listing.id)}
+                          compareSetSize={compareSet.length}
+                        />
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>

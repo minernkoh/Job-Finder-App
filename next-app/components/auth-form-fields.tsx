@@ -9,6 +9,7 @@ import { Input, Label } from "@ui/components";
 import { PasswordInput } from "@/components/password-input";
 import { InlineError } from "@/components/page-state";
 import { getPasswordStrength } from "@/lib/password-strength";
+import { USERNAME_REGEX } from "@/lib/validation";
 
 interface AuthFormFieldsProps {
   mode: "login" | "signup";
@@ -26,8 +27,8 @@ interface AuthFormFieldsProps {
   passwordError?: string;
 }
 
-/** Backend username rule: 3–30 chars, letters, numbers, underscore, hyphen. Exported for use in submit handlers. */
-export const USERNAME_REGEX = /^[a-zA-Z0-9_-]+$/;
+/** Re-export for consumers that still import from here. Defined in @/lib/validation. */
+export { USERNAME_REGEX };
 
 /** Renders login (email or username, password) or signup (username required, email, password) form fields. */
 export function AuthFormFields({

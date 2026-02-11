@@ -32,7 +32,7 @@ Job-Finder-App/
 │   └── lib/              #   Services, models, API client, auth, utilities
 ├── packages/
 │   ├── schemas/          # Shared Zod schemas and inferred TypeScript types
-│   └── ui/               # Shared UI components (Button, Card, Input, Label, Select)
+│   └── ui/               # Shared UI components (Button, Card, Dialog, Input, Label, Select)
 └── package.json          # Root workspace config (pnpm + Turborepo)
 ```
 
@@ -45,8 +45,7 @@ RootLayout                          # app/layout.tsx — fonts, metadata
     │   ├── AuthTabs                #   Log in / Sign up tab bar
     │   └── AuthFormFields          #   Shared form fields (email, password, username)
     │
-    ├── / (Home)                    # Redirects → /browse or /admin
-    │   └── HomeRedirect
+    ├── / (Home)                    # Server component: redirect() → /browse (preserves auth/redirect params)
     │
     ├── /browse                     # Main job search page
     │   └── UserOnlyRoute → ProtectedRoute
@@ -75,11 +74,6 @@ RootLayout                          # app/layout.tsx — fonts, metadata
     ├── /summarize                  # Paste URL or text → AI summary
     │   └── UserOnlyRoute
     │       └── PageShell → AISummaryCard
-    │
-    ├── /onboarding                 # Post-signup skill setup
-    │   └── ProtectedRoute
-    │       ├── AppHeader
-    │       └── SkillsEditor        #   Role suggest, manual add, resume upload/paste
     │
     ├── /profile                    # User skills + saved listings
     │   └── UserOnlyRoute
@@ -150,7 +144,7 @@ All routes are under `/api/v1/`. Protected routes require a Bearer token; admin 
 | `/admin/summaries`         | GET              | Admin  | All summaries                                     |
 | `/admin/summaries/:id`     | GET, DELETE      | Admin  | Summary by ID                                     |
 | `/admin/listings`          | GET, POST, PATCH | Admin  | Listing management                                |
-| `/admin/export/data`       | GET              | Admin  | Export data                                       |
+| `/admin/export/data`       | POST             | Admin  | Export data                                       |
 | `/admin/system/health`     | GET              | Admin  | System health check                               |
 
 ## Database schemas

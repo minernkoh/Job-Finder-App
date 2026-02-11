@@ -12,7 +12,7 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { AppHeader } from "@/components/app-header";
 import { AccountSettingsForm } from "@/components/account-settings-form";
 import { PageShell } from "@/components/page-shell";
-import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
+import { CARD_PADDING_COMPACT, CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { deleteOwnAccount } from "@/lib/api/users";
@@ -70,7 +70,7 @@ function SettingsContent() {
           <section aria-label="Delete account" className="mt-8 space-y-3">
             <h2 className="eyebrow text-destructive">Danger zone</h2>
             <Card variant="default" className="border-border border-destructive/50">
-              <CardContent className="p-4">
+              <CardContent className={CARD_PADDING_COMPACT}>
                 <p className="text-sm text-muted-foreground mb-4">
                   This permanently deletes your account and related data. This cannot be undone.
                 </p>

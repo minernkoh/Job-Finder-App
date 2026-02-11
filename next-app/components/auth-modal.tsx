@@ -15,11 +15,16 @@ import {
   authModalHeightClass,
   authModalNarrowWidthClass,
 } from "@/components/auth-card";
+import { CARD_PADDING_AUTH } from "@/lib/layout";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { getErrorMessage } from "@/lib/api/errors";
 import { InlineError } from "@/components/page-state";
 import { useAuth } from "@/contexts/AuthContext";
-import { AuthFormFields, USERNAME_REGEX } from "@/components/auth-form-fields";
+import { AuthFormFields } from "@/components/auth-form-fields";
+import {
+  validatePassword,
+  validateUsername,
+} from "@/lib/validation";
 import { Button, Card, CardContent } from "@ui/components";
 
 /** Builds pathname + search string without auth and redirect params. */
@@ -39,13 +44,10 @@ function AuthModalContent({
   initialTab,
   onClose,
   onSuccess,
-  onSignupSuccess,
 }: {
   initialTab: AuthTab;
   onClose: () => void;
   onSuccess: () => void;
-  /** Called after signup; redirects to onboarding with return URL. */
-  onSignupSuccess: () => void;
 }) {
   const [tab, setTab] = useState<AuthTab>(initialTab);
   const { login, register, isLoading } = useAuth();
@@ -82,23 +84,20 @@ function AuthModalContent({
       e.preventDefault();
       setError(null);
       setFieldErrors({});
-      const trimmedUsername = username.trim();
-      if (trimmedUsername.length < 3) {
-        setError("Username must be at least 3 characters");
+      const usernameResult = validateUsername(username);
+      if (!usernameResult.valid) {
+        setError(usernameResult.error ?? "Invalid username");
         return;
       }
-      if (!USERNAME_REGEX.test(trimmedUsername)) {
-        setError("Username may only contain letters, numbers, underscore, and hyphen");
-        return;
-      }
-      if (password.length < 8) {
-        setError("Password must be at least 8 characters");
+      const passwordResult = validatePassword(password);
+      if (!passwordResult.valid) {
+        setError(passwordResult.error ?? "Invalid password");
         return;
       }
       setSubmitting(true);
       try {
-        await register(email, password, trimmedUsername);
-        onSignupSuccess();
+        await register(email, password, username.trim());
+        onSuccess();
       } catch (err: unknown) {
         setError(getErrorMessage(err, "Registration failed"));
         const data = err && typeof err === "object" && "response" in err
@@ -116,7 +115,7 @@ function AuthModalContent({
         setSubmitting(false);
       }
     },
-    [email, password, username, register, onSignupSuccess]
+    [email, password, username, register, onSuccess]
   );
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -179,7 +178,7 @@ function AuthModalContent({
         </button>
       </div>
       <CardContent
-        className={`${authModalHeightClass} flex flex-col gap-6 p-10`}
+        className={`${authModalHeightClass} flex flex-col gap-6 ${CARD_PADDING_AUTH}`}
       >
         <AuthTabs value={tab} onChange={setTab} />
         <div className="flex-1 min-h-0 overflow-auto">
@@ -271,11 +270,6 @@ export function AuthModal() {
     router.replace(redirectTo);
   }, [router, redirectTo]);
 
-  const onSignupSuccess = useCallback(() => {
-    setDismissedAfterSuccess(true);
-    router.replace(`/onboarding?redirect=${encodeURIComponent(redirectTo)}`);
-  }, [router, redirectTo]);
-
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeModal();
@@ -312,7 +306,6 @@ export function AuthModal() {
           initialTab={initialTab}
           onClose={closeModal}
           onSuccess={onSuccess}
-          onSignupSuccess={onSignupSuccess}
         />
       </motion.div>
     </motion.div>

@@ -78,8 +78,9 @@ export function ListingCard({
       variant="default"
       className={cn(
         "cursor-pointer",
+        isSelected && "border-2 border-primary",
         isSelected &&
-          "ring-2 ring-primary ring-offset-2 ring-offset-background",
+          "hover:ring-0 hover:ring-offset-0 focus-within:ring-0 focus-within:ring-offset-0",
       )}
     >
       <Link

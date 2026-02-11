@@ -46,7 +46,7 @@ export default function AdminLayout({
       <AppHeader user={user} onLogout={logout} />
       <main
         id="main-content"
-        className={cn("mx-auto py-6 sm:py-8", CONTENT_MAX_W, PAGE_PX)}
+        className={cn("mx-auto py-8", CONTENT_MAX_W, PAGE_PX)}
       >
         {children}
       </main>
