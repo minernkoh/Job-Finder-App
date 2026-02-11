@@ -5,8 +5,8 @@
 
 import { CreateSummaryBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/request";
 import { validationErrorResponse } from "@/lib/api/errors";
+import { withAuth } from "@/lib/api/with-auth";
 import {
   prepareSummaryStream,
   generateSummaryStream,
@@ -14,11 +14,10 @@ import {
 } from "@/lib/services/summaries.service";
 import { getEnv } from "@/lib/env";
 
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
-
+async function postStreamHandler(
+  request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
   const env = getEnv();
   if (!env.GEMINI_API_KEY?.trim()) {
     return NextResponse.json(
@@ -43,57 +42,57 @@ export async function POST(request: NextRequest) {
   try {
     const result = await prepareSummaryStream(payload.sub, parsed.data);
 
-    /* Cache hit: return full JSON immediately (no streaming needed). */
-    if (result.cached) {
-      return NextResponse.json({ success: true, data: result.data });
-    }
+  /* Cache hit: return full JSON immediately (no streaming needed). */
+  if (result.cached) {
+    return NextResponse.json({ success: true, data: result.data });
+  }
 
-    /* Cache miss: stream partial objects as NDJSON. */
-    const { resolvedInput, inputTextHash, uid, userSkills, yearsOfExperience } =
-      result;
-    const { partialObjectStream, object } = await generateSummaryStream(
-      resolvedInput.text,
-      {
-        fromAdzunaPage: resolvedInput.fromAdzunaPage,
-        userSkills,
-        jobTitle: resolvedInput.jobTitle,
-        company: resolvedInput.company,
-        yearsOfExperience,
-      },
-    );
+  /* Cache miss: stream partial objects as NDJSON. */
+  const { resolvedInput, inputTextHash, uid, userSkills, yearsOfExperience } =
+    result;
+  const { partialObjectStream, object } = await generateSummaryStream(
+    resolvedInput.text,
+    {
+      fromAdzunaPage: resolvedInput.fromAdzunaPage,
+      userSkills,
+      jobTitle: resolvedInput.jobTitle,
+      company: resolvedInput.company,
+      yearsOfExperience,
+    },
+  );
 
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const partial of partialObjectStream) {
-            const line = JSON.stringify(partial) + "\n";
-            controller.enqueue(encoder.encode(line));
-          }
-          /* Wait for the final object and save to DB. */
-          const finalObject = await object;
-          const saved = await saveSummaryToDb(uid, inputTextHash, finalObject);
-          const completeLine =
-            JSON.stringify({ _complete: true, ...saved }) + "\n";
-          controller.enqueue(encoder.encode(completeLine));
-          controller.close();
-        } catch (err) {
-          const message =
-            err instanceof Error ? err.message : "Stream generation failed";
-          const errorLine = JSON.stringify({ _error: true, message }) + "\n";
-          controller.enqueue(encoder.encode(errorLine));
-          controller.close();
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const partial of partialObjectStream) {
+          const line = JSON.stringify(partial) + "\n";
+          controller.enqueue(encoder.encode(line));
         }
-      },
-    });
+        /* Wait for the final object and save to DB. */
+        const finalObject = await object;
+        const saved = await saveSummaryToDb(uid, inputTextHash, finalObject);
+        const completeLine =
+          JSON.stringify({ _complete: true, ...saved }) + "\n";
+        controller.enqueue(encoder.encode(completeLine));
+        controller.close();
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Stream generation failed";
+        const errorLine = JSON.stringify({ _error: true, message }) + "\n";
+        controller.enqueue(encoder.encode(errorLine));
+        controller.close();
+      }
+    },
+  });
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "application/x-ndjson",
-        "Cache-Control": "no-cache",
-        "Transfer-Encoding": "chunked",
-      },
-    });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson",
+      "Cache-Control": "no-cache",
+      "Transfer-Encoding": "chunked",
+    },
+  });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to create summary";
@@ -118,3 +117,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withAuth(postStreamHandler, "Failed to create summary");

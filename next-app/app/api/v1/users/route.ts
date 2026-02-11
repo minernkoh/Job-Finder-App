@@ -3,30 +3,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
-import { toErrorResponse } from "@/lib/api/errors";
-import { requireAdmin } from "@/lib/auth/guard";
+import { serializeUser } from "@/lib/user-serializer";
+import { withAdmin } from "@/lib/api/with-auth";
 
-/** Returns all users; requires admin role. */
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await requireAdmin(request);
-    if (auth instanceof NextResponse) return auth;
-
-    await connectDB();
-    const users = await User.find({}).select("-password").lean();
-    const data = users.map((u) => ({
-      id: u._id.toString(),
-      email: u.email,
-      username: u.username,
-      role: u.role,
-      createdAt: u.createdAt,
-      updatedAt: u.updatedAt,
-    }));
-
-    return NextResponse.json({ success: true, data });
-  } catch (e) {
-    return toErrorResponse(e, "Failed to list users");
-  }
+async function getUsersHandler(
+  _request: NextRequest,
+  _payload: { sub: string; email: string; role: "admin" | "user" }
+): Promise<NextResponse> {
+  const users = await User.find({}).select("-password").lean();
+  const data = users.map((u) => serializeUser(u));
+  return NextResponse.json({ success: true, data });
 }
+
+export const GET = withAdmin(getUsersHandler, "Failed to list users");

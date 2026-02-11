@@ -4,88 +4,81 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { AdminUpdateUserBodySchema } from "@schemas";
-import { requireAdmin } from "@/lib/auth/guard";
 import {
   getUserDetail,
   deleteUser,
   updateUserProfile,
 } from "@/lib/services/admin-users.service";
-import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { parseJsonBody, validateIdParam, validationErrorResponse } from "@/lib/api/errors";
+import { withAdmin } from "@/lib/api/with-auth";
 
-/** Returns user detail with summary count, saved count, last activity. */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const result = await requireAdmin(request);
-    if (result instanceof NextResponse) return result;
-    const { id } = await params;
-    const data = await getUserDetail(id);
-    if (!data) {
-      return NextResponse.json(
-        { success: false, message: "User not found" },
-        { status: 404 },
-      );
-    }
-    return NextResponse.json({ success: true, data });
-  } catch (e) {
-    return toErrorResponse(e, "Failed to get user");
+async function getAdminUserHandler(
+  _request: NextRequest,
+  _payload: { sub: string },
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
+  const idErr = validateIdParam(id, "user id");
+  if (idErr) return idErr;
+  const data = await getUserDetail(id!);
+  if (!data) {
+    return NextResponse.json(
+      { success: false, message: "User not found" },
+      { status: 404 },
+    );
   }
+  return NextResponse.json({ success: true, data });
 }
 
-/** Updates user email and/or username. Returns updated user on success. */
-export async function PATCH(
+async function patchAdminUserHandler(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const result = await requireAdmin(request);
-    if (result instanceof NextResponse) return result;
-    const { id } = await params;
-    const body = await request.json();
-    const parsed = AdminUpdateUserBodySchema.safeParse(body);
-    if (!parsed.success)
-      return validationErrorResponse(parsed.error, "Invalid input");
-    const data = parsed.data;
-    if (data.email === undefined && data.username === undefined) {
-      return NextResponse.json(
-        { success: false, message: "Provide email and/or username to update" },
-        { status: 400 },
-      );
-    }
-    const outcome = await updateUserProfile(id, data);
-    if (!outcome.success) {
-      return NextResponse.json(
-        { success: false, message: outcome.reason },
-        { status: 409 },
-      );
-    }
-    const updated = await getUserDetail(id);
-    return NextResponse.json({ success: true, data: updated });
-  } catch (e) {
-    return toErrorResponse(e, "Failed to update user");
+  _payload: { sub: string },
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
+  const idErr = validateIdParam(id, "user id");
+  if (idErr) return idErr;
+  const [body, parseError] = await parseJsonBody(request);
+  if (parseError) return parseError;
+  const parsed = AdminUpdateUserBodySchema.safeParse(body);
+  if (!parsed.success)
+    return validationErrorResponse(parsed.error, "Invalid input");
+  const data = parsed.data;
+  if (data.email === undefined && data.username === undefined) {
+    return NextResponse.json(
+      { success: false, message: "Provide email and/or username to update" },
+      { status: 400 },
+    );
   }
+  const outcome = await updateUserProfile(id!, data);
+  if (!outcome.success) {
+    return NextResponse.json(
+      { success: false, message: outcome.reason },
+      { status: 409 },
+    );
+  }
+  const updated = await getUserDetail(id!);
+  return NextResponse.json({ success: true, data: updated });
 }
 
-/** Deletes user and related data; prevents self-delete and deleting last admin. */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const auth = await requireAdmin(request);
-    if (auth instanceof NextResponse) return auth;
-    const { id } = await params;
-    const deleteResult = await deleteUser(id);
-    if (!deleteResult.success) {
-      return NextResponse.json(
-        { success: false, message: deleteResult.reason },
-        { status: 400 },
-      );
-    }
-    return NextResponse.json({ success: true, data: { id } });
-  } catch (e) {
-    return toErrorResponse(e, "Failed to delete user");
+async function deleteAdminUserHandler(
+  _request: NextRequest,
+  _payload: { sub: string },
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
+  const idErr = validateIdParam(id, "user id");
+  if (idErr) return idErr;
+  const deleteResult = await deleteUser(id!);
+  if (!deleteResult.success) {
+    return NextResponse.json(
+      { success: false, message: deleteResult.reason },
+      { status: 400 },
+    );
   }
+  return NextResponse.json({ success: true, data: { id } });
 }
+
+export const GET = withAdmin(getAdminUserHandler, "Failed to get user");
+export const PATCH = withAdmin(patchAdminUserHandler, "Failed to update user");
+export const DELETE = withAdmin(deleteAdminUserHandler, "Failed to delete user");

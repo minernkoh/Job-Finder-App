@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/app-header";
 import { formatSalaryRange } from "@/lib/format";
 import { fetchListing } from "@/lib/api/listings";
+import { fetchProfile } from "@/lib/api/profile";
 import { createComparisonSummary } from "@/lib/api/summaries";
 import { listingKeys } from "@/lib/query-keys";
 import {
@@ -25,9 +26,8 @@ import {
   PAGE_PX,
   SECTION_GAP,
 } from "@/lib/layout";
-import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
 
-/** One column: listing meta, description, and link to full page for AI summary. */
+/** One column: listing meta, description, and link to the full listing page. */
 function CompareColumn({ listingId }: { listingId: string }) {
   const { data: listing, isLoading } = useQuery({
     queryKey: listingKeys(listingId),
@@ -69,7 +69,7 @@ function CompareColumn({ listingId }: { listingId: string }) {
       </div>
       {sanitizedDescription.length > 0 && (
         <div className="border-t border-border pt-4">
-          <h4 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Description</h4>
+          <h4 className="eyebrow mb-2">Description</h4>
           <div
             className={cn(
               "max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground",
@@ -77,27 +77,15 @@ function CompareColumn({ listingId }: { listingId: string }) {
             )}
             dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
           />
-          <Link
-            href={`/browse/${listingId}`}
-            className="mt-2 inline-block text-sm text-primary hover:underline"
-          >
-            Open full page
-          </Link>
         </div>
       )}
-      {sanitizedDescription.length === 0 && (
+      <div className="border-t border-border pt-4">
         <Link
           href={`/browse/${listingId}`}
           className="text-sm text-primary hover:underline"
         >
           Open full page
         </Link>
-      )}
-      <div className="border-t border-border pt-4">
-        <h4 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>AI Summary</h4>
-        <p className="text-sm text-muted-foreground">
-          Open full page for AI summary.
-        </p>
       </div>
     </div>
   );
@@ -130,6 +118,12 @@ function ComparePageInner() {
     enabled: !!listingIds && listingIds.length >= 2 && !!user,
   });
 
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile,
+    enabled: !!user,
+  });
+
   if (!listingIds) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -157,7 +151,17 @@ function ComparePageInner() {
         </h1>
 
         <section aria-label="Unified comparison">
-          <h2 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Comparison summary</h2>
+          <h2 className="eyebrow mb-2">Comparison summary</h2>
+          {user && comparisonQuery.data && (profile?.skills?.length ?? 0) === 0 && (
+            <div className="mb-4 rounded-lg bg-primary/10 p-3 text-foreground">
+              <p className="text-sm">
+                Add your skills in your profile to get personalized match scores and recommendations.{" "}
+                <Link href="/profile" className="text-primary underline hover:opacity-80">
+                  Add skills in Profile
+                </Link>
+              </p>
+            </div>
+          )}
           {!user && (
             <Card variant="elevated" className={CARD_PADDING_DEFAULT}>
               <h3 className="mb-2 font-medium text-foreground">
@@ -191,10 +195,53 @@ function ComparePageInner() {
                 <p className="text-foreground">
                   {comparisonQuery.data.summary}
                 </p>
+                {comparisonQuery.data.listingMatchScores &&
+                  comparisonQuery.data.listingMatchScores.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="eyebrow mb-2">
+                        Match to your skills
+                      </h3>
+                      <div className="space-y-2">
+                        {comparisonQuery.data.listingMatchScores.map((m) => {
+                          const jobLabel =
+                            `Job ${(listingIds?.indexOf(m.listingId) ?? -1) + 1}`;
+                          return (
+                            <div
+                              key={m.listingId}
+                              className="rounded-lg bg-primary/10 p-3 text-foreground"
+                            >
+                              <p className="text-foreground">
+                                <span className="font-medium">{jobLabel}: </span>
+                                {typeof m.matchScore === "number" && (
+                                  <span className="font-semibold">
+                                    {m.matchScore}%
+                                  </span>
+                                )}
+                              </p>
+                              {m.matchedSkills &&
+                                m.matchedSkills.length > 0 && (
+                                  <p className="mt-1 text-xs text-foreground">
+                                    <span className="eyebrow">Matched: </span>
+                                    {m.matchedSkills.join(", ")}
+                                  </p>
+                                )}
+                              {m.missingSkills &&
+                                m.missingSkills.length > 0 && (
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    <span className="eyebrow">Missing: </span>
+                                    {m.missingSkills.join(", ")}
+                                  </p>
+                                )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 {comparisonQuery.data.similarities &&
                   comparisonQuery.data.similarities.length > 0 && (
                     <div>
-                      <h3 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>
+                      <h3 className="eyebrow mb-2">
                         Similarities
                       </h3>
                       <ul className="list-disc pl-5 space-y-0.5 text-foreground">
@@ -207,7 +254,7 @@ function ComparePageInner() {
                 {comparisonQuery.data.differences &&
                   comparisonQuery.data.differences.length > 0 && (
                     <div>
-                      <h3 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>
+                      <h3 className="eyebrow mb-2">
                         Differences
                       </h3>
                       <ul className="list-disc pl-5 space-y-0.5 text-foreground">
@@ -228,7 +275,7 @@ function ComparePageInner() {
                 {comparisonQuery.data.recommendedListingId &&
                   comparisonQuery.data.recommendationReason && (
                     <div className="rounded-lg bg-primary/10 p-3 text-foreground">
-                      <span className={EYEBROW_CLASS}>Better fit: </span>
+                      <span className="eyebrow">Better fit: </span>
                       {comparisonQuery.data.recommendationReason}
                     </div>
                   )}

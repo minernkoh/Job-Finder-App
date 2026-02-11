@@ -3,18 +3,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth/guard";
 import { getSystemHealth } from "@/lib/services/admin-system.service";
-import { toErrorResponse } from "@/lib/api/errors";
+import { withAdmin } from "@/lib/api/with-auth";
 
-/** Returns system health (e.g. DB ping). */
-export async function GET(request: NextRequest) {
-  try {
-    const result = await requireAdmin(request);
-    if (result instanceof NextResponse) return result;
-    const data = await getSystemHealth();
-    return NextResponse.json({ success: true, data });
-  } catch (e) {
-    return toErrorResponse(e, "Health check failed");
-  }
+async function getHealthHandler(
+  _request: NextRequest,
+  _payload: { sub: string }
+): Promise<NextResponse> {
+  const data = await getSystemHealth();
+  return NextResponse.json({ success: true, data });
 }
+
+export const GET = withAdmin(getHealthHandler, "Health check failed");

@@ -3,199 +3,164 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { UserUpdateSchema } from "@schemas";
-import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
-import { requireAuth } from "@/lib/auth/request";
+import { parseJsonBody, validationErrorResponse } from "@/lib/api/errors";
+import { withAuth } from "@/lib/api/with-auth";
 import { isValidObjectId } from "@/lib/objectid";
 import { deleteUser } from "@/lib/services/admin-users.service";
+import { serializeUser } from "@/lib/user-serializer";
 
-/** Returns user if requester is the user or admin; otherwise 403. */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const auth = await requireAuth(request);
-    if (auth instanceof NextResponse) return auth;
-    const payload = auth;
-
-    const { id } = await params;
-    const isOwn = payload.sub === id;
-    const isAdmin = payload.role === "admin";
-    if (!isOwn && !isAdmin) {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 },
-      );
-    }
-
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid user id" },
-        { status: 400 },
-      );
-    }
-
-    await connectDB();
-    const user = await User.findById(id).select("-password").lean();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, message: "User not found" },
-        { status: 404 },
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        id: user._id.toString(),
-        email: user.email,
-        role: user.role,
-        username: user.username,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
-    });
-  } catch (e) {
-    return toErrorResponse(e, "Failed to get user");
+async function getUserIdHandler(
+  _request: NextRequest,
+  payload: { sub: string; role: string },
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
+  const isOwn = payload.sub === id;
+  const isAdmin = payload.role === "admin";
+  if (!isOwn && !isAdmin) {
+    return NextResponse.json(
+      { success: false, message: "Forbidden" },
+      { status: 403 },
+    );
   }
+
+  if (!isValidObjectId(id)) {
+    return NextResponse.json(
+      { success: false, message: "Invalid user id" },
+      { status: 400 },
+    );
+  }
+
+  const user = await User.findById(id).select("-password").lean();
+  if (!user) {
+    return NextResponse.json(
+      { success: false, message: "User not found" },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    data: serializeUser(user),
+  });
 }
 
-/** Updates user if requester is the user or admin; duplicate email or username returns 409. */
-export async function PATCH(
+async function patchUserIdHandler(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const auth = await requireAuth(request);
-    if (auth instanceof NextResponse) return auth;
-    const payload = auth;
+  payload: { sub: string; role: string },
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
+  const isOwn = payload.sub === id;
+  const isAdmin = payload.role === "admin";
+  if (!isOwn && !isAdmin) {
+    return NextResponse.json(
+      { success: false, message: "Forbidden" },
+      { status: 403 },
+    );
+  }
 
-    const { id } = await params;
-    const isOwn = payload.sub === id;
-    const isAdmin = payload.role === "admin";
-    if (!isOwn && !isAdmin) {
+  if (!isValidObjectId(id)) {
+    return NextResponse.json(
+      { success: false, message: "Invalid user id" },
+      { status: 400 },
+    );
+  }
+
+  const [body, parseError] = await parseJsonBody(request);
+  if (parseError) return parseError;
+  const parsed = UserUpdateSchema.safeParse(body);
+  if (!parsed.success)
+    return validationErrorResponse(parsed.error, "Invalid input");
+
+  const user = await User.findById(id);
+  if (!user) {
+    return NextResponse.json(
+      { success: false, message: "User not found" },
+      { status: 404 },
+    );
+  }
+
+  if (parsed.data.email !== undefined) {
+    const existing = await User.findOne({
+      email: parsed.data.email,
+      role: user.role,
+    }).lean();
+    if (existing && existing._id.toString() !== id) {
       return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 },
+        { success: false, message: "Email already in use" },
+        { status: 409 },
       );
     }
-
-    if (!isValidObjectId(id)) {
+    user.email = parsed.data.email;
+  }
+  if (parsed.data.username !== undefined) {
+    const trimmed = parsed.data.username.trim();
+    if (!trimmed) {
       return NextResponse.json(
-        { success: false, message: "Invalid user id" },
+        {
+          success: false,
+          message: "Username is required and cannot be cleared",
+        },
         { status: 400 },
       );
     }
-
-    const body = await request.json();
-    const parsed = UserUpdateSchema.safeParse(body);
-    if (!parsed.success)
-      return validationErrorResponse(parsed.error, "Invalid input");
-
-    await connectDB();
-    const user = await User.findById(id);
-    if (!user) {
+    const existingByUsername = await User.findOne({
+      username: trimmed,
+      _id: { $ne: id },
+    }).lean();
+    if (existingByUsername) {
       return NextResponse.json(
-        { success: false, message: "User not found" },
-        { status: 404 },
+        { success: false, message: "Username already taken" },
+        { status: 409 },
       );
     }
-
-    if (parsed.data.email !== undefined) {
-      const existing = await User.findOne({
-        email: parsed.data.email,
-        role: user.role,
-      }).lean();
-      if (existing && existing._id.toString() !== id) {
-        return NextResponse.json(
-          { success: false, message: "Email already in use" },
-          { status: 409 },
-        );
-      }
-      user.email = parsed.data.email;
-    }
-    if (parsed.data.username !== undefined) {
-      const trimmed = parsed.data.username.trim();
-      if (!trimmed) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Username is required and cannot be cleared",
-          },
-          { status: 400 },
-        );
-      }
-      const existingByUsername = await User.findOne({
-        username: trimmed,
-        _id: { $ne: id },
-      }).lean();
-      if (existingByUsername) {
-        return NextResponse.json(
-          { success: false, message: "Username already taken" },
-          { status: 409 },
-        );
-      }
-      user.username = trimmed;
-    }
-    if (parsed.data.password !== undefined)
-      user.password = parsed.data.password;
-
-    await user.save();
-
-    const updated = await User.findById(id).select("-password").lean();
-    return NextResponse.json({
-      success: true,
-      data: {
-        id: updated!._id.toString(),
-        email: updated!.email,
-        role: updated!.role,
-        username: updated!.username,
-        createdAt: updated!.createdAt,
-        updatedAt: updated!.updatedAt,
-      },
-    });
-  } catch (e) {
-    return toErrorResponse(e, "Failed to update user");
+    user.username = trimmed;
   }
+  if (parsed.data.password !== undefined)
+    user.password = parsed.data.password;
+
+  await user.save();
+
+  const updated = await User.findById(id).select("-password").lean();
+  return NextResponse.json({
+    success: true,
+    data: serializeUser(updated!),
+  });
 }
 
-/** Deletes the current user's account (own id only). Cascades related data; rejects if last admin. */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const auth = await requireAuth(request);
-    if (auth instanceof NextResponse) return auth;
-    const payload = auth;
-
-    const { id } = await params;
-    if (payload.sub !== id) {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 },
-      );
-    }
-
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid user id" },
-        { status: 400 },
-      );
-    }
-
-    const deleteResult = await deleteUser(id);
-    if (!deleteResult.success) {
-      return NextResponse.json(
-        { success: false, message: deleteResult.reason },
-        { status: 400 },
-      );
-    }
-    return NextResponse.json({ success: true, data: { id } });
-  } catch (e) {
-    return toErrorResponse(e, "Failed to delete account");
+async function deleteUserIdHandler(
+  _request: NextRequest,
+  payload: { sub: string },
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
+  if (payload.sub !== id) {
+    return NextResponse.json(
+      { success: false, message: "Forbidden" },
+      { status: 403 },
+    );
   }
+
+  if (!isValidObjectId(id)) {
+    return NextResponse.json(
+      { success: false, message: "Invalid user id" },
+      { status: 400 },
+    );
+  }
+
+  const deleteResult = await deleteUser(id);
+  if (!deleteResult.success) {
+    return NextResponse.json(
+      { success: false, message: deleteResult.reason },
+      { status: 400 },
+    );
+  }
+  return NextResponse.json({ success: true, data: { id } });
 }
+
+export const GET = withAuth(getUserIdHandler, "Failed to get user");
+export const PATCH = withAuth(patchUserIdHandler, "Failed to update user");
+export const DELETE = withAuth(deleteUserIdHandler, "Failed to delete account");

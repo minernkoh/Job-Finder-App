@@ -15,6 +15,7 @@ import {
 import { Button, Card, CardContent, CardHeader } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
+import { BADGE_PRIMARY, BADGE_MUTED_TIGHT } from "@/lib/badges";
 import type { ListingResult } from "@schemas";
 
 interface ListingCardProps {
@@ -100,9 +101,7 @@ export function ListingCard({
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {showTrendingBadge && (
-              <span className="rounded bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
-                Trending
-              </span>
+              <span className={BADGE_PRIMARY}>Trending</span>
             )}
             {onAddToCompare && (
               <Button
@@ -204,7 +203,7 @@ export function ListingCard({
             ) : null;
           })()}
           {listing.country && listing.country !== "sg" && (
-            <span className="mt-1 inline-block rounded bg-muted px-1.5 py-0.5 text-xs">
+            <span className={cn("mt-1 inline-block", BADGE_MUTED_TIGHT)}>
               {listing.country.toUpperCase()}
             </span>
           )}

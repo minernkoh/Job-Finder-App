@@ -1,5 +1,5 @@
 /**
- * Shared horizontal carousel of listing cards. Used by TrendingListings and RecommendedListings.
+ * Shared horizontal carousel of listing cards. Used by ListingSection for trending and recommended sections.
  */
 
 "use client";

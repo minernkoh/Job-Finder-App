@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Suspense, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompare } from "@/contexts/CompareContext";
-import { UserOnlyRoute } from "@/components/user-only-route";
+import { ProtectedRoute } from "@/components/protected-route";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { savedListingToListingResult } from "@/lib/api/saved";
@@ -377,9 +377,9 @@ function ProfileContent() {
 export default function ProfilePage() {
   return (
     <Suspense fallback={null}>
-      <UserOnlyRoute>
+      <ProtectedRoute blockAdmins>
         <ProfileContent />
-      </UserOnlyRoute>
+      </ProtectedRoute>
     </Suspense>
   );
 }

@@ -4,34 +4,33 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { AdminUserStatusBodySchema } from "@schemas";
-import { requireAdmin } from "@/lib/auth/guard";
 import { updateUserStatus } from "@/lib/services/admin-users.service";
-import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { parseJsonBody, validateIdParam, validationErrorResponse } from "@/lib/api/errors";
+import { withAdmin } from "@/lib/api/with-auth";
 
-/** Updates user status (active | suspended). */
-export async function PATCH(
+async function patchStatusHandler(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const result = await requireAdmin(request);
-    if (result instanceof NextResponse) return result;
-    const { id } = await params;
-    const body = await request.json();
-    const parsed = AdminUserStatusBodySchema.safeParse(body);
-    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");
-    const updateResult = await updateUserStatus(id, parsed.data.status);
-    if (!updateResult.success) {
-      return NextResponse.json(
-        { success: false, message: updateResult.reason },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json({
-      success: true,
-      data: { id, status: parsed.data.status },
-    });
-  } catch (e) {
-    return toErrorResponse(e, "Failed to update status");
+  _payload: { sub: string },
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
+  const idErr = validateIdParam(id, "user id");
+  if (idErr) return idErr;
+  const [body, parseError] = await parseJsonBody(request);
+  if (parseError) return parseError;
+  const parsed = AdminUserStatusBodySchema.safeParse(body);
+  if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");
+  const updateResult = await updateUserStatus(id!, parsed.data.status);
+  if (!updateResult.success) {
+    return NextResponse.json(
+      { success: false, message: updateResult.reason },
+      { status: 400 }
+    );
   }
+  return NextResponse.json({
+    success: true,
+    data: { id, status: parsed.data.status },
+  });
 }
+
+export const PATCH = withAdmin(patchStatusHandler, "Failed to update status");

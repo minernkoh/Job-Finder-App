@@ -12,7 +12,11 @@ import {
   validateUsername,
 } from "@/lib/validation";
 import { useMutation } from "@tanstack/react-query";
-import { Button, Card, CardContent, Input, Label } from "@ui/components";
+import { Button, Card, CardContent, Input } from "@ui/components";
+import { FormField } from "@/components/form-field";
+import { InlineError } from "@/components/page-state";
+import { CARD_PADDING_COMPACT, GAP_MD } from "@/lib/layout";
+import { cn } from "@ui/components/lib/utils";
 import type { AuthUser } from "@/contexts/AuthContext";
 
 export interface AccountSettingsFormProps {
@@ -96,13 +100,9 @@ function AccountSettingsFormInner({
 
   return (
     <Card variant="default" className="border-border">
-      <CardContent className="p-4">
-        <div className="flex flex-col gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor={usernameId}>Username</Label>
-            <p className="text-xs text-muted-foreground">
-              Used to sign in and identify you.
-            </p>
+      <CardContent className={CARD_PADDING_COMPACT}>
+        <div className={cn("flex flex-col", GAP_MD)}>
+          <FormField id={usernameId} label="Username">
             <Input
               id={usernameId}
               value={accountUsername}
@@ -113,9 +113,11 @@ function AccountSettingsFormInner({
               maxLength={30}
               autoComplete="username"
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor={emailId}>Email</Label>
+            <p className="text-xs text-muted-foreground">
+              Used to sign in and identify you.
+            </p>
+          </FormField>
+          <FormField id={emailId} label="Email">
             <Input
               id={emailId}
               type="email"
@@ -124,9 +126,8 @@ function AccountSettingsFormInner({
               placeholder="you@example.com"
               className="w-full"
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor={newPwId}>New password (optional)</Label>
+          </FormField>
+          <FormField id={newPwId} label="New password (optional)">
             <Input
               id={newPwId}
               type="password"
@@ -136,9 +137,8 @@ function AccountSettingsFormInner({
               className="w-full"
               autoComplete="new-password"
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor={confirmPwId}>Confirm new password</Label>
+          </FormField>
+          <FormField id={confirmPwId} label="Confirm new password">
             <Input
               id={confirmPwId}
               type="password"
@@ -148,14 +148,18 @@ function AccountSettingsFormInner({
               className="w-full"
               autoComplete="new-password"
             />
-          </div>
+          </FormField>
         </div>
         {accountMutation.isError && (
-          <p className="mt-4 text-sm text-destructive" role="alert">
-            {accountMutation.error instanceof Error
-              ? accountMutation.error.message
-              : "Failed to update account"}
-          </p>
+          <div className="mt-4">
+            <InlineError
+              message={
+                accountMutation.error instanceof Error
+                  ? accountMutation.error.message
+                  : "Failed to update account"
+              }
+            />
+          </div>
         )}
         <div className="mt-4 flex justify-center">
           <Button
@@ -180,7 +184,7 @@ export function AccountSettingsForm({
   if (!user) {
     return (
       <Card variant="default" className="border-border">
-        <CardContent className="p-4">
+        <CardContent className={CARD_PADDING_COMPACT}>
           <p className="text-sm text-muted-foreground">
             Sign in to update your account.
           </p>

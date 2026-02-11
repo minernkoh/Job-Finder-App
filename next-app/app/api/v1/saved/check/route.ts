@@ -3,14 +3,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/request";
-import { toErrorResponse } from "@/lib/api/errors";
+import { withAuth } from "@/lib/api/with-auth";
 import { isListingSaved } from "@/lib/services/saved-listings.service";
 
-export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
+async function getCheckHandler(
+  request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
   const listingId = request.nextUrl.searchParams.get("listingId");
   if (!listingId) {
     return NextResponse.json(
@@ -18,10 +17,8 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   }
-  try {
-    const saved = await isListingSaved(payload.sub, listingId);
-    return NextResponse.json({ success: true, data: { saved } });
-  } catch (err) {
-    return toErrorResponse(err, "Failed to check saved status");
-  }
+  const saved = await isListingSaved(payload.sub, listingId);
+  return NextResponse.json({ success: true, data: { saved } });
 }
+
+export const GET = withAuth(getCheckHandler, "Failed to check saved status");

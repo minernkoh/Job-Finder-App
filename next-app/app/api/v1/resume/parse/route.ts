@@ -4,8 +4,8 @@
 
 import { ParseResumeBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/request";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { withAuth } from "@/lib/api/with-auth";
 import { getEnv } from "@/lib/env";
 import {
   DOCX_EXTRACT_ERROR_MESSAGE,
@@ -38,11 +38,10 @@ function isResumeFile(file: { type: string; name: string }): boolean {
   return isPdfFile(file) || isDocxFile(file);
 }
 
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
-
+async function postParseHandler(
+  request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
   const env = getEnv();
   if (!env.GEMINI_API_KEY?.trim()) {
     return NextResponse.json(
@@ -53,60 +52,60 @@ export async function POST(request: NextRequest) {
 
   const contentType = request.headers.get("content-type") ?? "";
 
-  try {
-    let text: string;
+  let text: string;
 
-    if (contentType.includes("multipart/form-data")) {
-      const formData = await request.formData();
-      const file = formData.get("file");
-      if (!file || typeof file === "string") {
-        return NextResponse.json(
-          { success: false, message: "No file provided. Use the 'file' field." },
-          { status: 400 }
-        );
-      }
-      if (!isResumeFile(file)) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Only PDF or DOCX files up to 5MB are supported.",
-          },
-          { status: 400 }
-        );
-      }
-      if (file.size > MAX_FILE_BYTES) {
-        return NextResponse.json(
-          { success: false, message: "File must be 5MB or smaller." },
-          { status: 400 }
-        );
-      }
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      text = isPdfFile(file)
-        ? await extractTextFromPdf(buffer)
-        : await extractTextFromDocx(buffer);
-    } else {
-      let body: unknown;
-      try {
-        body = await request.json();
-      } catch {
-        return NextResponse.json(
-          { success: false, message: "Request body must be JSON with a text field." },
-          { status: 400 }
-        );
-      }
-      const parsed = ParseResumeBodySchema.safeParse(body);
-      if (!parsed.success)
-        return validationErrorResponse(parsed.error, "Invalid body");
-      text = parsed.data.text.trim();
-      if (!text) {
-        return NextResponse.json(
-          { success: false, message: "Resume text is required." },
-          { status: 400 }
-        );
-      }
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData();
+    const file = formData.get("file");
+    if (!file || typeof file === "string") {
+      return NextResponse.json(
+        { success: false, message: "No file provided. Use the 'file' field." },
+        { status: 400 }
+      );
     }
+    if (!isResumeFile(file)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Only PDF or DOCX files up to 5MB are supported.",
+        },
+        { status: 400 }
+      );
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      return NextResponse.json(
+        { success: false, message: "File must be 5MB or smaller." },
+        { status: 400 }
+      );
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    text = isPdfFile(file)
+      ? await extractTextFromPdf(buffer)
+      : await extractTextFromDocx(buffer);
+  } else {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Request body must be JSON with a text field." },
+        { status: 400 }
+      );
+    }
+    const parsed = ParseResumeBodySchema.safeParse(body);
+    if (!parsed.success)
+      return validationErrorResponse(parsed.error, "Invalid body");
+    text = parsed.data.text.trim();
+    if (!text) {
+      return NextResponse.json(
+        { success: false, message: "Resume text is required." },
+        { status: 400 }
+      );
+    }
+  }
 
+  try {
     const result = await parseResumeWithRetry(text);
     await upsertProfileForUser(payload.sub, {
       jobTitles: result.jobTitles,
@@ -133,3 +132,5 @@ export async function POST(request: NextRequest) {
     return toErrorResponse(err, "Failed to parse resume");
   }
 }
+
+export const POST = withAuth(postParseHandler, "Failed to parse resume");

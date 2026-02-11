@@ -12,13 +12,15 @@ import {
 } from "@phosphor-icons/react";
 import { Button, Card, CardContent, Label } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { ProtectedRoute } from "@/components/protected-route";
+import { fetchProfile } from "@/lib/api/profile";
 import { createSummaryStream, consumeSummaryStream } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
 import { useState, useCallback, Suspense } from "react";
-import { CARD_PADDING_COMPACT, PAGE_PX } from "@/lib/layout";
-import { EYEBROW_CLASS } from "@/lib/styles";
-import { SummaryPanel } from "@/components/summary-panel";
+import { CARD_PADDING_COMPACT, PAGE_PX, TEXTAREA_BASE_CLASS } from "@/lib/layout";
+import { InlineError } from "@/components/page-state";
+import { AISummaryCard } from "@/components/ai-summary-card";
 
 /** Inner content: paste URL or text, summarize button, streaming summary or error. */
 function SummarizeContent() {
@@ -26,6 +28,11 @@ function SummarizeContent() {
   const [summary, setSummary] = useState<Partial<SummaryWithId> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile,
+  });
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -63,7 +70,7 @@ function SummarizeContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="mx-auto flex w-full max-w-2xl items-center border-b border-border py-4">
+      <header className="nav-glass sticky top-0 z-50 mx-auto flex w-full max-w-2xl items-center border-b border-border/80 py-4">
         <Link
           href="/browse"
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
@@ -91,12 +98,13 @@ function SummarizeContent() {
         {summary && summary.tldr ? (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-[3fr_1fr] md:gap-8">
             <div className="space-y-3">
-              <h2 className={EYEBROW_CLASS}>
+              <h2 className="eyebrow">
                 AI Summary
               </h2>
-              <SummaryPanel
+              <AISummaryCard
                 summary={summary as SummaryWithId}
                 showJdMatch={false}
+                hasSkills={(profile?.skills?.length ?? 0) > 0}
               />
               {!isLoading && (
                 <Button
@@ -111,7 +119,7 @@ function SummarizeContent() {
               )}
             </div>
             <div className="space-y-2">
-              <h2 className={EYEBROW_CLASS}>Description</h2>
+              <h2 className="eyebrow">Description</h2>
               <Card variant="elevated" className="text-sm">
                 <CardContent className={CARD_PADDING_COMPACT}>
                   {/^https?:\/\//i.test(input) ? (
@@ -138,7 +146,7 @@ function SummarizeContent() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="summarize-input" className={EYEBROW_CLASS}>
+              <Label htmlFor="summarize-input" className="eyebrow">
                 URL or job description
               </Label>
               <textarea
@@ -147,7 +155,7 @@ function SummarizeContent() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Paste a job URL (e.g. https://...) or paste the full job description text"
                 rows={8}
-                className="flex w-full rounded-xl border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_3px_hsl(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-y min-h-[120px]"
+                className={cn(TEXTAREA_BASE_CLASS, "resize-y min-h-[120px]")}
               />
             </div>
             <Button
@@ -163,11 +171,7 @@ function SummarizeContent() {
             >
               {isLoading ? "Summarizing…" : "Summarize with AI"}
             </Button>
-            {error && (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            )}
+            {error && <InlineError message={error} />}
           </form>
         )}
       </main>

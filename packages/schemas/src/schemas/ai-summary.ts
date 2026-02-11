@@ -50,6 +50,14 @@ export const CreateSummaryBodySchema = z
 
 export type CreateSummaryBody = z.infer<typeof CreateSummaryBodySchema>;
 
+/** Per-listing skills match: match score and skills breakdown (when user has skills). */
+export const ListingMatchScoreSchema = z.object({
+  listingId: z.string(),
+  matchScore: z.number().min(0).max(100),
+  matchedSkills: z.array(z.string()).optional(),
+  missingSkills: z.array(z.string()).optional(),
+});
+
 /** AI-generated comparison of 2–3 job listings: similarities, differences, summary, and optional recommendation. */
 export const ComparisonSummarySchema = z.object({
   summary: z.string(),
@@ -60,6 +68,8 @@ export const ComparisonSummarySchema = z.object({
   comparisonPoints: z.array(z.string()).optional(),
   recommendedListingId: z.string().optional(),
   recommendationReason: z.string().optional(),
+  /** Per-listing match to user skills (when user has skills). */
+  listingMatchScores: z.array(ListingMatchScoreSchema).optional(),
 });
 
 export type ComparisonSummary = z.infer<typeof ComparisonSummarySchema>;

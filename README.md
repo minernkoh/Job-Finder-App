@@ -4,7 +4,7 @@ AI-assisted job search built with Next.js. Browse listings from the Adzuna API, 
 compare up to 3 roles side by side, and generate AI summaries powered by Gemini.
 Admins manage users, listings, and summaries from a dedicated dashboard.
 
-_(Add a screenshot of the app here)_
+![App Screenshot](image/appscreenshot.png)
 
 ## Tech Stack
 
@@ -48,35 +48,33 @@ RootLayout                          # app/layout.tsx — fonts, metadata
     ├── / (Home)                    # Server component: redirect() → /browse (preserves auth/redirect params)
     │
     ├── /browse                     # Main job search page
-    │   └── UserOnlyRoute → ProtectedRoute
+    │   └── ProtectedRoute (blockAdmins)
     │       ├── AppHeader           #   Logo, nav links, UserMenu or AuthModalLink
     │       ├── CompareBar          #   Sticky bar when 1–3 jobs selected for comparison
-    │       ├── TrendingListings    #   → ListingCarousel → ListingCard[]
-    │       ├── RecommendedListings #   → ListingCarousel → ListingCard[]
+    │       ├── ListingSection[]    #   → ListingCarousel → ListingCard[] (Recommended, Trending)
     │       ├── ListingCard[]       #   Search results grid
     │       └── JobDetailPanel      #   Right panel (lg) or full-page detail
     │           └── AISummaryCard   #     AI summary output
     │
     ├── /browse/[id]                # Full-page job detail
-    │   └── UserOnlyRoute
+    │   └── ProtectedRoute (blockAdmins)
     │       ├── AppHeader
     │       ├── CompareBar
     │       └── JobDetailPanel → AISummaryCard
     │
     ├── /browse/compare             # Side-by-side comparison (2–3 jobs)
-    │   └── UserOnlyRoute
+    │   └── ProtectedRoute (blockAdmins)
     │       ├── AppHeader
     │       ├── CompareBar
     │       └── PageShell
-    │           ├── CompareColumn[] #   Per-job: meta, description, AISummaryCard
-    │           └── AISummaryCard   #   Unified comparison summary
+    │           └── CompareColumn[] #   Per-job: meta, description, inline summary
     │
     ├── /summarize                  # Paste URL or text → AI summary
-    │   └── UserOnlyRoute
+    │   └── ProtectedRoute
     │       └── PageShell → AISummaryCard
     │
-    ├── /profile                    # User skills + saved listings
-    │   └── UserOnlyRoute
+    ├── /profile                    # User skills + saved listings (/saved, /my-jobs redirect here)
+    │   └── ProtectedRoute (blockAdmins)
     │       ├── AppHeader
     │       ├── SkillsEditor
     │       └── ListingCard[]       #   Saved listings
@@ -104,7 +102,7 @@ RootLayout                          # app/layout.tsx — fonts, metadata
         └── PageShell → AccountSettingsForm
 ```
 
-**Shared components** used across multiple pages: `AppHeader`, `ListingCard`, `ListingCarousel`, `SkillsEditor`, `AccountSettingsForm`, `PageShell`, `PageLoading`/`PageError`, `CompareBar`, `AISummaryCard`, `AuthFormFields`, `FormField`, `TablePagination`.
+**Shared components** used across multiple pages: `AppHeader`, `ListingCard`, `ListingCarousel`, `ListingSection`, `SkillsEditor`, `AccountSettingsForm`, `PageShell`, `PageLoading`/`PageError`, `CompareBar`, `AISummaryCard`, `AuthFormFields`, `FormField`, `TablePagination`, `AdminTable`, `ProtectedRoute`.
 
 ## API routes
 
@@ -119,7 +117,7 @@ All routes are under `/api/v1/`. Protected routes require a Bearer token; admin 
 | `/auth/admin/register`     | POST             | Admin  | Create admin user                                 |
 | `/users`                   | GET              | Admin  | List users                                        |
 | `/users/me`                | GET              | Auth   | Current user                                      |
-| `/users/:id`               | GET, PATCH       | Auth   | User by ID                                        |
+| `/users/:id`               | GET, PATCH, DELETE | Auth   | User by ID (own or admin); DELETE = delete own account |
 | `/profile`                 | GET, PUT         | Auth   | User profile (skills, job titles, resume summary) |
 | `/profile/suggest-skills`  | POST             | Auth   | AI skill suggestions from role                    |
 | `/resume/parse`            | POST             | Auth   | Parse resume (PDF, DOCX, or text) via AI          |
@@ -130,11 +128,12 @@ All routes are under `/api/v1/`. Protected routes require a Bearer token; admin 
 | `/listings/trending`       | GET              | —      | Trending listings                                 |
 | `/listings/recommended`    | GET              | Auth   | Recommended listings                              |
 | `/saved`                   | GET              | Auth   | Saved listings                                    |
-| `/saved/:listingId`        | POST, DELETE     | Auth   | Save / unsave                                     |
+| `/saved/:listingId`        | DELETE           | Auth   | Unsave a listing                                  |
 | `/saved/check`             | GET              | Auth   | Check if listings are saved                       |
 | `/summaries`               | GET, POST        | Auth   | List / create AI summary                          |
 | `/summaries/:id`           | GET, DELETE      | Auth   | Get / delete summary                              |
 | `/summaries/compare`       | POST             | Auth   | Compare 2–3 listings via AI                       |
+| `/summaries/stream`        | POST             | Auth   | Stream AI summary via SSE                         |
 | `/admin/dashboard`         | GET              | Admin  | Dashboard metrics                                 |
 | `/admin/dashboard/summary` | GET              | Admin  | AI dashboard summary                              |
 | `/admin/users`             | GET              | Admin  | User management                                   |
@@ -142,7 +141,7 @@ All routes are under `/api/v1/`. Protected routes require a Bearer token; admin 
 | `/admin/users/:id/role`    | PATCH            | Admin  | Change user role                                  |
 | `/admin/users/:id/status`  | PATCH            | Admin  | Suspend / activate                                |
 | `/admin/summaries`         | GET              | Admin  | All summaries                                     |
-| `/admin/summaries/:id`     | GET, DELETE      | Admin  | Summary by ID                                     |
+| `/admin/summaries/:id`     | DELETE           | Admin  | Delete summary by ID                              |
 | `/admin/listings`          | GET, POST, PATCH | Admin  | Listing management                                |
 | `/admin/export/data`       | POST             | Admin  | Export data                                       |
 | `/admin/system/health`     | GET              | Admin  | System health check                               |

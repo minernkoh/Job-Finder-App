@@ -34,6 +34,8 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   fetchListings,
+  fetchTrending,
+  fetchRecommendedListings,
   recordListingView,
   type ListingsFilters,
 } from "@/lib/api/listings";
@@ -42,8 +44,7 @@ import { AppHeader } from "@/components/app-header";
 import { CompareBar } from "@/components/compare-bar";
 import { JobDetailPanel } from "@/components/job-detail-panel";
 import { ListingCard } from "@/components/listing-card";
-import { RecommendedListings } from "@/components/recommended-listings";
-import { TrendingListings } from "@/components/trending-listings";
+import { ListingSection } from "@/components/listing-section";
 import { useCompare } from "@/contexts/CompareContext";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { JOB_SEARCH_COUNTRIES } from "@/lib/constants/countries";
@@ -56,7 +57,7 @@ import {
   PAGE_PX,
   SECTION_GAP,
 } from "@/lib/layout";
-import { listingsKeys } from "@/lib/query-keys";
+import { listingsKeys, trendingKeys, recommendedKeys } from "@/lib/query-keys";
 import { cn } from "@ui/components/lib/utils";
 import { SORT_BY_OPTIONS } from "@/lib/constants/listings";
 
@@ -481,10 +482,6 @@ function BrowseContent() {
                   CARD_PADDING_HERO,
                 )}
               >
-                <p className="text-sm text-muted-foreground">
-                  Search above to find jobs. Sign in to save them and get AI
-                  summaries.
-                </p>
                 <h2 className="text-2xl font-semibold text-foreground">
                   Find your next role,{" "}
                   <span className="text-gradient-hero">faster</span>
@@ -568,8 +565,25 @@ function BrowseContent() {
                 aria-label="Recommended and trending jobs"
                 className="space-y-6"
               >
-                <RecommendedListings />
-                <TrendingListings />
+                <ListingSection
+                  title="Recommended For You"
+                  ariaLabel="Recommended for you"
+                  queryKey={recommendedKeys.all}
+                  queryFn={async () => {
+                    const data = await fetchRecommendedListings();
+                    return data.listings;
+                  }}
+                  enabled={!!user}
+                  showCompare
+                  hrefForListing={(listing) => `/browse/${listing.id}`}
+                />
+                <ListingSection
+                  title="Trending"
+                  queryKey={trendingKeys.all}
+                  queryFn={() => fetchTrending(5, 168)}
+                  staleTime={7 * 24 * 60 * 60 * 1000}
+                  showTrendingBadge
+                />
               </section>
             )}
 

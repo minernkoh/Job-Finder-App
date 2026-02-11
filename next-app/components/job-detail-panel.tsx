@@ -23,14 +23,16 @@ import { cn } from "@ui/components/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
 import { fetchListing, recordListingView } from "@/lib/api/listings";
+import { fetchProfile } from "@/lib/api/profile";
 import { createSummaryStream, consumeSummaryStream } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
 import { useIsMdViewport } from "@/hooks/useIsMdViewport";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { listingKeys } from "@/lib/query-keys";
+import { BADGE_MUTED } from "@/lib/badges";
 import { CARD_PADDING_DEFAULT_RESPONSIVE, GAP_LG } from "@/lib/layout";
-import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
-import { SummaryPanel } from "@/components/summary-panel";
+import { InlineError, PageLoadingSkeleton } from "@/components/page-state";
+import { AISummaryCard } from "@/components/ai-summary-card";
 
 export interface JobDetailPanelProps {
   /** Listing ID to show. */
@@ -75,6 +77,12 @@ export function JobDetailPanel({
     queryKey: listingKeys(listingId),
     queryFn: () => fetchListing(listingId),
     enabled: !!listingId,
+  });
+
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile,
+    enabled: !!user,
   });
 
   const { isSaved, saveMutation, unsaveMutation } = useSavedListings();
@@ -162,17 +170,16 @@ export function JobDetailPanel({
 
   if (isLoading) {
     return (
-      <div className={cn(GAP_LG, CARD_PADDING_DEFAULT_RESPONSIVE)}>
-        <div className="h-8 w-24 animate-pulse rounded bg-muted" />
-        <div className="h-64 animate-pulse rounded-xl bg-muted" />
-      </div>
+      <PageLoadingSkeleton
+        className={cn(GAP_LG, CARD_PADDING_DEFAULT_RESPONSIVE)}
+      />
     );
   }
 
   if (isError || !listing) {
     return (
       <div className={CARD_PADDING_DEFAULT_RESPONSIVE}>
-        <p className="text-destructive">Listing not found.</p>
+        <InlineError message="Listing not found." />
         <Link
           href="/browse"
           className="mt-4 inline-block text-primary hover:underline"
@@ -298,7 +305,7 @@ export function JobDetailPanel({
             ) : null;
           })()}
           {listing.country && listing.country !== "sg" && (
-            <span className="mt-2 inline-block rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            <span className={cn("mt-2 inline-block", BADGE_MUTED)}>
               {listing.country.toUpperCase()}
             </span>
           )}
@@ -314,11 +321,14 @@ export function JobDetailPanel({
 
         <div className="space-y-6">
           <section className="space-y-3">
-            <h2 className={EYEBROW_CLASS}>
+            <h2 className="eyebrow">
               AI Summary
             </h2>
             {summary && summary.tldr ? (
-              <SummaryPanel summary={summary as SummaryWithId} />
+              <AISummaryCard
+                summary={summary as SummaryWithId}
+                hasSkills={(profile?.skills?.length ?? 0) > 0}
+              />
             ) : user ? (
               <>
                 <Button onClick={handleSummarize} disabled={isSummarizing}>
@@ -332,7 +342,7 @@ export function JobDetailPanel({
                   )}
                 </Button>
                 {summaryError && (
-                  <p className="text-sm text-destructive">{summaryError}</p>
+                  <InlineError message={summaryError} />
                 )}
               </>
             ) : (
@@ -349,7 +359,7 @@ export function JobDetailPanel({
 
           {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
             <section className="space-y-2">
-              <h2 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Description</h2>
+              <h2 className="eyebrow mb-2">Description</h2>
               <Card variant="elevated" className="text-sm">
                 {sanitizedDescription.length > 0 && (
                   <CardContent

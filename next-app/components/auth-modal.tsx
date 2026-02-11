@@ -21,6 +21,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AuthFormFields } from "@/components/auth-form-fields";
 import { validatePassword, validateUsername } from "@/lib/validation";
 import { Button, Card, CardContent } from "@ui/components";
+import { cn } from "@ui/components/lib/utils";
+import { CARD_PADDING_AUTH } from "@/lib/layout";
 
 /** Builds pathname + search string without auth and redirect params. */
 function stripAuthParams(
@@ -181,7 +183,7 @@ function AuthModalContent({
           <XIcon className="size-5" />
         </button>
       </div>
-      <CardContent className="flex flex-col gap-6 pt-0 px-10 pb-10">
+      <CardContent className={cn("flex flex-col gap-6 pt-0", CARD_PADDING_AUTH)}>
         <AuthTabs value={tab} onChange={setTab} />
         <div className="min-h-0 overflow-auto">
           {tab === "login" ? (

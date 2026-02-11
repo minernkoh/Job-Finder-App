@@ -10,6 +10,7 @@ import { connectDB } from "@/lib/db";
 import { User, comparePassword } from "@/lib/models/User";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 import { buildSetCookieHeader } from "@/lib/auth/cookies";
+import { serializeUser } from "@/lib/user-serializer";
 
 /** Validates credentials and returns access token plus user; sets refresh token cookie. Resolves user by email (if login contains @) or username. */
 export async function POST(request: NextRequest) {
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     const isEmail = login.includes("@");
     const user = isEmail
       ? await User.findOne({ email: login, role: loginRole }).select("+password").lean()
-      : await User.findOne({ username: login }).select("+password").lean();
+      : await User.findOne({ username: login, role: loginRole }).select("+password").lean();
     if (!user) {
       return NextResponse.json(
         { success: false, message: "Invalid email, username, or password" },
@@ -60,12 +61,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         accessToken,
-        user: {
-          id: sub,
-          email: user.email,
-          role: user.role,
-          username: user.username,
-        },
+        user: serializeUser(user, { timestamps: false }),
       },
       { headers }
     );

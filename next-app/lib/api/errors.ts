@@ -3,8 +3,9 @@
  * Also exports getErrorMessage for client-side and lib/api catch blocks.
  */
 
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import type { z } from "zod";
+import { isValidObjectId } from "@/lib/objectid";
 
 /**
  * Extracts a user-facing error message from an unknown error. Checks response?.data?.message or
@@ -68,4 +69,47 @@ export function validationErrorResponse(
     { success: false, message: displayMessage, errors: zodError.flatten() },
     { status: 400 }
   );
+}
+
+/**
+ * Validates a route param as required and valid ObjectId. Returns 400 NextResponse if missing or invalid; otherwise null.
+ */
+export function validateIdParam(
+  id: string | undefined | null,
+  paramLabel: string
+): NextResponse | null {
+  if (id == null || id === "") {
+    return NextResponse.json(
+      { success: false, message: `${paramLabel} required` },
+      { status: 400 }
+    );
+  }
+  if (!isValidObjectId(id)) {
+    return NextResponse.json(
+      { success: false, message: `Invalid ${paramLabel}` },
+      { status: 400 }
+    );
+  }
+  return null;
+}
+
+/**
+ * Parses request body as JSON. Returns [body, null] on success or [null, 400 NextResponse] on parse error.
+ * Use in POST/PATCH handlers to avoid SyntaxError bubbling as 500.
+ */
+export async function parseJsonBody(
+  request: NextRequest
+): Promise<[unknown, null] | [null, NextResponse]> {
+  try {
+    const body = await request.json();
+    return [body, null];
+  } catch {
+    return [
+      null,
+      NextResponse.json(
+        { success: false, message: "Invalid or missing JSON body" },
+        { status: 400 }
+      ),
+    ];
+  }
 }

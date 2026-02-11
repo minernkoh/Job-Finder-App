@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ListingCreateSchema } from "@schemas";
-import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { parseJsonBody, toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
 import { SORT_BY_ALLOWLIST } from "@/lib/constants/listings";
 import { requireAdmin } from "@/lib/auth/guard";
 import type { ListingsFilters } from "@/lib/types/listings";
@@ -76,7 +76,8 @@ export async function POST(request: NextRequest) {
   try {
     const result = await requireAdmin(request);
     if (result instanceof NextResponse) return result;
-    const body = await request.json();
+    const [body, parseError] = await parseJsonBody(request);
+    if (parseError) return parseError;
     const parsed = ListingCreateSchema.safeParse(body);
     if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
     const listing = await createListing(parsed.data);

@@ -4,8 +4,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ListingUpdateSchema } from "@schemas";
-import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
-import { requireAdmin } from "@/lib/auth/guard";
+import { parseJsonBody, toErrorResponse, validateIdParam, validationErrorResponse } from "@/lib/api/errors";
+import { withAdmin } from "@/lib/api/with-auth";
+import { connectDB } from "@/lib/db";
 import {
   deleteListingById,
   getListingById,
@@ -17,15 +18,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await connectDB();
     const { id } = await params;
-    if (!id) {
-      return NextResponse.json(
-        { success: false, message: "Listing id required" },
-        { status: 400 }
-      );
-    }
-
-    const listing = await getListingById(id);
+    const idErr = validateIdParam(id, "listing id");
+    if (idErr) return idErr;
+    const listing = await getListingById(id!);
     if (!listing) {
       return NextResponse.json(
         { success: false, message: "Listing not found" },
@@ -39,64 +36,46 @@ export async function GET(
   }
 }
 
-/** Updates a listing (admin only). Returns 200 with updated listing or 404. */
-export async function PATCH(
+async function patchListingHandler(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const result = await requireAdmin(request);
-    if (result instanceof NextResponse) return result;
-    const { id } = await params;
-    if (!id) {
-      return NextResponse.json(
-        { success: false, message: "Listing id required" },
-        { status: 400 }
-      );
-    }
+  _payload: { sub: string },
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
+  const idErr = validateIdParam(id, "listing id");
+  if (idErr) return idErr;
+  const [body, parseError] = await parseJsonBody(request);
+  if (parseError) return parseError;
+  const parsed = ListingUpdateSchema.safeParse(body);
+  if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
 
-    const body = await request.json();
-    const parsed = ListingUpdateSchema.safeParse(body);
-    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
-
-    const listing = await updateListingById(id, parsed.data);
-    if (!listing) {
-      return NextResponse.json(
-        { success: false, message: "Listing not found" },
-        { status: 404 }
-      );
-    }
-    return NextResponse.json({ success: true, data: listing });
-  } catch (err) {
-    return toErrorResponse(err, "Failed to update listing");
+  const listing = await updateListingById(id!, parsed.data);
+  if (!listing) {
+    return NextResponse.json(
+      { success: false, message: "Listing not found" },
+      { status: 404 }
+    );
   }
+  return NextResponse.json({ success: true, data: listing });
 }
 
-/** Deletes a listing (admin only). Returns 204 on success or 404 if not found. */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const result = await requireAdmin(request);
-    if (result instanceof NextResponse) return result;
-    const { id } = await params;
-    if (!id) {
-      return NextResponse.json(
-        { success: false, message: "Listing id required" },
-        { status: 400 }
-      );
-    }
-
-    const deleted = await deleteListingById(id);
-    if (!deleted) {
-      return NextResponse.json(
-        { success: false, message: "Listing not found" },
-        { status: 404 }
-      );
-    }
-    return new NextResponse(null, { status: 204 });
-  } catch (err) {
-    return toErrorResponse(err, "Failed to delete listing");
+async function deleteListingHandler(
+  _request: NextRequest,
+  _payload: { sub: string },
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
+  const idErr = validateIdParam(id, "listing id");
+  if (idErr) return idErr;
+  const deleted = await deleteListingById(id!);
+  if (!deleted) {
+    return NextResponse.json(
+      { success: false, message: "Listing not found" },
+      { status: 404 }
+    );
   }
+  return new NextResponse(null, { status: 204 });
 }
+
+export const PATCH = withAdmin(patchListingHandler, "Failed to update listing");
+export const DELETE = withAdmin(deleteListingHandler, "Failed to delete listing");

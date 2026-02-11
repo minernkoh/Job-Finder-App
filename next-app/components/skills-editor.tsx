@@ -13,7 +13,12 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { cn } from "@ui/components/lib/utils";
-import { CARD_PADDING_COMPACT } from "@/lib/layout";
+import { InlineError } from "@/components/page-state";
+import { CARD_PADDING_COMPACT, TEXTAREA_BASE_CLASS } from "@/lib/layout";
+
+/** Shared Tailwind class for clickable skill pill buttons (suggest, resume suggested). */
+const SKILL_PILL_CLASS =
+  "rounded-full border border-border bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export interface SkillsEditorResumeProps {
   selectedFile: File | null;
@@ -205,7 +210,7 @@ export function SkillsEditor({
                       key={skill}
                       type="button"
                       onClick={() => onAddSuggestedSkill(skill)}
-                      className="rounded-full border border-border bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className={SKILL_PILL_CLASS}
                     >
                       {skill}
                     </button>
@@ -337,9 +342,7 @@ export function SkillsEditor({
                 </div>
               )}
               {resumeProps.fileError && (
-                <p className="text-sm text-destructive" role="alert">
-                  {resumeProps.fileError}
-                </p>
+                <InlineError message={resumeProps.fileError} />
               )}
             </div>
             <div className="space-y-2">
@@ -351,7 +354,7 @@ export function SkillsEditor({
                 placeholder="Paste resume or CV text here..."
                 value={resumeProps.resumeText}
                 onChange={(e) => resumeProps.setResumeText(e.target.value)}
-                className="min-h-[96px] w-full rounded-xl border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className={cn(TEXTAREA_BASE_CLASS, "min-h-[96px]")}
                 aria-label="Resume text"
               />
             </div>
@@ -378,9 +381,7 @@ export function SkillsEditor({
               </Button>
             </div>
             {resumeProps.parseError && (
-              <p className="text-sm text-destructive" role="alert">
-                {resumeProps.parseError}
-              </p>
+              <InlineError message={resumeProps.parseError} />
             )}
             {resumeAssessment != null && resumeAssessment.trim() !== "" && (
               <div className="space-y-1 border-t border-border pt-4">
@@ -397,7 +398,7 @@ export function SkillsEditor({
                       key={skill}
                       type="button"
                       onClick={() => onAddResumeSuggestedSkill(skill)}
-                      className="rounded-full border border-border bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className={SKILL_PILL_CLASS}
                     >
                       {skill}
                     </button>
@@ -424,7 +425,7 @@ export function SkillsEditor({
                     key={skill}
                     type="button"
                     onClick={() => onAddResumeSuggestedSkill(skill)}
-                    className="rounded-full border border-border bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className={SKILL_PILL_CLASS}
                   >
                     {skill}
                   </button>
@@ -488,9 +489,7 @@ export function SkillsEditor({
                 </Button>
               </div>
               {saveError && (
-                <p className="text-sm text-destructive" role="alert">
-                  {saveError}
-                </p>
+                <InlineError message={saveError} />
               )}
             </>
           )}

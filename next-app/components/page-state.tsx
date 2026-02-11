@@ -36,7 +36,22 @@ export function PageLoading({
     <div
       className={`flex items-center justify-center p-4 ${fullScreen ? "min-h-screen" : "min-h-[40vh]"}`}
     >
-      <p className="text-muted-foreground">{message}</p>
+      <p className="text-muted-foreground text-sm">{message}</p>
+    </div>
+  );
+}
+
+interface PageLoadingSkeletonProps {
+  /** Optional wrapper className (e.g. layout padding/gap). */
+  className?: string;
+}
+
+/** Skeleton loading state: two pulse bars (title + content). Use in panels or cards where a skeleton is preferred over a message. Pass a wrapper className that includes vertical gap (e.g. GAP_LG) if desired. */
+export function PageLoadingSkeleton({ className }: PageLoadingSkeletonProps) {
+  return (
+    <div className={className}>
+      <div className="h-8 w-24 animate-pulse rounded bg-muted" />
+      <div className="h-64 animate-pulse rounded-xl bg-muted" />
     </div>
   );
 }
@@ -65,7 +80,7 @@ export function PageError({
     <div
       className={`flex flex-col items-center justify-center gap-4 p-4 ${fullScreen ? "min-h-screen" : "min-h-[40vh]"}`}
     >
-      <p className="text-destructive" role="alert">
+      <p className="text-destructive text-sm" role="alert">
         {message}
       </p>
       <div className="flex flex-wrap items-center justify-center gap-2">

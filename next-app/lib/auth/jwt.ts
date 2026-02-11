@@ -11,7 +11,7 @@ export interface AccessPayload {
   role: "admin" | "user";
 }
 
-export interface RefreshPayload {
+interface RefreshPayload {
   sub: string;
 }
 

@@ -52,6 +52,9 @@ export function setOnRefreshSuccess(callback: (newToken: string) => void) {
   onRefreshSuccess = callback;
 }
 
+/** Single in-flight refresh promise so concurrent 401s share one refresh call. */
+let refreshPromise: Promise<string | null> | null = null;
+
 apiClient.interceptors.response.use(
   (res) => res,
   async (err: AxiosError) => {
@@ -68,12 +71,21 @@ apiClient.interceptors.response.use(
       return Promise.reject(err);
     }
     try {
-      const refreshRes = await axios.post(
-        `${baseURL}/api/v1/auth/refresh`,
-        {},
-        { withCredentials: true },
-      );
-      const newToken = refreshRes.data?.accessToken;
+      if (!refreshPromise) {
+        refreshPromise = (async () => {
+          try {
+            const refreshRes = await axios.post(
+              `${baseURL}/api/v1/auth/refresh`,
+              {},
+              { withCredentials: true },
+            );
+            return (refreshRes.data?.accessToken as string) ?? null;
+          } finally {
+            refreshPromise = null;
+          }
+        })();
+      }
+      const newToken = await refreshPromise;
       if (newToken) {
         onRefreshSuccess?.(newToken);
         (originalRequest as { _retry?: boolean })._retry = true;

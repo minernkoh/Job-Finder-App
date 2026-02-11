@@ -10,6 +10,7 @@ import { ArrowsLeftRightIcon, XIcon } from "@phosphor-icons/react";
 import { Button, Card } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { useCompare } from "@/contexts/CompareContext";
+import { BADGE_PILL_COMPARE_ITEM } from "@/lib/badges";
 import { COMPARE_BAR_MB, CONTENT_MAX_W, PAGE_PX } from "@/lib/layout";
 import { EASE_TRANSITION } from "@/lib/animations";
 
@@ -82,7 +83,7 @@ export function CompareBar({ fullWidth }: CompareBarProps) {
                 key={item.id}
                 type="button"
                 onClick={() => removeFromCompare(item.id)}
-                className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-0.5 rounded bg-muted px-3 py-2 text-xs text-muted-foreground hover:text-foreground min-[480px]:min-h-0 min-[480px]:px-2 min-[480px]:py-0.5"
+                className={BADGE_PILL_COMPARE_ITEM}
                 title={`Remove ${item.title} from comparison`}
                 aria-label={`Remove job ${item.title} from comparison`}
               >

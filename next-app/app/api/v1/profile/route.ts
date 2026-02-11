@@ -4,53 +4,45 @@
 
 import { UserProfileUpdateSchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/request";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { withAuth } from "@/lib/api/with-auth";
 import {
   getProfileByUserId,
   upsertProfileForUser,
 } from "@/lib/services/resume.service";
 
-/** Returns the current user's profile or null if none. */
-export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
-
-  try {
-    const profile = await getProfileByUserId(payload.sub);
-    return NextResponse.json({
-      success: true,
-      data: profile ?? { skills: [], jobTitles: [], resumeSummary: undefined, yearsOfExperience: undefined },
-    });
-  } catch (err) {
-    return toErrorResponse(err, "Failed to get profile");
-  }
+async function getProfileHandler(
+  _request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
+  const profile = await getProfileByUserId(payload.sub);
+  return NextResponse.json({
+    success: true,
+    data: profile ?? { skills: [], jobTitles: [], resumeSummary: undefined, yearsOfExperience: undefined },
+  });
 }
 
-/** Upserts the current user's profile with optional skills, jobTitles, resumeSummary, yearsOfExperience. */
-export async function PUT(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
+async function putProfileHandler(
+  request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
+  const body = await request.json();
+  const parsed = UserProfileUpdateSchema.safeParse(body);
+  if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
 
+  const data = parsed.data;
+  const existing = await getProfileByUserId(payload.sub);
+  const merged = {
+    skills: data.skills ?? existing?.skills ?? [],
+    jobTitles: data.jobTitles ?? existing?.jobTitles ?? [],
+    resumeSummary:
+      data.resumeSummary !== undefined
+        ? data.resumeSummary
+        : existing?.resumeSummary,
+    yearsOfExperience:
+      data.yearsOfExperience !== undefined ? data.yearsOfExperience : existing?.yearsOfExperience,
+  };
   try {
-    const body = await request.json();
-    const parsed = UserProfileUpdateSchema.safeParse(body);
-    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
-
-    const data = parsed.data;
-    const existing = await getProfileByUserId(payload.sub);
-    const merged = {
-      skills: data.skills ?? existing?.skills ?? [],
-      jobTitles: data.jobTitles ?? existing?.jobTitles ?? [],
-      resumeSummary:
-        data.resumeSummary !== undefined
-          ? data.resumeSummary
-          : existing?.resumeSummary,
-      yearsOfExperience:
-        data.yearsOfExperience !== undefined ? data.yearsOfExperience : existing?.yearsOfExperience,
-    };
     const profile = await upsertProfileForUser(payload.sub, merged);
     return NextResponse.json({ success: true, data: profile });
   } catch (err) {
@@ -61,3 +53,6 @@ export async function PUT(request: NextRequest) {
     return toErrorResponse(err, "Failed to update profile");
   }
 }
+
+export const GET = withAuth(getProfileHandler, "Failed to get profile");
+export const PUT = withAuth(putProfileHandler, "Failed to update profile");

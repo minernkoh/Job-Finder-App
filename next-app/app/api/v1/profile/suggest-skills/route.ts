@@ -4,16 +4,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { SuggestSkillsBodySchema } from "@schemas";
-import { requireAuth } from "@/lib/auth/request";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { withAuth } from "@/lib/api/with-auth";
 import { suggestSkillsWithRetry } from "@/lib/services/suggest-skills.service";
 import { getEnv } from "@/lib/env";
 
-/** Returns suggested skills for the given current role using Gemini. */
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-
+async function postSuggestSkillsHandler(
+  request: NextRequest,
+  _payload: { sub: string }
+): Promise<NextResponse> {
   const env = getEnv();
   if (!env.GEMINI_API_KEY?.trim()) {
     return NextResponse.json(
@@ -22,11 +21,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  try {
-    const body = await request.json();
-    const parsed = SuggestSkillsBodySchema.safeParse(body);
-    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
+  const body = await request.json();
+  const parsed = SuggestSkillsBodySchema.safeParse(body);
+  if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
 
+  try {
     const result = await suggestSkillsWithRetry(parsed.data.currentRole);
     return NextResponse.json({ success: true, data: result });
   } catch (err) {
@@ -38,3 +37,5 @@ export async function POST(request: NextRequest) {
     return toErrorResponse(err, "Failed to suggest skills");
   }
 }
+
+export const POST = withAuth(postSuggestSkillsHandler, "Failed to suggest skills");

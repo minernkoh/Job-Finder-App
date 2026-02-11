@@ -4,17 +4,16 @@
 
 import { CompareSummaryBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/request";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { withAuth } from "@/lib/api/with-auth";
 import { getProfileByUserId } from "@/lib/services/resume.service";
 import { generateComparisonSummary } from "@/lib/services/summaries.service";
 import { getEnv } from "@/lib/env";
 
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
-
+async function postCompareHandler(
+  request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
   const env = getEnv();
   if (!env.GEMINI_API_KEY?.trim()) {
     return NextResponse.json(
@@ -23,11 +22,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  try {
-    const body = await request.json();
-    const parsed = CompareSummaryBodySchema.safeParse(body);
-    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
+  const body = await request.json();
+  const parsed = CompareSummaryBodySchema.safeParse(body);
+  if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
 
+  try {
     const profile = await getProfileByUserId(payload.sub);
     const userSkills = profile?.skills ?? [];
     const currentRole =
@@ -50,3 +49,5 @@ export async function POST(request: NextRequest) {
     return toErrorResponse(err, "Failed to compare listings");
   }
 }
+
+export const POST = withAuth(postCompareHandler, "Failed to compare listings");

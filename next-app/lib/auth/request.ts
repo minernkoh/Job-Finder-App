@@ -13,7 +13,7 @@ const BEARER_PREFIX = "Bearer ";
  * Extracts and verifies the access token from the request's Authorization header.
  * Returns the payload (userId as sub, email, role) or null if missing or invalid.
  */
-export async function getPayloadFromRequest(
+async function getPayloadFromRequest(
   request: NextRequest
 ): Promise<AccessPayload | null> {
   const auth = request.headers.get("Authorization");

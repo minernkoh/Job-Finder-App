@@ -5,8 +5,8 @@
 
 import { CreateSummaryBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/request";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { withAuth } from "@/lib/api/with-auth";
 import {
   getOrCreateSummary,
   getSummaryForListing,
@@ -14,12 +14,10 @@ import {
 import { getEnv } from "@/lib/env";
 import { isValidObjectId } from "@/lib/objectid";
 
-/** Returns existing summary for listing or null; requires auth. */
-export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
-
+async function getSummariesHandler(
+  request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
   const listingId = request.nextUrl.searchParams.get("listingId")?.trim();
   if (!listingId || !isValidObjectId(listingId)) {
     return NextResponse.json(
@@ -43,11 +41,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
-
+async function postSummariesHandler(
+  request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
   const env = getEnv();
   if (!env.GEMINI_API_KEY?.trim()) {
     return NextResponse.json(
@@ -56,11 +53,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  try {
-    const body = await request.json();
-    const parsed = CreateSummaryBodySchema.safeParse(body);
-    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
+  const body = await request.json();
+  const parsed = CreateSummaryBodySchema.safeParse(body);
+  if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
 
+  try {
     const summary = await getOrCreateSummary(payload.sub, parsed.data);
     return NextResponse.json({ success: true, data: summary });
   } catch (err) {
@@ -84,3 +81,6 @@ export async function POST(request: NextRequest) {
     return toErrorResponse(err, "Failed to create summary");
   }
 }
+
+export const GET = withAuth(getSummariesHandler, "Failed to fetch summary");
+export const POST = withAuth(postSummariesHandler, "Failed to create summary");

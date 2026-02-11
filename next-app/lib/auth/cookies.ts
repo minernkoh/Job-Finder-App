@@ -7,7 +7,7 @@ const REFRESH_COOKIE_PATH = "/api/v1/auth";
 const REFRESH_MAX_AGE_DAYS = 7;
 
 /** Options used when setting the refresh cookie (path, httpOnly, secure, etc.). */
-export function getRefreshCookieOptions(): {
+function getRefreshCookieOptions(): {
   httpOnly: boolean;
   secure: boolean;
   sameSite: "lax";

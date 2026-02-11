@@ -108,6 +108,13 @@
   --color-ring: hsl(var(--ring));
 }
 
+/* Translucent nav bar: semi-transparent background + blur so content behind shows through. */
+.nav-glass {
+  background: hsl(var(--background-hsl) / 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
 /* Match html to body background so overscroll (rubber-band) shows dark theme instead of white */
 html {
   margin: 0;

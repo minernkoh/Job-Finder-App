@@ -10,6 +10,7 @@ import { Button } from "@ui/components";
 import { Logo } from "@/components/logo";
 import { UserMenu } from "@/components/user-menu";
 import { AuthModalLink } from "@/components/auth-modal-link";
+import { BADGE_PILL_ROLE } from "@/lib/badges";
 import { CONTENT_MAX_W, PAGE_PX } from "@/lib/layout";
 import { cn } from "@ui/components/lib/utils";
 import type { AuthUser } from "@/contexts/AuthContext";
@@ -50,7 +51,7 @@ export function AppHeader({ user, onLogout, className }: AppHeaderProps) {
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 border-b border-border bg-background",
+        "sticky top-0 z-50 border-b border-border/80 nav-glass",
         PAGE_PX,
         "py-4",
         className,
@@ -66,7 +67,7 @@ export function AppHeader({ user, onLogout, className }: AppHeaderProps) {
           <Logo className="shrink-0" />
           {isAdmin && user?.role === "admin" && (
             <span
-              className="rounded-full px-2 py-0.5 text-xs font-medium bg-primary/15 text-primary border border-primary/30"
+              className={BADGE_PILL_ROLE}
               aria-label="Admin mode"
             >
               Admin

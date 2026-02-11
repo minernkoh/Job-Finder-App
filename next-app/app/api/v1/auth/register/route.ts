@@ -10,6 +10,7 @@ import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 import { buildSetCookieHeader } from "@/lib/auth/cookies";
+import { serializeUser } from "@/lib/user-serializer";
 
 /** Creates user and returns access token plus user; sets refresh token cookie. Duplicate (email, user) returns 409. */
 export async function POST(request: NextRequest) {
@@ -55,12 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         accessToken,
-        user: {
-          id: sub,
-          email: user.email,
-          role: user.role,
-          username: user.username,
-        },
+        user: serializeUser(user, { timestamps: false }),
       },
       { status: 201, headers }
     );

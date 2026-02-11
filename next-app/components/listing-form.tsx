@@ -5,8 +5,10 @@
 "use client";
 
 import { Button, Input, Label } from "@ui/components";
+import { cn } from "@ui/components/lib/utils";
 import { FormField } from "@/components/form-field";
 import { InlineError } from "@/components/page-state";
+import { TEXTAREA_BASE_CLASS } from "@/lib/layout";
 
 export interface ListingFormValue {
   title: string;
@@ -30,8 +32,7 @@ interface ListingFormProps {
   idPrefix: string;
 }
 
-const textareaClass =
-  "min-h-[100px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm";
+const textareaClass = cn(TEXTAREA_BASE_CLASS, "min-h-[100px]");
 
 /** Renders the six-field listing form; parent owns state and passes value, onChange, and submit handler. */
 export function ListingForm({

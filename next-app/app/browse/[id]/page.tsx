@@ -17,7 +17,7 @@ import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
 import { fetchListing } from "@/lib/api/listings";
 import { listingKeys } from "@/lib/query-keys";
 import { cn } from "@ui/components/lib/utils";
-import { UserOnlyRoute } from "@/components/user-only-route";
+import { ProtectedRoute } from "@/components/protected-route";
 import { Suspense } from "react";
 
 /** Full-page job view: header, compare bar, and job detail with back link to browse. */
@@ -96,9 +96,9 @@ function BrowseJobPageContent() {
 export default function BrowseJobPage() {
   return (
     <Suspense fallback={null}>
-      <UserOnlyRoute requireAuth={false}>
+      <ProtectedRoute blockAdmins requireAuth={false}>
         <BrowseJobPageContent />
-      </UserOnlyRoute>
+      </ProtectedRoute>
     </Suspense>
   );
 }

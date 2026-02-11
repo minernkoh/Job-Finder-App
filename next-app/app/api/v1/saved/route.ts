@@ -5,36 +5,32 @@
 
 import { SaveListingBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/request";
-import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { parseJsonBody, validationErrorResponse } from "@/lib/api/errors";
+import { withAuth } from "@/lib/api/with-auth";
 import {
   getSavedListings,
   saveListing,
 } from "@/lib/services/saved-listings.service";
 
-export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
-  try {
-    const listings = await getSavedListings(payload.sub);
-    return NextResponse.json({ success: true, data: { listings } });
-  } catch (err) {
-    return toErrorResponse(err, "Failed to fetch saved listings");
-  }
+async function getSavedHandler(
+  _request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
+  const listings = await getSavedListings(payload.sub);
+  return NextResponse.json({ success: true, data: { listings } });
 }
 
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  const payload = auth;
-  try {
-    const body = await request.json();
-    const parsed = SaveListingBodySchema.safeParse(body);
-    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
-    const saved = await saveListing(payload.sub, parsed.data);
-    return NextResponse.json({ success: true, data: saved });
-  } catch (err) {
-    return toErrorResponse(err, "Failed to save listing");
-  }
+async function postSavedHandler(
+  request: NextRequest,
+  payload: { sub: string }
+): Promise<NextResponse> {
+  const [body, parseError] = await parseJsonBody(request);
+  if (parseError) return parseError;
+  const parsed = SaveListingBodySchema.safeParse(body);
+  if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
+  const saved = await saveListing(payload.sub, parsed.data);
+  return NextResponse.json({ success: true, data: saved });
 }
+
+export const GET = withAuth(getSavedHandler, "Failed to fetch saved listings");
+export const POST = withAuth(postSavedHandler, "Failed to save listing");

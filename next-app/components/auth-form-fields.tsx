@@ -5,9 +5,9 @@
 
 "use client";
 
-import { Input, Label } from "@ui/components";
+import { Input } from "@ui/components";
+import { FormField } from "@/components/form-field";
 import { PasswordInput } from "@/components/password-input";
-import { InlineError } from "@/components/page-state";
 import { getPasswordStrength } from "@/lib/password-strength";
 import { USERNAME_REGEX } from "@/lib/validation";
 
@@ -51,8 +51,12 @@ export function AuthFormFields({
   return (
     <>
       {mode === "signup" && (
-        <div className="space-y-2">
-          <Label htmlFor={`${p}username`}>Username</Label>
+        <FormField
+          id={`${p}username`}
+          label="Username"
+          error={usernameError}
+          required
+        >
           <Input
             id={`${p}username`}
             type="text"
@@ -67,11 +71,14 @@ export function AuthFormFields({
             autoComplete="username"
             disabled={disabled}
           />
-          {usernameError && <InlineError message={usernameError} />}
-        </div>
+        </FormField>
       )}
-      <div className="space-y-2">
-        <Label htmlFor={`${p}email`}>{mode === "login" ? "Email or username" : "Email"}</Label>
+      <FormField
+        id={`${p}email`}
+        label={mode === "login" ? "Email or username" : "Email"}
+        error={emailError}
+        required
+      >
         <Input
           id={`${p}email`}
           type={mode === "login" ? "text" : "email"}
@@ -82,10 +89,13 @@ export function AuthFormFields({
           autoComplete={mode === "login" ? "username" : "email"}
           disabled={disabled}
         />
-        {emailError && <InlineError message={emailError} />}
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor={`${p}password`}>Password</Label>
+      </FormField>
+      <FormField
+        id={`${p}password`}
+        label="Password"
+        error={passwordError}
+        required
+      >
         <PasswordInput
           id={`${p}password`}
           value={password}
@@ -95,7 +105,6 @@ export function AuthFormFields({
           autoComplete={mode === "login" ? "current-password" : "new-password"}
           disabled={disabled}
         />
-        {passwordError && <InlineError message={passwordError} />}
         {mode === "signup" && password.length > 0 && !passwordError && (
           <p className="text-xs text-muted-foreground">
             Strength:{" "}
@@ -104,7 +113,7 @@ export function AuthFormFields({
             {passwordStrength === 3 && "Strong"}
           </p>
         )}
-      </div>
+      </FormField>
     </>
   );
 }

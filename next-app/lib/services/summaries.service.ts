@@ -562,12 +562,18 @@ ${yearsOfExperience != null ? `- Years of experience: ${yearsOfExperience}` : ""
 Given your skills and experience, which listing is the better fit for you? Set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation based on your skills and experience.`
     : `
 If one listing is clearly a better fit for a typical applicant, set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation.`;
+  const skillsMatchRules =
+    userSkills.length > 0
+      ? `
+- The "summary" paragraph MUST include how each listing matches the user's skills: which of their skills align with each role, how well each job fits their profile, and any gaps (e.g. "Both roles match your Python and data analysis skills; Job 1 emphasizes ML while Job 2 focuses on business analytics. Job 1 aligns better with your experience...").
+- Output "listingMatchScores" for each listing: an array of objects with listingId, matchScore (0-100), matchedSkills (skills from the user's list that the job requires or clearly values), and missingSkills (skills the job requires that the user does not have). Compare each job description to the user's skills and compute the score. Include experience-related gaps in missingSkills when the job requires more years than the user has. For each listing ID in ${JSON.stringify(listingIds)}, add exactly one entry to listingMatchScores.`
+      : "";
   const prompt = `You are a job comparison assistant for the Singapore job market. Compare the following ${listings.length} job listings and produce a unified comparison that summarizes similarities and differences.
 
 ${blocks.join("\n\n")}
 
 Rules:
-- Write a single "summary" paragraph that synthesizes the comparison: what the roles have in common and how they differ (e.g. seniority, focus, salary, location, requirements).
+- Write a single "summary" paragraph that synthesizes the comparison: what the roles have in common and how they differ (e.g. seniority, focus, salary, location, requirements).${skillsMatchRules}
 - Provide "similarities": an array of 3–6 short points describing what is similar across these listings (e.g. all require X, all mention Y, similar industry).
 - Provide "differences": an array of 3–6 short points describing key differences (e.g. seniority level, salary range, remote vs on-site, different tech stacks).
 - Optionally list 3–6 "comparisonPoints" (additional comparison points if needed).
