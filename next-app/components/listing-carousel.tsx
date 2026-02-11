@@ -56,8 +56,8 @@ export function ListingCarousel({
       {/* Breakout wrapper: full viewport width so first/last cards are not cropped by padded main content. */}
       <div className="relative left-1/2 w-screen -translate-x-1/2">
         {/* Left padding matches main content left edge so the first card aligns with the section title. */}
-        <div className="scrollbar-hide min-w-0 w-full min-h-[12rem] overflow-x-scroll overflow-y-hidden pl-[max(1rem,calc(1rem+(100vw-2rem-72rem)/2))] sm:pl-[max(1.5rem,calc(1.5rem+(100vw-3rem-72rem)/2))] pr-6 pt-3 pb-4 [scroll-padding-inline:1rem]">
-          <div className="flex gap-3 shrink-0 w-max">
+        <div className="scrollbar-hide min-w-0 w-full h-[12rem] overflow-x-scroll overflow-y-hidden pl-[max(1rem,calc(1rem+(100vw-2rem-72rem)/2))] sm:pl-[max(1.5rem,calc(1.5rem+(100vw-3rem-72rem)/2))] pr-6 pt-3 pb-4 [scroll-padding-inline:1rem]">
+          <div className="flex gap-2 shrink-0 w-max h-full items-stretch">
             {listings.map((listing, index) => (
               <motion.div
                 key={listing.id}
@@ -67,7 +67,7 @@ export function ListingCarousel({
                   ...EASE_TRANSITION,
                   ...staggerDelay(index),
                 }}
-                className="min-w-[17.5rem] max-w-[20rem] shrink-0"
+                className="min-w-[17.5rem] max-w-[20rem] shrink-0 h-full"
               >
                 <ListingCard
                   listing={listing}

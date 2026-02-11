@@ -1,11 +1,10 @@
 /**
- * Summarize page: paste job URL or raw job description text and get an AI summary. Protected.
+ * Summarize page: paste job URL or raw job description text and get a streaming AI summary. Protected.
  */
 
 "use client";
 
 import Link from "next/link";
-import { useMutation } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -14,38 +13,53 @@ import {
 import { Button, Card, CardContent, Label } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { ProtectedRoute } from "@/components/protected-route";
-import { createSummary } from "@/lib/api/summaries";
+import { createSummaryStream, consumeSummaryStream } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
-import { useState, Suspense } from "react";
+import { useState, useCallback, Suspense } from "react";
 import { CARD_PADDING_COMPACT, PAGE_PX } from "@/lib/layout";
 import { EYEBROW_CLASS } from "@/lib/styles";
 import { SummaryPanel } from "@/components/summary-panel";
 
-/** Inner content: paste URL or text, summarize button, summary or error. */
+/** Inner content: paste URL or text, summarize button, streaming summary or error. */
 function SummarizeContent() {
   const [input, setInput] = useState("");
-  const [summary, setSummary] = useState<SummaryWithId | null>(null);
+  const [summary, setSummary] = useState<Partial<SummaryWithId> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const mutation = useMutation({
-    mutationFn: (body: { url?: string; text?: string }) => createSummary(body),
-    onSuccess: (data) => {
-      setSummary(data);
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const trimmed = input.trim();
+      if (!trimmed) return;
       setError(null);
-    },
-    onError: (err) => {
-      setError(err instanceof Error ? err.message : "Failed to summarize");
-    },
-  });
+      setSummary(null);
+      setIsLoading(true);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = input.trim();
-    if (!trimmed) return;
-    setError(null);
-    const isUrl = /^https?:\/\//i.test(trimmed);
-    mutation.mutate(isUrl ? { url: trimmed } : { text: trimmed });
-  }
+      try {
+        const isUrl = /^https?:\/\//i.test(trimmed);
+        const body = isUrl ? { url: trimmed } : { text: trimmed };
+        const result = await createSummaryStream(body);
+
+        if (!result.stream) {
+          /* Cache hit: full summary returned immediately. */
+          setSummary(result.data);
+          setIsLoading(false);
+          return;
+        }
+
+        /* Cache miss: read NDJSON stream and merge partial updates. */
+        await consumeSummaryStream(result.reader, (partial) => {
+          setSummary((prev) => ({ ...prev, ...partial }));
+        });
+        setIsLoading(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to summarize");
+        setIsLoading(false);
+      }
+    },
+    [input],
+  );
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -64,7 +78,7 @@ function SummarizeContent() {
         className={cn(
           "mx-auto w-full flex-1 space-y-8 py-8",
           PAGE_PX,
-          summary ? "max-w-5xl" : "max-w-2xl"
+          summary ? "max-w-5xl" : "max-w-2xl",
         )}
       >
         <h1 className="text-2xl font-semibold text-foreground tracking-tight">
@@ -74,20 +88,27 @@ function SummarizeContent() {
           Paste a job posting URL or raw job description text below.
         </p>
 
-        {summary ? (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_1fr] lg:gap-8">
+        {summary && summary.tldr ? (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-[3fr_1fr] md:gap-8">
             <div className="space-y-3">
-              <h2 className={EYEBROW_CLASS}>AI Summary</h2>
-              <SummaryPanel summary={summary} showJdMatch={false} />
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSummary(null);
-                  setInput("");
-                }}
-              >
-                Summarize another
-              </Button>
+              <h2 className={EYEBROW_CLASS}>
+                AI Summary
+              </h2>
+              <SummaryPanel
+                summary={summary as SummaryWithId}
+                showJdMatch={false}
+              />
+              {!isLoading && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSummary(null);
+                    setInput("");
+                  }}
+                >
+                  Summarize another
+                </Button>
+              )}
             </div>
             <div className="space-y-2">
               <h2 className={EYEBROW_CLASS}>Description</h2>
@@ -126,25 +147,21 @@ function SummarizeContent() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Paste a job URL (e.g. https://...) or paste the full job description text"
                 rows={8}
-                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-y min-h-[120px]"
+                className="flex w-full rounded-xl border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_3px_hsl(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-y min-h-[120px]"
               />
             </div>
             <Button
               type="submit"
               variant="default"
-              disabled={mutation.isPending || !input.trim()}
+              disabled={isLoading || !input.trim()}
               icon={
-                !mutation.isPending ? (
-                  <SparkleIcon size={16} weight="bold" />
-                ) : undefined
+                !isLoading ? <SparkleIcon size={16} weight="bold" /> : undefined
               }
               iconRight={
-                !mutation.isPending ? (
-                  <ArrowRightIcon weight="bold" />
-                ) : undefined
+                !isLoading ? <ArrowRightIcon weight="bold" /> : undefined
               }
             >
-              {mutation.isPending ? "Summarizing…" : "Summarize with AI"}
+              {isLoading ? "Summarizing…" : "Summarize with AI"}
             </Button>
             {error && (
               <p className="text-sm text-destructive" role="alert">

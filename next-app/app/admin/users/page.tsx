@@ -220,7 +220,7 @@ export default function AdminUsersPage() {
                 id="create-role"
                 value={createForm.role}
                 onChange={(e) => setCreateForm((f) => ({ ...f, role: e.target.value as "user" | "admin" }))}
-                className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                className="rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground"
                 disabled={createSubmitting}
               >
                 <option value="user">User</option>
@@ -252,7 +252,7 @@ export default function AdminUsersPage() {
               <Label htmlFor="search" className="sr-only">
                 Search
               </Label>
-              <span className="flex items-center gap-1 rounded-md border border-input bg-background px-2">
+              <span className="flex items-center gap-1 rounded-xl border border-input bg-background px-2">
                 <MagnifyingGlassIcon className="size-4 text-muted-foreground" weight="regular" />
                 <Input
                   id="search"
@@ -267,7 +267,7 @@ export default function AdminUsersPage() {
             <select
               value={role}
               onChange={(e) => { setRole(e.target.value); setPage(1); }}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+              className="rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground"
             >
               <option value="">All roles</option>
               <option value="admin">Admin</option>
@@ -276,7 +276,7 @@ export default function AdminUsersPage() {
             <select
               value={status}
               onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+              className="rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground"
             >
               <option value="">All statuses</option>
               <option value="active">Active</option>

@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse } from "@/lib/api/errors";
+import { isValidObjectId } from "@/lib/objectid";
 import { recordView } from "@/lib/services/listing-views.service";
 
 export async function POST(
@@ -15,6 +16,12 @@ export async function POST(
     if (!id) {
       return NextResponse.json(
         { success: false, message: "Listing id required" },
+        { status: 400 }
+      );
+    }
+    if (!isValidObjectId(id)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing id" },
         { status: 400 }
       );
     }

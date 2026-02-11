@@ -9,12 +9,11 @@ import { EYEBROW_CLASS } from "@/lib/styles";
 
 /** Same close button style as auth modal for consistency. */
 export const authCloseButtonClass =
-  "rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors";
+  "rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors";
 
 /** Narrow width for auth modal card; matches AuthCard layout. */
-export const authModalNarrowWidthClass = "w-full max-w-lg";
-/** Min height for auth modal content; matches AuthCard CardContent. */
-export const authModalHeightClass = "min-h-[22rem]";
+export const authModalNarrowWidthClass =
+  "w-full min-w-0 max-w-[min(32rem,calc(100vw-2rem))]";
 
 interface AuthCardProps {
   title: string;
@@ -43,9 +42,9 @@ export function AuthCard({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-4">
       {backLink != null && backLink}
-      <Card variant="elevated" className="w-full max-w-lg overflow-hidden">
+      <Card variant="elevated" className="w-full max-w-lg min-w-0 overflow-hidden">
         {onClose != null && (
-          <div className="flex min-h-[3rem] items-center justify-end border-b border-border pr-2 py-2">
+          <div className="flex min-h-[3rem] items-center justify-end pr-2 py-2">
             <button
               type="button"
               onClick={onClose}

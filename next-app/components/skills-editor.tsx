@@ -120,17 +120,54 @@ export function SkillsEditor({
 }: SkillsEditorProps) {
   const fileInputId = `${idPrefix}-resume-file`;
   const yearsId = yearsInputId ?? `${idPrefix}-years`;
+  const hasYearsField =
+    yearsValue !== undefined && typeof onYearsChange === "function";
 
   return (
     <Card variant="default" className="border-border">
-      <CardContent className={cn(CARD_PADDING_COMPACT, "space-y-3")}>
+      <CardContent className={cn(CARD_PADDING_COMPACT, "space-y-6")}>
         {introText && (
           <p className="text-sm text-muted-foreground">{introText}</p>
         )}
-        {showRoleBlock && yearsValue !== undefined && onYearsChange && (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
+        {showRoleBlock && (
+          <section className="space-y-4">
+            {hasYearsField ? (
+              <>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-3 min-w-0">
+                    <Label htmlFor={`${idPrefix}-role`} className="text-sm">
+                      Current Role
+                    </Label>
+                    <Input
+                      id={`${idPrefix}-role`}
+                      type="text"
+                      placeholder="e.g. Software Engineer"
+                      value={roleValue}
+                      onChange={(e) => onRoleChange(e.target.value)}
+                      className="h-9 w-full min-w-0"
+                      aria-label="Current role"
+                    />
+                  </div>
+                  <div className="space-y-3 min-w-0">
+                    <Label htmlFor={yearsId} className="text-sm">
+                      {yearsLabel ?? "Years of experience"}
+                    </Label>
+                    <Input
+                      id={yearsId}
+                      type="number"
+                      min={0}
+                      max={70}
+                      placeholder="Optional"
+                      value={yearsValue}
+                      onChange={(e) => onYearsChange?.(e.target.value)}
+                      className="h-9 w-full min-w-0"
+                      aria-label="Years of experience"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3">
                 <Label htmlFor={`${idPrefix}-role`} className="text-sm">
                   Current Role
                 </Label>
@@ -140,81 +177,17 @@ export function SkillsEditor({
                   placeholder="e.g. Software Engineer"
                   value={roleValue}
                   onChange={(e) => onRoleChange(e.target.value)}
-                  className="w-full h-9 min-w-0"
+                  className="h-9 w-full min-w-0"
                   aria-label="Current role"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor={yearsId} className="text-sm">
-                  {yearsLabel ?? "Years of experience"}
-                </Label>
-                <div className="flex gap-2 items-center">
-                  <Input
-                    id={yearsId}
-                    type="number"
-                    min={0}
-                    max={70}
-                    placeholder="Optional"
-                    value={yearsValue}
-                    onChange={(e) => onYearsChange(e.target.value)}
-                    className="w-24 h-9 shrink-0"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="default"
-                    className="h-9 min-w-0 px-4 shrink-0"
-                    disabled={!roleValue.trim() || suggestPending}
-                    onClick={onSuggest}
-                    aria-label="Suggest skills"
-                  >
-                    <SparkleIcon className="mr-1.5 size-4" aria-hidden />
-                    {suggestPending ? "Suggesting…" : "Suggest skills"}
-                  </Button>
-                </div>
-              </div>
-            </div>
-            {suggestedSkills.length > 0 && (
-              <div className="space-y-1">
-                <p className="eyebrow">Suggested skills — click to add</p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedSkills.map((skill) => (
-                    <button
-                      key={skill}
-                      type="button"
-                      onClick={() => onAddSuggestedSkill(skill)}
-                      className="rounded-full px-3 py-1 text-sm bg-muted border border-border hover:bg-muted/80 text-foreground"
-                    >
-                      {skill}
-                    </button>
-                  ))}
-                </div>
-              </div>
             )}
-          </>
-        )}
-        {showRoleBlock && (yearsValue === undefined || !onYearsChange) && (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor={`${idPrefix}-role`} className="text-sm">
-                Current Role
-              </Label>
-              <Input
-                id={`${idPrefix}-role`}
-                type="text"
-                placeholder="e.g. Software Engineer"
-                value={roleValue}
-                onChange={(e) => onRoleChange(e.target.value)}
-                className="w-full h-9 min-w-0"
-                aria-label="Current role"
-              />
-            </div>
-            <div>
+            <div className="flex justify-center">
               <Button
                 type="button"
                 variant="secondary"
                 size="default"
-                className="h-9 min-w-0 px-4"
+                className="h-9 min-w-[12rem] px-6"
                 disabled={!roleValue.trim() || suggestPending}
                 onClick={onSuggest}
                 aria-label="Suggest skills"
@@ -224,7 +197,7 @@ export function SkillsEditor({
               </Button>
             </div>
             {suggestedSkills.length > 0 && (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <p className="eyebrow">Suggested skills — click to add</p>
                 <div className="flex flex-wrap gap-2">
                   {suggestedSkills.map((skill) => (
@@ -232,7 +205,7 @@ export function SkillsEditor({
                       key={skill}
                       type="button"
                       onClick={() => onAddSuggestedSkill(skill)}
-                      className="rounded-full px-3 py-1 text-sm bg-muted border border-border hover:bg-muted/80 text-foreground"
+                      className="rounded-full border border-border bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {skill}
                     </button>
@@ -240,63 +213,67 @@ export function SkillsEditor({
                 </div>
               </div>
             )}
-          </>
+          </section>
         )}
-        {!showRoleBlock && yearsValue !== undefined && onYearsChange && (
-          <div className="space-y-2">
-            <Label htmlFor={yearsId} className="text-sm">
-              {yearsLabel ?? "Years of experience"}
-            </Label>
-            <Input
-              id={yearsId}
-              type="number"
-              min={0}
-              max={70}
-              placeholder="Optional"
-              value={yearsValue}
-              onChange={(e) => onYearsChange(e.target.value)}
-              className="w-24"
-            />
-          </div>
+        {!showRoleBlock && hasYearsField && (
+          <section className="space-y-3">
+            <p className="eyebrow">Experience</p>
+            <div className="space-y-2">
+              <Label htmlFor={yearsId} className="text-sm">
+                {yearsLabel ?? "Years of experience"}
+              </Label>
+              <Input
+                id={yearsId}
+                type="number"
+                min={0}
+                max={70}
+                placeholder="Optional"
+                value={yearsValue}
+                onChange={(e) => onYearsChange?.(e.target.value)}
+                className="w-24"
+              />
+            </div>
+          </section>
         )}
         {showCustomBlock && (
-          <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}-custom`} className="text-sm">
-              Or add a skill manually
-            </Label>
-            <div className="flex gap-2 items-center">
-              <Input
-                id={`${idPrefix}-custom`}
-                type="text"
-                placeholder="e.g. TypeScript"
-                value={customSkill}
-                onChange={(e) => onCustomSkillChange(e.target.value)}
-                onKeyDown={(e) =>
-                  e.key === "Enter" && (e.preventDefault(), onAddCustom())
-                }
-                className="flex-1 h-9"
-                aria-label="Custom skill"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="default"
-                className="h-9 min-w-0 px-4"
-                disabled={!customSkill.trim()}
-                onClick={onAddCustom}
-                aria-label="Add skill"
-              >
-                Add
-              </Button>
+          <section className="space-y-3 border-t border-border pt-4">
+            <p className="eyebrow">Or add manually</p>
+            <div className="space-y-2">
+              <Label htmlFor={`${idPrefix}-custom`} className="text-sm">
+                Skill name
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id={`${idPrefix}-custom`}
+                  type="text"
+                  placeholder="e.g. TypeScript"
+                  value={customSkill}
+                  onChange={(e) => onCustomSkillChange(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && (e.preventDefault(), onAddCustom())
+                  }
+                  className="h-9 flex-1"
+                  aria-label="Custom skill"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="default"
+                  className="h-9 min-w-0 px-4"
+                  disabled={!customSkill.trim()}
+                  onClick={onAddCustom}
+                  aria-label="Add skill"
+                >
+                  Add
+                </Button>
+              </div>
             </div>
-          </div>
+          </section>
         )}
         {showResumeBlock && resumeProps && (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor={fileInputId} className="text-sm">
-                Or upload a PDF or DOCX (max 5MB)
-              </Label>
+          <section className="space-y-4 border-t border-border pt-4">
+            <p className="eyebrow">Scan resume for skills</p>
+            <div className="space-y-3">
               <input
                 id={fileInputId}
                 type="file"
@@ -322,10 +299,10 @@ export function SkillsEditor({
                 }}
                 onClick={() => document.getElementById(fileInputId)?.click()}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-6 px-4 cursor-pointer transition-colors",
+                  "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-10 px-4 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   resumeProps.dragOver
                     ? "border-primary bg-primary/5"
-                    : "border-border bg-muted/30 hover:bg-muted/50",
+                    : "border-border bg-muted/30 hover:border-border/70 hover:bg-muted/50",
                 )}
                 aria-label="Drop PDF or DOCX here or click to choose file"
               >
@@ -339,20 +316,25 @@ export function SkillsEditor({
                     : "Drop a PDF or DOCX here or click to choose file"}
                 </span>
               </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Supported files: PDF, DOCX (max 5MB)
+              </p>
               {resumeProps.selectedFile && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="text-muted-foreground"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    resumeProps.setSelectedFile(null);
-                    resumeProps.setFileError(null);
-                  }}
-                >
-                  Clear file
-                </Button>
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="text-muted-foreground"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      resumeProps.setSelectedFile(null);
+                      resumeProps.setFileError(null);
+                    }}
+                  >
+                    Clear file
+                  </Button>
+                </div>
               )}
               {resumeProps.fileError && (
                 <p className="text-sm text-destructive" role="alert">
@@ -362,14 +344,14 @@ export function SkillsEditor({
             </div>
             <div className="space-y-2">
               <Label htmlFor={`${idPrefix}-resume-paste`} className="text-sm">
-                {resumeProps.pasteLabel ?? "Or paste resume text"}
+                {resumeProps.pasteLabel ?? "Paste resume text"}
               </Label>
               <textarea
                 id={`${idPrefix}-resume-paste`}
                 placeholder="Paste resume or CV text here..."
                 value={resumeProps.resumeText}
                 onChange={(e) => resumeProps.setResumeText(e.target.value)}
-                className="w-full min-h-[80px] rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="min-h-[96px] w-full rounded-xl border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 aria-label="Resume text"
               />
             </div>
@@ -400,32 +382,57 @@ export function SkillsEditor({
                 {resumeProps.parseError}
               </p>
             )}
-          </>
+            {resumeAssessment != null && resumeAssessment.trim() !== "" && (
+              <div className="space-y-1 border-t border-border pt-4">
+                <p className="eyebrow">Resume feedback</p>
+                <p className="text-sm text-foreground">{resumeAssessment}</p>
+              </div>
+            )}
+            {resumeSuggestedSkills.length > 0 && onAddResumeSuggestedSkill && (
+              <div className="space-y-2 border-t border-border pt-4">
+                <p className="eyebrow">Skills from resume — click to add</p>
+                <div className="flex flex-wrap gap-2">
+                  {resumeSuggestedSkills.map((skill) => (
+                    <button
+                      key={skill}
+                      type="button"
+                      onClick={() => onAddResumeSuggestedSkill(skill)}
+                      className="rounded-full border border-border bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {skill}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
         )}
-        {resumeAssessment != null && resumeAssessment.trim() !== "" && (
-          <div className="space-y-1 pt-2 border-t border-border">
+        {!showResumeBlock && resumeAssessment != null && resumeAssessment.trim() !== "" && (
+          <div className="space-y-1 border-t border-border pt-4">
             <p className="eyebrow">Resume feedback</p>
             <p className="text-sm text-foreground">{resumeAssessment}</p>
           </div>
         )}
-        {resumeSuggestedSkills.length > 0 && onAddResumeSuggestedSkill && (
-          <div className="space-y-1 pt-2 border-t border-border">
-            <p className="eyebrow">Skills from resume — click to add</p>
-            <div className="flex flex-wrap gap-2">
-              {resumeSuggestedSkills.map((skill) => (
-                <button
-                  key={skill}
-                  type="button"
-                  onClick={() => onAddResumeSuggestedSkill(skill)}
-                  className="rounded-full px-3 py-1 text-sm bg-muted border border-border hover:bg-muted/80 text-foreground"
-                >
-                  {skill}
-                </button>
-              ))}
+        {!showResumeBlock &&
+          resumeSuggestedSkills.length > 0 &&
+          onAddResumeSuggestedSkill && (
+            <div className="space-y-2 border-t border-border pt-4">
+              <p className="eyebrow">Skills from resume — click to add</p>
+              <div className="flex flex-wrap gap-2">
+                {resumeSuggestedSkills.map((skill) => (
+                  <button
+                    key={skill}
+                    type="button"
+                    onClick={() => onAddResumeSuggestedSkill(skill)}
+                    className="rounded-full border border-border bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {skill}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-        <div className="pt-2 border-t border-border space-y-2">
+          )}
+        <div className="space-y-3 border-t border-border pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="eyebrow m-0">{yourSkillsHeading ?? "Your skills"}</p>
             {onRemoveAllSkills && skills.length > 0 && (

@@ -31,7 +31,7 @@ interface ListingFormProps {
 }
 
 const textareaClass =
-  "min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
+  "min-h-[100px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm";
 
 /** Renders the six-field listing form; parent owns state and passes value, onChange, and submit handler. */
 export function ListingForm({

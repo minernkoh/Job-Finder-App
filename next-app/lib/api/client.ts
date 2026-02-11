@@ -22,6 +22,11 @@ export function setAccessTokenGetter(getter: () => string | null) {
   getAccessToken = getter;
 }
 
+/** Returns the current access token (or null). Used by fetch-based helpers that bypass Axios (e.g. streaming). */
+export function getCurrentAccessToken(): string | null {
+  return getAccessToken?.() ?? null;
+}
+
 apiClient.interceptors.request.use((config) => {
   const token = getAccessToken?.() ?? null;
   if (token) {
@@ -66,7 +71,7 @@ apiClient.interceptors.response.use(
       const refreshRes = await axios.post(
         `${baseURL}/api/v1/auth/refresh`,
         {},
-        { withCredentials: true }
+        { withCredentials: true },
       );
       const newToken = refreshRes.data?.accessToken;
       if (newToken) {
@@ -80,5 +85,5 @@ apiClient.interceptors.response.use(
     }
     if (!isRefreshRequest) onUnauthorized?.();
     return Promise.reject(err);
-  }
+  },
 );

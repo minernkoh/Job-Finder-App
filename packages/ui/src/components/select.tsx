@@ -207,7 +207,7 @@ function Select({
 
   const isPlaceholderSelected = !value;
   const triggerClasses = cn(
-    "flex h-9 items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    "flex h-9 items-center justify-between gap-2 rounded-xl border border-input bg-transparent px-3 text-sm transition-colors focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_3px_hsl(var(--ring))]",
     fullWidth && "w-full",
     disabled && "cursor-not-allowed opacity-50",
     isPlaceholderSelected ? "text-muted-foreground" : "text-foreground",
@@ -221,7 +221,7 @@ function Select({
             ref={panelRef}
             style={panelStyle}
             className={cn(
-              "overflow-hidden rounded-lg border border-border bg-card shadow-sm",
+              "overflow-hidden rounded-xl border border-border bg-card shadow-sm",
               panelClassName
             )}
             role="listbox"

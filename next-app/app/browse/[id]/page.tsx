@@ -40,7 +40,12 @@ function BrowseJobPageContent() {
         <AppHeader user={user} onLogout={logout} />
         <main
           id="main-content"
-          className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}
+          className={cn(
+            "mx-auto flex-1 w-full pb-8",
+            CONTENT_MAX_W,
+            SECTION_GAP,
+            PAGE_PX,
+          )}
         >
           <p className="text-muted-foreground">Job not found.</p>
           <Button asChild variant="outline" size="sm" className="mt-4">
@@ -58,12 +63,21 @@ function BrowseJobPageContent() {
 
       <main
         id="main-content"
-        className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}
+        className={cn(
+          "mx-auto flex-1 w-full pb-8",
+          CONTENT_MAX_W,
+          SECTION_GAP,
+          PAGE_PX,
+        )}
       >
-        <Card variant="default" className="flex flex-col min-h-0 border-border overflow-hidden">
+        <Card
+          variant="default"
+          className="flex flex-col min-h-0 border-border overflow-hidden"
+        >
           <JobDetailPanel
             listingId={id}
-            basePath="/browse"
+            backToHref="/browse"
+            backToLabel="Back to listings"
             onAddToCompare={
               isInCompareSet(id)
                 ? () => removeFromCompare(id)

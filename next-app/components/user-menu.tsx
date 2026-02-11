@@ -1,5 +1,5 @@
 /**
- * UserMenu: circular avatar with user's first initial. Hover or click opens dropdown with Logout; Escape or click outside closes. Accessible aria-expanded and keyboard support.
+ * UserMenu: circular avatar with user's first initial. Click opens dropdown with Logout; Escape or click outside closes. Accessible aria-expanded and keyboard support.
  */
 
 "use client";
@@ -23,34 +23,13 @@ function getInitial(user: AuthUser): string {
   );
 }
 
-/** Renders a circular avatar; hover or click opens dropdown with Logout. Escape or click outside closes; aria-expanded reflects open state. */
+/** Renders a circular avatar; click opens dropdown with Logout. Escape or click outside closes; aria-expanded reflects open state. */
 export function UserMenu({ user, onLogout }: UserMenuProps) {
   const initial = getInitial(user);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const close = useCallback(() => setOpen(false), []);
-
-  const clearCloseTimeout = useCallback(() => {
-    if (closeTimeoutRef.current !== null) {
-      clearTimeout(closeTimeoutRef.current);
-      closeTimeoutRef.current = null;
-    }
-  }, []);
-
-  const handleMouseEnter = useCallback(() => {
-    clearCloseTimeout();
-    setOpen(true);
-  }, [clearCloseTimeout]);
-
-  const handleMouseLeave = useCallback(() => {
-    closeTimeoutRef.current = setTimeout(() => setOpen(false), 150);
-  }, []);
-
-  useEffect(() => {
-    return () => clearCloseTimeout();
-  }, [clearCloseTimeout]);
 
   useEffect(() => {
     if (!open) return;
@@ -84,8 +63,6 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
       className="relative"
       role="group"
       aria-label="User menu"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
     >
       <button
         type="button"

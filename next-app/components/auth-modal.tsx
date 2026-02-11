@@ -12,25 +12,20 @@ import { XIcon } from "@phosphor-icons/react";
 import { EASE_TRANSITION } from "@/lib/animations";
 import {
   authCloseButtonClass,
-  authModalHeightClass,
   authModalNarrowWidthClass,
 } from "@/components/auth-card";
-import { CARD_PADDING_AUTH } from "@/lib/layout";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { getErrorMessage } from "@/lib/api/errors";
 import { InlineError } from "@/components/page-state";
 import { useAuth } from "@/contexts/AuthContext";
 import { AuthFormFields } from "@/components/auth-form-fields";
-import {
-  validatePassword,
-  validateUsername,
-} from "@/lib/validation";
+import { validatePassword, validateUsername } from "@/lib/validation";
 import { Button, Card, CardContent } from "@ui/components";
 
 /** Builds pathname + search string without auth and redirect params. */
 function stripAuthParams(
   pathname: string,
-  searchParams: URLSearchParams
+  searchParams: URLSearchParams,
 ): string {
   const next = new URLSearchParams(searchParams);
   next.delete("auth");
@@ -76,7 +71,7 @@ function AuthModalContent({
         setSubmitting(false);
       }
     },
-    [email, password, login, onSuccess]
+    [email, password, login, onSuccess],
   );
 
   const handleSignup = useCallback(
@@ -100,9 +95,18 @@ function AuthModalContent({
         onSuccess();
       } catch (err: unknown) {
         setError(getErrorMessage(err, "Registration failed"));
-        const data = err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { errors?: { fieldErrors?: Record<string, string[]> } } } }).response?.data
-          : undefined;
+        const data =
+          err && typeof err === "object" && "response" in err
+            ? (
+                err as {
+                  response?: {
+                    data?: {
+                      errors?: { fieldErrors?: Record<string, string[]> };
+                    };
+                  };
+                }
+              ).response?.data
+            : undefined;
         const fieldErrorsFromApi = data?.errors?.fieldErrors;
         if (fieldErrorsFromApi && typeof fieldErrorsFromApi === "object") {
           setFieldErrors({
@@ -115,7 +119,7 @@ function AuthModalContent({
         setSubmitting(false);
       }
     },
-    [email, password, username, register, onSuccess]
+    [email, password, username, register, onSuccess],
   );
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -124,7 +128,7 @@ function AuthModalContent({
     const el = contentRef.current;
     if (!el) return;
     const firstFocusable = el.querySelector<HTMLElement>(
-      'button[aria-label="Close"], button:not([disabled]), input:not([disabled]), [href]'
+      'button[aria-label="Close"], button:not([disabled]), input:not([disabled]), [href]',
     );
     firstFocusable?.focus();
   }, []);
@@ -135,8 +139,8 @@ function AuthModalContent({
     const getFocusables = () =>
       Array.from(
         el.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
-        )
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
       ).filter((node) => node.tabIndex !== -1);
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
@@ -177,11 +181,9 @@ function AuthModalContent({
           <XIcon className="size-5" />
         </button>
       </div>
-      <CardContent
-        className={`${authModalHeightClass} flex flex-col gap-6 ${CARD_PADDING_AUTH}`}
-      >
+      <CardContent className="flex flex-col gap-6 pt-0 px-10 pb-10">
         <AuthTabs value={tab} onChange={setTab} />
-        <div className="flex-1 min-h-0 overflow-auto">
+        <div className="min-h-0 overflow-auto">
           {tab === "login" ? (
             <form
               id="modal-login-form"
@@ -223,7 +225,7 @@ function AuthModalContent({
             </form>
           )}
         </div>
-        <div className="mt-auto pt-4">
+        <div className="pt-4">
           <Button
             type="submit"
             form={tab === "login" ? "modal-login-form" : "modal-signup-form"}
@@ -278,7 +280,8 @@ export function AuthModal() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeModal]);
 
-  if ((auth !== "login" && auth !== "signup") || dismissedAfterSuccess) return null;
+  if ((auth !== "login" && auth !== "signup") || dismissedAfterSuccess)
+    return null;
 
   const initialTab: AuthTab = auth === "signup" ? "signup" : "login";
 

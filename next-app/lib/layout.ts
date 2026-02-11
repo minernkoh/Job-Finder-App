@@ -38,5 +38,5 @@ export const CARD_PADDING_HERO = "p-6 sm:p-8";
 /** Empty state containers (centered copy). */
 export const EMPTY_STATE_PADDING = "px-6 py-12";
 
-/** Margin below compare bar (sticky bar above main content). */
-export const COMPARE_BAR_MB = "mb-6";
+/** Margin below compare bar (sticky bar above main content). Kept equal to space above for equidistant spacing. */
+export const COMPARE_BAR_MB = "mb-4";

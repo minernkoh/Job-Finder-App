@@ -229,7 +229,7 @@ function ProfileContent() {
         )}
       >
         <h1 className="sr-only">Profile</h1>
-        <div className="min-w-0 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 lg:items-stretch">
+        <div className="min-w-0 flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 md:items-stretch">
           <section aria-label="Resume and skills" className={cn("space-y-3 min-w-0")}>
             <h2 className="eyebrow">Resume &amp; skills</h2>
             <SkillsEditor

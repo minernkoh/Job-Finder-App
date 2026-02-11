@@ -239,7 +239,7 @@ function ComparePageInner() {
 
         <section
           aria-label="Job columns"
-          className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8"
+          className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 md:gap-8"
         >
           {listingIds.map((id) => (
             <CompareColumn key={id} listingId={id} />

@@ -4,7 +4,7 @@
 
 import { createHash } from "crypto";
 import mongoose from "mongoose";
-import { generateObject } from "ai";
+import { generateObject, streamObject } from "ai";
 import {
   AISummarySchema,
   type AISummary,
@@ -16,6 +16,8 @@ import { getEnv } from "@/lib/env";
 import {
   executeWithGeminiFallback,
   retryWithBackoff,
+  getGeminiModel,
+  isRateLimitError,
 } from "@/lib/ai/gemini";
 import { isValidObjectId } from "@/lib/objectid";
 import {
@@ -100,6 +102,189 @@ ${inputText.slice(0, 30000)}`;
     { fallbackMessage: "Summary generation failed. Please try again." },
   );
   return object as AISummary;
+}
+
+/** Streaming summary result: async iterable of partial objects plus a promise for the final complete object. */
+export interface SummaryStreamResult {
+  partialObjectStream: AsyncIterable<Partial<AISummary>>;
+  object: Promise<AISummary>;
+}
+
+/** Generates a streaming summary using Gemini via streamObject. Returns the partialObjectStream and the final object promise. */
+export async function generateSummaryStream(
+  inputText: string,
+  options?: {
+    fromAdzunaPage?: boolean;
+    userSkills?: string[];
+    jobTitle?: string;
+    company?: string;
+    yearsOfExperience?: number;
+  },
+): Promise<SummaryStreamResult> {
+  const fromAdzunaPage = options?.fromAdzunaPage === true;
+  const userSkills = options?.userSkills ?? [];
+  const hasUserSkills = userSkills.length > 0;
+  const yearsOfExperience = options?.yearsOfExperience;
+  const jobTitle = options?.jobTitle?.trim();
+  const company = options?.company?.trim();
+  const roleContext =
+    jobTitle != null && jobTitle !== ""
+      ? `Job title: ${jobTitle}${company ? ` | Company: ${company}` : ""}\n\n`
+      : "";
+
+  const intro = fromAdzunaPage
+    ? "You are scanning the job description of the Adzuna job posting below. The content may include some page layout or navigation; focus on the main job description and summarize it into a structured summary."
+    : "You are a job summary assistant for the Singapore job market. Summarize the following job description into a structured summary.";
+  const experienceLine =
+    yearsOfExperience != null
+      ? ` You have ${yearsOfExperience} year(s) of professional experience. When the job description mentions experience requirements (e.g. "5+ years", "3–5 years"), consider this when setting matchScore and include an experience gap in missingSkills if the job asks for more years than you have.`
+      : "";
+  const jdMatchRules = hasUserSkills
+    ? `
+- Your skills are: ${userSkills.join(", ")}.${experienceLine} Compare the job description to these skills and output "jdMatch" with:
+  - matchScore: number 0-100 (how well the job matches your skills for this specific role).
+  - matchedSkills: array of skills from your list that are actually required or clearly relevant for this job role. When there are no matching skills, output matchedSkills as an empty array [] (do not omit it).
+  - missingSkills: array of skills the job requires or prefers that are not in your skills list (or empty if well matched). Include experience-related gaps here when the job requires more years than you have.
+- Consider the job title/role when scoring. Relevance is for this specific role only. Include in matchedSkills only skills from your list that are actually required or clearly relevant for this job role. Do not list one of your skills as matched just because the job description mentions a related word (e.g. do not match "JavaScript" for an Art Director role unless the role explicitly requires development/technical skills).
+- If the job role is clearly unrelated to your skills (e.g. Art Director vs software engineering), set matchScore low (e.g. 0–30), set matchedSkills to [], and set missingSkills to the main skills/experience the job actually requires.`
+    : "";
+  const prompt = `${intro}
+
+Rules:
+- The tldr must describe only the job (role, main duties, key requirements). Do not state whether you are a good fit or have suitable skills; do not address the user in the tldr. Provide a short tldr in at most 2-3 short sentences.
+- Extract at most 4-5 key responsibilities and at most 4-5 requirements (most important first). Omit nice-to-haves or fold into requirements if needed.
+- If salary in SGD is mentioned, put it in salarySgd (e.g. "SGD 5,000 - 7,000").
+- Add caveats for missing or unclear information.${jdMatchRules}
+- When describing match results, skills, or recommendations, use second-person ("you", "your") — never "the candidate".
+- Output must match the schema exactly (tldr required; other fields optional).
+
+${roleContext}Job description:
+${inputText.slice(0, 30000)}`;
+
+  const model = getGeminiModel();
+  try {
+    const result = streamObject({ model, schema: AISummarySchema, prompt });
+    return {
+      partialObjectStream: result.partialObjectStream as AsyncIterable<
+        Partial<AISummary>
+      >,
+      object: result.object as Promise<AISummary>,
+    };
+  } catch (err) {
+    if (!isRateLimitError(err)) throw err;
+    const env = getEnv();
+    const fallbackKey = env.GEMINI_API_KEY_FALLBACK?.trim();
+    if (!fallbackKey) throw err;
+    const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
+    const google = createGoogleGenerativeAI({ apiKey: fallbackKey });
+    const fallbackModel = google("gemini-2.5-flash");
+    const fallbackResult = streamObject({
+      model: fallbackModel,
+      schema: AISummarySchema,
+      prompt,
+    });
+    return {
+      partialObjectStream: fallbackResult.partialObjectStream as AsyncIterable<
+        Partial<AISummary>
+      >,
+      object: fallbackResult.object as Promise<AISummary>,
+    };
+  }
+}
+
+/**
+ * Checks the cache for an existing summary; if found returns { cached: true, data }.
+ * On cache miss, resolves input text and returns { cached: false, resolvedInput } so the caller can stream.
+ */
+export async function prepareSummaryStream(
+  userId: string,
+  input: {
+    text?: string;
+    url?: string;
+    listingId?: string;
+    forceRegenerate?: boolean;
+  },
+): Promise<
+  | { cached: true; data: AISummary & { id: string } }
+  | {
+      cached: false;
+      resolvedInput: {
+        text: string;
+        fromAdzunaPage?: boolean;
+        jobTitle?: string;
+        company?: string;
+      };
+      inputTextHash: string;
+      uid: mongoose.Types.ObjectId;
+      userSkills?: string[];
+      yearsOfExperience?: number;
+    }
+> {
+  const { text, fromAdzunaPage, jobTitle, company } =
+    await resolveInputText(input);
+  const inputTextHash = hashInputText(text);
+  const env = getEnv();
+  const ttlSeconds = env.AI_SUMMARY_CACHE_TTL ?? 604800;
+  const since = new Date(Date.now() - ttlSeconds * 1000);
+
+  await connectDB();
+  const uid = toObjectIdOrThrow(userId);
+
+  if (input.forceRegenerate !== true) {
+    const existing = await AISummaryModel.findOne({
+      inputTextHash,
+      userId: uid,
+      updatedAt: { $gte: since },
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    if (existing) {
+      return {
+        cached: true,
+        data: docToSummary(existing as IAISummaryDocument),
+      };
+    }
+  }
+
+  const profile = await getProfileByUserId(userId);
+  const userSkills =
+    profile && profile.skills.length > 0 ? profile.skills : undefined;
+
+  return {
+    cached: false,
+    resolvedInput: { text, fromAdzunaPage, jobTitle, company },
+    inputTextHash,
+    uid,
+    userSkills,
+    yearsOfExperience: profile?.yearsOfExperience,
+  };
+}
+
+/**
+ * Saves a generated summary to MongoDB after streaming completes. Returns the saved summary with id.
+ */
+export async function saveSummaryToDb(
+  uid: mongoose.Types.ObjectId,
+  inputTextHash: string,
+  generated: AISummary,
+): Promise<AISummary & { id: string }> {
+  const parsed = AISummarySchema.safeParse(generated);
+  const safe = parsed.success
+    ? parsed.data
+    : { tldr: String(generated?.tldr ?? "Summary unavailable.") };
+  const doc = await AISummaryModel.create({
+    userId: uid,
+    inputTextHash,
+    tldr: safe.tldr,
+    keyResponsibilities: safe.keyResponsibilities,
+    requirements: safe.requirements,
+    niceToHaves: safe.niceToHaves,
+    salarySgd: safe.salarySgd,
+    jdMatch: safe.jdMatch,
+    caveats: safe.caveats,
+  });
+  return docToSummary(doc);
 }
 
 /** Resolves create-summary input to text, optional Adzuna flag, and when input is listingId also returns jobTitle and company for prompt context. */

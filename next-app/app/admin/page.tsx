@@ -323,7 +323,7 @@ function AdminDashboard() {
                       <Link
                         href={`/browse/${p.listingId}`}
                         title={p.title ?? p.listingId}
-                        className="flex justify-between rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+                        className="flex justify-between rounded-lg px-2 py-1.5 text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <span className="truncate text-muted-foreground">
                           {p.title ?? p.listingId}
@@ -350,7 +350,6 @@ function AdminDashboard() {
 
 /** Admin sign up and log in form: two tabs; sign up uses admin secret; login only allows admin role. */
 function AdminForm() {
-  const router = useRouter();
   const [tab, setTab] = useState<AuthTab>("login");
   const { setToken, setUser, isLoading } = useAuth();
   const [username, setUsername] = useState("");
@@ -412,7 +411,6 @@ function AdminForm() {
   return (
     <AuthCard
       title="Admin Log In"
-      onClose={() => router.push("/browse")}
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Create a user account with the same email at signup to browse jobs.

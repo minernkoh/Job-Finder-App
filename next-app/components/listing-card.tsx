@@ -77,7 +77,7 @@ export function ListingCard({
       interactive
       variant="default"
       className={cn(
-        "cursor-pointer",
+        "cursor-pointer h-full flex flex-col",
         isSelected && "border-2 border-primary",
         isSelected &&
           "hover:ring-0 hover:ring-offset-0 focus-within:ring-0 focus-within:ring-offset-0",
@@ -85,7 +85,7 @@ export function ListingCard({
     >
       <Link
         href={cardHref}
-        className="block"
+        className="block h-full flex flex-col min-h-0 flex-1"
         prefetch={false}
         onClick={() => onView?.()}
       >
@@ -161,7 +161,7 @@ export function ListingCard({
               <>
                 <Link
                   href={`/admin/listings?edit=${listing.id}`}
-                  className="shrink-0 inline-flex items-center justify-center rounded-md hover:bg-muted p-1.5"
+                  className="shrink-0 inline-flex items-center justify-center rounded-lg hover:bg-muted p-1.5"
                   onClick={(e) => e.stopPropagation()}
                   title="Edit listing"
                   aria-label="Edit listing"

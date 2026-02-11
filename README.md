@@ -28,7 +28,7 @@ Job-Finder-App/
 │   ├── app/              #   Pages and API routes (App Router)
 │   ├── components/       #   React components
 │   ├── contexts/         #   AuthContext, CompareContext
-│   ├── hooks/            #   useSavedListings, useIsLgViewport
+│   ├── hooks/            #   useSavedListings, useIsMdViewport
 │   └── lib/              #   Services, models, API client, auth, utilities
 ├── packages/
 │   ├── schemas/          # Shared Zod schemas and inferred TypeScript types

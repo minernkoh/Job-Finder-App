@@ -30,6 +30,36 @@ function parsePostedAt(created: string | undefined): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
+/** Adzuna country code to job page base domain. Used to build fallback URL when redirect_url is missing. */
+const ADZUNA_DOMAINS: Record<string, string> = {
+  gb: "adzuna.co.uk",
+  at: "adzuna.at",
+  au: "adzuna.com.au",
+  be: "adzuna.be",
+  br: "adzuna.com.br",
+  ca: "adzuna.ca",
+  ch: "adzuna.ch",
+  de: "adzuna.de",
+  es: "adzuna.es",
+  fr: "adzuna.fr",
+  in: "adzuna.in",
+  it: "adzuna.it",
+  mx: "adzuna.com.mx",
+  nl: "adzuna.nl",
+  nz: "adzuna.co.nz",
+  pl: "adzuna.pl",
+  ru: "adzuna.ru",
+  sg: "adzuna.sg",
+  us: "adzuna.com",
+  za: "adzuna.co.za",
+};
+
+/** Builds Adzuna job page URL when redirect_url is missing. Uses sourceId and country. */
+function buildAdzunaJobUrl(sourceId: string, country: string): string {
+  const domain = ADZUNA_DOMAINS[country?.toLowerCase() ?? "sg"] ?? "adzuna.com";
+  return `https://www.${domain}/jobs/land/ad/${encodeURIComponent(sourceId)}`;
+}
+
 /** Builds cache key from search params for deduplication. */
 function buildCacheKey(
   country: string,
@@ -60,11 +90,17 @@ function docToListingResult(doc: {
   location?: string;
   description?: string;
   sourceUrl?: string;
+  sourceId?: string;
   country: string;
   postedAt?: Date;
   salaryMin?: number;
   salaryMax?: number;
 }): ListingResult {
+  const sourceUrl =
+    doc.sourceUrl ??
+    (doc.sourceId && !doc.sourceId.startsWith("manual-")
+      ? buildAdzunaJobUrl(doc.sourceId, doc.country)
+      : undefined);
   return {
     id: String(doc._id),
     title: doc.title,
@@ -72,7 +108,7 @@ function docToListingResult(doc: {
     location: doc.location,
     description: doc.description,
     source: "adzuna",
-    sourceUrl: doc.sourceUrl,
+    sourceUrl,
     country: doc.country,
     postedAt: doc.postedAt,
     salaryMin: doc.salaryMin,
@@ -86,6 +122,8 @@ function jobToListingResult(
   id: string,
   country: string
 ): ListingResult {
+  const sourceUrl =
+    job.redirect_url ?? buildAdzunaJobUrl(String(job.id), country);
   return {
     id,
     title: job.title,
@@ -93,7 +131,7 @@ function jobToListingResult(
     location: job.location?.display_name,
     description: job.description,
     source: "adzuna",
-    sourceUrl: job.redirect_url,
+    sourceUrl,
     country,
     postedAt: parsePostedAt(job.created),
     salaryMin: job.salary_min,
@@ -178,13 +216,15 @@ function normalizeAdzunaJob(
   expiresAt: Date
 ): Omit<IListingDocument, "_id" | "createdAt" | "updatedAt"> {
   const postedAt = parsePostedAt(job.created);
+  const sourceUrl =
+    job.redirect_url ?? buildAdzunaJobUrl(String(job.id), country);
   return {
     title: job.title,
     company: job.company?.display_name ?? "Unknown",
     location: job.location?.display_name ?? undefined,
     description: job.description ?? undefined,
     source: "adzuna",
-    sourceUrl: job.redirect_url,
+    sourceUrl,
     sourceId: String(job.id),
     country,
     expiresAt,
@@ -304,6 +344,18 @@ export async function getListingsByIds(
 ): Promise<ListingResult[]> {
   const results = await Promise.all(ids.map((id) => getListingById(id)));
   return results.filter((r): r is ListingResult => r != null);
+}
+
+/** Returns the most recent listings by createdAt, for fallback when no trending views exist. */
+export async function getRecentListings(
+  limit: number
+): Promise<ListingResult[]> {
+  await connectDB();
+  const docs = await Listing.find({})
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+  return docs.map((d) => docToListingResult(d));
 }
 
 /** Creates a manual listing (admin). Sets sourceId and expiresAt server-side. */

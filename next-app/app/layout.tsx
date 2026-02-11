@@ -22,6 +22,13 @@ export const metadata: Metadata = {
   description: "Find and browse jobs with AI summaries",
 };
 
+/** Viewport config for mobile: device width, no zoom lock, cover for safe areas on notched devices. */
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+};
+
 /** Root layout for the app: sets fonts, title, and wraps all pages in Providers so auth is available everywhere. */
 export default function RootLayout({
   children,

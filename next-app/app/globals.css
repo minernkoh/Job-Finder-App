@@ -22,12 +22,12 @@
     #060612 100%
   );
   --gradient-orb-top: radial-gradient(
-    ellipse 90% 60% at 80% -10%,
+    ellipse 70% 70% at 80% -10%,
     rgba(59, 130, 246, 0.22) 0%,
     transparent 55%
   );
   --gradient-orb-bottom: radial-gradient(
-    ellipse 70% 50% at 15% 105%,
+    ellipse 60% 60% at 15% 105%,
     rgba(59, 130, 246, 0.15) 0%,
     transparent 55%
   );
@@ -37,22 +37,22 @@
     transparent 70%
   );
   --gradient-orb-top-left: radial-gradient(
-    ellipse 60% 50% at 0% 0%,
+    ellipse 55% 55% at 0% 0%,
     rgba(99, 102, 241, 0.12) 0%,
     transparent 55%
   );
   --gradient-orb-bottom-right: radial-gradient(
-    ellipse 55% 45% at 100% 95%,
+    ellipse 50% 50% at 100% 95%,
     rgba(59, 130, 246, 0.14) 0%,
     transparent 55%
   );
   --gradient-orb-violet: radial-gradient(
-    ellipse 65% 55% at 100% 35%,
+    ellipse 60% 60% at 100% 35%,
     rgba(139, 92, 246, 0.14) 0%,
     transparent 55%
   );
   --gradient-orb-sky: radial-gradient(
-    ellipse 60% 50% at 25% 85%,
+    ellipse 55% 55% at 25% 85%,
     rgba(56, 189, 248, 0.12) 0%,
     transparent 55%
   );
@@ -124,6 +124,10 @@ html {
 
 body {
   margin: 0;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   background-color: var(--background);
   background:
     var(--gradient-orb-top), var(--gradient-orb-top-left),

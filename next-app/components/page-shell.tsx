@@ -22,7 +22,7 @@ export function PageShell({
 }: PageShellProps) {
   return (
     <div className={GAP_LG}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
         {headerAction}
       </div>
