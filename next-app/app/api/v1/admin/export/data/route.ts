@@ -5,7 +5,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
-import { logAudit } from "@/lib/services/audit.service";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { Listing } from "@/lib/models/Listing";
@@ -17,12 +16,11 @@ const ExportBodySchema = z.object({
   limit: z.coerce.number().min(1).max(1000).default(500),
 });
 
-/** Exports data as JSON; audits the action. */
+/** Exports data as JSON. */
 export async function POST(request: NextRequest) {
   try {
     const result = await requireAdmin(request);
     if (result instanceof NextResponse) return result;
-    const { payload } = result;
     const body = await request.json();
     const parsed = ExportBodySchema.safeParse(body);
     if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");
@@ -33,8 +31,8 @@ export async function POST(request: NextRequest) {
       const users = await User.find({}).select("-password").limit(limit).lean();
       data = users.map((u) => ({
         id: u._id.toString(),
-        name: u.name,
         email: u.email,
+        username: u.username,
         role: u.role,
         status: (u as { status?: string }).status,
         createdAt: u.createdAt,
@@ -60,11 +58,6 @@ export async function POST(request: NextRequest) {
         createdAt: s.createdAt,
       }));
     }
-    await logAudit(request, payload, {
-      action: "export",
-      resourceType: type,
-      details: { limit },
-    });
     return NextResponse.json({ success: true, data });
   } catch (e) {
     return toErrorResponse(e, "Export failed");

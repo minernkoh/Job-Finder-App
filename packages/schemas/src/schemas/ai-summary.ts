@@ -37,6 +37,8 @@ export const CreateSummaryBodySchema = z
     listingId: z.string().min(1).optional(),
     text: z.string().min(1).optional(),
     url: z.string().url().optional(),
+    /** When true, skip cache and always generate a new summary. */
+    forceRegenerate: z.boolean().optional(),
   })
   .refine(
     (data) =>

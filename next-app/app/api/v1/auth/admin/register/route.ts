@@ -10,7 +10,7 @@ import { User } from "@/lib/models/User";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 import { buildSetCookieHeader } from "@/lib/auth/cookies";
 
-/** Creates admin user when adminSecret is valid; returns access token and sets refresh cookie. Duplicate email returns 409; invalid or missing secret returns 403. */
+/** Creates admin user when adminSecret is valid; returns access token and sets refresh cookie. Duplicate (email, admin) returns 409; invalid or missing secret returns 403. */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     await connectDB();
-    const existing = await User.findOne({ email: createData.email }).lean();
+    const existing = await User.findOne({ email: createData.email, role: "admin" }).lean();
     if (existing) {
       return NextResponse.json(
         {
@@ -49,6 +49,14 @@ export async function POST(request: NextRequest) {
           message: "Email already registered",
           error: "Email already registered",
         },
+        { status: 409 }
+      );
+    }
+    const usernameTrimmed = createData.username.trim();
+    const existingUsername = await User.findOne({ username: usernameTrimmed }).lean();
+    if (existingUsername) {
+      return NextResponse.json(
+        { success: false, message: "Username already taken", error: "Username already taken" },
         { status: 409 }
       );
     }
@@ -71,15 +79,14 @@ export async function POST(request: NextRequest) {
         accessToken,
         user: {
           id: sub,
-          name: user.name,
           email: user.email,
           role: user.role,
+          username: user.username,
         },
       },
       { status: 201, headers }
     );
-  } catch (e) {
-    console.error("Admin register error:", e);
+  } catch {
     return NextResponse.json(
       {
         success: false,

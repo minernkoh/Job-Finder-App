@@ -1,15 +1,18 @@
 /**
  * GET /api/v1/listings: search job listings with keyword, country, and Adzuna-aligned filters. Returns paginated results from Adzuna (cached).
+ * POST: create listing (admin only).
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { toErrorResponse } from "@/lib/api/errors";
+import { ListingCreateSchema } from "@schemas";
+import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { SORT_BY_ALLOWLIST } from "@/lib/constants/listings";
+import { requireAdmin } from "@/lib/auth/guard";
+import type { ListingsFilters } from "@/lib/types/listings";
 import {
+  createListing,
   searchListings,
-  type ListingsFilters,
 } from "@/lib/services/listings.service";
-
-const SORT_BY_ALLOWLIST = ["salary", "date"] as const;
 
 function parseBool(value: string | null): boolean {
   if (value == null) return false;
@@ -65,5 +68,20 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     return toErrorResponse(err, "Failed to fetch listings");
+  }
+}
+
+/** Creates a listing (admin only). */
+export async function POST(request: NextRequest) {
+  try {
+    const result = await requireAdmin(request);
+    if (result instanceof NextResponse) return result;
+    const body = await request.json();
+    const parsed = ListingCreateSchema.safeParse(body);
+    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
+    const listing = await createListing(parsed.data);
+    return NextResponse.json({ success: true, data: listing });
+  } catch (err) {
+    return toErrorResponse(err, "Failed to create listing");
   }
 }

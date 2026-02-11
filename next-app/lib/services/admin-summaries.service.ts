@@ -4,8 +4,10 @@
 
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
+import { calculatePagination } from "@/lib/pagination";
 import { isValidObjectId, parseObjectId } from "@/lib/objectid";
 import { AISummary } from "@/lib/models/AISummary";
+import { User } from "@/lib/models/User";
 
 export interface ListSummariesParams {
   userId?: string;
@@ -18,6 +20,7 @@ export interface ListSummariesResult {
   summaries: Array<{
     id: string;
     userId: string;
+    userName: string;
     tldr: string;
     createdAt: Date;
     hasSalarySgd: boolean;
@@ -33,9 +36,7 @@ export async function listSummaries(
   params: ListSummariesParams
 ): Promise<ListSummariesResult> {
   await connectDB();
-  const page = Math.max(1, params.page ?? 1);
-  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
-  const skip = (page - 1) * limit;
+  const { page, limit, skip } = calculatePagination(params);
   const sortKey =
     params.sort === "-createdAt"
       ? { createdAt: -1 as const }
@@ -50,15 +51,40 @@ export async function listSummaries(
     AISummary.countDocuments(filter),
   ]);
 
+  const userIds = [
+    ...new Set(
+      summaries.map((s) => String((s as { userId: mongoose.Types.ObjectId }).userId))
+    ),
+  ].filter(Boolean);
+  const userIdObjList = userIds
+    .map((id) => parseObjectId(id))
+    .filter((id): id is mongoose.Types.ObjectId => id != null);
+  const userDocs =
+    userIdObjList.length > 0
+      ? await User.find({ _id: { $in: userIdObjList } })
+          .select("username")
+          .lean()
+      : [];
+  const usernameByUserId = new Map<string, string>();
+  for (const u of userDocs) {
+    const id = (u as { _id: mongoose.Types.ObjectId })._id.toString();
+    const uname = (u as { username: string }).username;
+    usernameByUserId.set(id, uname);
+  }
+
   return {
-    summaries: summaries.map((s) => ({
-      id: (s as { _id: mongoose.Types.ObjectId })._id.toString(),
-      userId: String((s as { userId: mongoose.Types.ObjectId }).userId),
-      tldr: (s as { tldr: string }).tldr,
-      createdAt: (s as { createdAt: Date }).createdAt,
-      hasSalarySgd: !!(s as { salarySgd?: string }).salarySgd,
-      hasJdMatch: !!(s as { jdMatch?: unknown }).jdMatch,
-    })),
+    summaries: summaries.map((s) => {
+      const uid = String((s as { userId: mongoose.Types.ObjectId }).userId);
+      return {
+        id: (s as { _id: mongoose.Types.ObjectId })._id.toString(),
+        userId: uid,
+        userName: usernameByUserId.get(uid) ?? "",
+        tldr: (s as { tldr: string }).tldr,
+        createdAt: (s as { createdAt: Date }).createdAt,
+        hasSalarySgd: !!(s as { salarySgd?: string }).salarySgd,
+        hasJdMatch: !!(s as { jdMatch?: unknown }).jdMatch,
+      };
+    }),
     total,
     page,
     limit,

@@ -6,27 +6,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { toErrorResponse } from "@/lib/api/errors";
-import { requireAuth } from "@/lib/auth/request";
+import { requireAdmin } from "@/lib/auth/guard";
 
 /** Returns all users; requires admin role. */
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth(request);
+    const auth = await requireAdmin(request);
     if (auth instanceof NextResponse) return auth;
-    const payload = auth;
-    if (payload.role !== "admin") {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 }
-      );
-    }
 
     await connectDB();
     const users = await User.find({}).select("-password").lean();
     const data = users.map((u) => ({
       id: u._id.toString(),
-      name: u.name,
       email: u.email,
+      username: u.username,
       role: u.role,
       createdAt: u.createdAt,
       updatedAt: u.updatedAt,

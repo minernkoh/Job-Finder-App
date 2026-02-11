@@ -22,17 +22,17 @@ import {
 
 export interface AuthUser {
   id: string;
-  name: string;
   email: string;
   role: "admin" | "user";
+  username: string;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  login: (login: string, password: string) => Promise<void>;
+  register: (email: string, password: string, username: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: AuthUser | null) => void;
   setToken: (token: string | null) => void;
@@ -81,10 +81,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const newToken = refreshRes.data?.accessToken;
         if (newToken) {
           setToken(newToken);
-          const meRes = await apiClient.get<AuthUser>("/api/v1/users/me", {
-            headers: { Authorization: `Bearer ${newToken}` },
-          });
-          setUser(meRes.data);
+          const meRes = await apiClient.get<{ success: true; data: AuthUser }>(
+            "/api/v1/users/me",
+            { headers: { Authorization: `Bearer ${newToken}` } }
+          );
+          setUser(meRes.data.data);
         }
       } catch {
         setUser(null);
@@ -96,21 +97,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     init();
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (login: string, password: string) => {
     const res = await apiClient.post<{ accessToken: string; user: AuthUser }>(
       "/api/v1/auth/login",
-      { email, password }
+      { login, password, role: "user" }
     );
     setToken(res.data.accessToken);
     setUser(res.data.user);
   }, []);
 
   const register = useCallback(
-    async (name: string, email: string, password: string) => {
+    async (email: string, password: string, username: string) => {
       const res = await apiClient.post<{ accessToken: string; user: AuthUser }>(
         "/api/v1/auth/register",
-        { name, email, password }
+        { email, password, username: username.trim() }
       );
+      if (!res.data?.accessToken || !res.data?.user) {
+        throw new Error("Invalid response from server");
+      }
       setToken(res.data.accessToken);
       setUser(res.data.user);
     },

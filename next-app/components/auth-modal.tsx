@@ -7,16 +7,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
+import { XIcon } from "@phosphor-icons/react";
+import { EASE_TRANSITION } from "@/lib/animations";
 import {
-  ArrowRightIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  XIcon,
-} from "@phosphor-icons/react";
-import { authCloseButtonClass } from "@/components/auth-card";
+  authCloseButtonClass,
+  authModalHeightClass,
+  authModalNarrowWidthClass,
+} from "@/components/auth-card";
+import { CARD_PADDING_AUTH } from "@/lib/layout";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
+import { getErrorMessage } from "@/lib/api/errors";
+import { InlineError } from "@/components/page-state";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button, Card, CardContent, Input, Label } from "@ui/components";
+import { AuthFormFields } from "@/components/auth-form-fields";
+import {
+  validatePassword,
+  validateUsername,
+} from "@/lib/validation";
+import { Button, Card, CardContent } from "@ui/components";
 
 /** Builds pathname + search string without auth and redirect params. */
 function stripAuthParams(
@@ -35,31 +44,23 @@ function AuthModalContent({
   initialTab,
   onClose,
   onSuccess,
-  onSignupSuccess,
 }: {
   initialTab: AuthTab;
   onClose: () => void;
   onSuccess: () => void;
-  /** Called after signup; redirects to onboarding with return URL. */
-  onSignupSuccess: () => void;
 }) {
   const [tab, setTab] = useState<AuthTab>(initialTab);
   const { login, register, isLoading } = useAuth();
-  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    username?: string;
+    email?: string;
+    password?: string;
+  }>({});
   const [submitting, setSubmitting] = useState(false);
-
-  const passwordStrength =
-    password.length === 0
-      ? 0
-      : password.length < 8
-        ? 1
-        : /[A-Z]/.test(password) && /[0-9]/.test(password)
-          ? 3
-          : 2;
 
   const handleLogin = useCallback(
     async (e: React.FormEvent) => {
@@ -70,11 +71,7 @@ function AuthModalContent({
         await login(email, password);
         onSuccess();
       } catch (err: unknown) {
-        const data = err && typeof err === "object" && "response" in err
-            ? (err as { response?: { data?: { message?: string; error?: string } } }).response?.data
-            : undefined;
-        const message = data?.message ?? data?.error ?? "Login failed";
-        setError(message);
+        setError(getErrorMessage(err, "Login failed"));
       } finally {
         setSubmitting(false);
       }
@@ -86,21 +83,39 @@ function AuthModalContent({
     async (e: React.FormEvent) => {
       e.preventDefault();
       setError(null);
+      setFieldErrors({});
+      const usernameResult = validateUsername(username);
+      if (!usernameResult.valid) {
+        setError(usernameResult.error ?? "Invalid username");
+        return;
+      }
+      const passwordResult = validatePassword(password);
+      if (!passwordResult.valid) {
+        setError(passwordResult.error ?? "Invalid password");
+        return;
+      }
       setSubmitting(true);
       try {
-        await register(name, email, password);
-        onSignupSuccess();
+        await register(email, password, username.trim());
+        onSuccess();
       } catch (err: unknown) {
+        setError(getErrorMessage(err, "Registration failed"));
         const data = err && typeof err === "object" && "response" in err
-            ? (err as { response?: { data?: { message?: string; error?: string } } }).response?.data
-            : undefined;
-        const message = data?.message ?? data?.error ?? "Registration failed";
-        setError(message);
+          ? (err as { response?: { data?: { errors?: { fieldErrors?: Record<string, string[]> } } } }).response?.data
+          : undefined;
+        const fieldErrorsFromApi = data?.errors?.fieldErrors;
+        if (fieldErrorsFromApi && typeof fieldErrorsFromApi === "object") {
+          setFieldErrors({
+            username: fieldErrorsFromApi.username?.[0],
+            email: fieldErrorsFromApi.email?.[0],
+            password: fieldErrorsFromApi.password?.[0],
+          });
+        }
       } finally {
         setSubmitting(false);
       }
     },
-    [name, email, password, register, onSignupSuccess]
+    [email, password, username, register, onSuccess]
   );
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -149,10 +164,10 @@ function AuthModalContent({
     <Card
       ref={contentRef}
       variant="elevated"
-      className="relative w-full max-w-lg overflow-hidden"
+      className={`relative ${authModalNarrowWidthClass} overflow-hidden`}
     >
-      {/* Header strip: close only; no gradient to match minimal auth card look. */}
-      <div className="relative min-h-[3rem] border-b border-border rounded-t-2xl flex items-center justify-end pr-2 py-2">
+      {/* Header strip: close only; no top border to match minimal look. */}
+      <div className="relative min-h-[3rem] rounded-t-2xl flex items-center justify-end pr-2 py-2">
         <button
           type="button"
           onClick={onClose}
@@ -162,149 +177,70 @@ function AuthModalContent({
           <XIcon className="size-5" />
         </button>
       </div>
-      <CardContent className="min-h-[18rem] space-y-6 p-10">
+      <CardContent
+        className={`${authModalHeightClass} flex flex-col gap-6 ${CARD_PADDING_AUTH}`}
+      >
         <AuthTabs value={tab} onChange={setTab} />
-        {tab === "login" ? (
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="modal-login-email">Email</Label>
-              <Input
-                id="modal-login-email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                disabled={submitting || isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="modal-login-password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="modal-login-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  disabled={submitting || isLoading}
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="size-5" weight="regular" />
-                  ) : (
-                    <EyeIcon className="size-5" weight="regular" />
-                  )}
-                </button>
-              </div>
-            </div>
-            {error && (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            )}
-            <Button
-              type="submit"
-              variant="default"
-              size="lg"
-              className="w-full"
-              disabled={submitting || isLoading}
+        <div className="flex-1 min-h-0 overflow-auto">
+          {tab === "login" ? (
+            <form
+              id="modal-login-form"
+              onSubmit={handleLogin}
+              className="space-y-4"
             >
-              {submitting ? "Logging in…" : "Login"}
-            </Button>
-          </form>
-        ) : (
-          <form onSubmit={handleSignup} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="modal-register-name">Name</Label>
-              <Input
-                id="modal-register-name"
-                type="text"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                autoComplete="name"
+              <AuthFormFields
+                mode="login"
+                idPrefix="modal-login-"
+                email={email}
+                onEmailChange={(e) => setEmail(e.target.value)}
+                password={password}
+                onPasswordChange={(e) => setPassword(e.target.value)}
                 disabled={submitting || isLoading}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="modal-register-email">Email</Label>
-              <Input
-                id="modal-register-email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                disabled={submitting || isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="modal-register-password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="modal-register-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  disabled={submitting || isLoading}
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="size-5" weight="regular" />
-                  ) : (
-                    <EyeIcon className="size-5" weight="regular" />
-                  )}
-                </button>
-              </div>
-              {password.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Strength:{" "}
-                  {passwordStrength === 1 && "Weak (min 8 characters)"}
-                  {passwordStrength === 2 &&
-                    "Medium (add uppercase and number)"}
-                  {passwordStrength === 3 && "Strong"}
-                </p>
-              )}
-            </div>
-            {error && (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            )}
-            <Button
-              type="submit"
-              variant="cta"
-              size="lg"
-              className="w-full"
-              disabled={submitting || isLoading}
-              iconRight={
-                !submitting ? <ArrowRightIcon weight="bold" /> : undefined
-              }
+              {error && <InlineError message={error} />}
+            </form>
+          ) : (
+            <form
+              id="modal-signup-form"
+              onSubmit={handleSignup}
+              className="space-y-4"
             >
-              {submitting ? "Creating account…" : "Register"}
-            </Button>
-          </form>
-        )}
+              <AuthFormFields
+                mode="signup"
+                idPrefix="modal-register-"
+                email={email}
+                onEmailChange={(e) => setEmail(e.target.value)}
+                password={password}
+                onPasswordChange={(e) => setPassword(e.target.value)}
+                username={username}
+                onUsernameChange={(e) => setUsername(e.target.value)}
+                disabled={submitting || isLoading}
+                usernameError={fieldErrors.username}
+                emailError={fieldErrors.email}
+                passwordError={fieldErrors.password}
+              />
+              {error && <InlineError message={error} />}
+            </form>
+          )}
+        </div>
+        <div className="mt-auto pt-4">
+          <Button
+            type="submit"
+            form={tab === "login" ? "modal-login-form" : "modal-signup-form"}
+            variant="default"
+            size="lg"
+            className="w-full"
+            disabled={submitting || isLoading}
+          >
+            {tab === "login"
+              ? submitting
+                ? "Logging in…"
+                : "Login"
+              : submitting
+                ? "Creating account…"
+                : "Register"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -318,6 +254,11 @@ export function AuthModal() {
   const auth = searchParams.get("auth");
   const redirectParam = searchParams.get("redirect");
   const redirectTo = redirectParam ?? pathname ?? "/";
+  const [dismissedAfterSuccess, setDismissedAfterSuccess] = useState(false);
+
+  useEffect(() => {
+    if (auth === "login" || auth === "signup") setDismissedAfterSuccess(false);
+  }, [auth]);
 
   const closeModal = useCallback(() => {
     const next = stripAuthParams(pathname ?? "/", searchParams);
@@ -325,11 +266,8 @@ export function AuthModal() {
   }, [pathname, router, searchParams]);
 
   const onSuccess = useCallback(() => {
+    setDismissedAfterSuccess(true);
     router.replace(redirectTo);
-  }, [router, redirectTo]);
-
-  const onSignupSuccess = useCallback(() => {
-    router.replace(`/onboarding?redirect=${encodeURIComponent(redirectTo)}`);
   }, [router, redirectTo]);
 
   useEffect(() => {
@@ -340,12 +278,15 @@ export function AuthModal() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeModal]);
 
-  if (auth !== "login" && auth !== "signup") return null;
+  if ((auth !== "login" && auth !== "signup") || dismissedAfterSuccess) return null;
 
   const initialTab: AuthTab = auth === "signup" ? "signup" : "login";
 
   const overlay = (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={EASE_TRANSITION}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
@@ -354,15 +295,20 @@ export function AuthModal() {
         if (e.target === e.currentTarget) closeModal();
       }}
     >
-      <div onClick={(e) => e.stopPropagation()}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={EASE_TRANSITION}
+        onClick={(e) => e.stopPropagation()}
+        className={`flex ${authModalNarrowWidthClass} justify-center`}
+      >
         <AuthModalContent
           initialTab={initialTab}
           onClose={closeModal}
           onSuccess={onSuccess}
-          onSignupSuccess={onSignupSuccess}
         />
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 
   if (typeof document === "undefined") return null;

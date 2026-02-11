@@ -7,7 +7,6 @@
 import {
   ArrowRightIcon,
   BriefcaseIcon,
-  FileTextIcon,
   MagnifyingGlassIcon,
   SlidersIcon,
   BookmarkIcon,
@@ -31,25 +30,28 @@ import {
   recordListingView,
   type ListingsFilters,
 } from "@/lib/api/listings";
-import { fetchProfile } from "@/lib/api/profile";
 import { AuthModalLink } from "@/components/auth-modal-link";
 import { AppHeader } from "@/components/app-header";
 import { CompareBar } from "@/components/compare-bar";
 import { JobDetailPanel } from "@/components/job-detail-panel";
 import { ListingCard } from "@/components/listing-card";
+import { RecommendedListings } from "@/components/recommended-listings";
 import { TrendingListings } from "@/components/trending-listings";
 import { useCompare } from "@/contexts/CompareContext";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { JOB_SEARCH_COUNTRIES } from "@/lib/constants/countries";
-import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
+import {
+  CARD_PADDING_COMPACT,
+  CARD_PADDING_HERO,
+  CONTENT_MAX_W,
+  EMPTY_STATE_PADDING,
+  GAP_MD,
+  PAGE_PX,
+  SECTION_GAP,
+} from "@/lib/layout";
 import { listingsKeys } from "@/lib/query-keys";
 import { cn } from "@ui/components/lib/utils";
-
-const SORT_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "Relevance" },
-  { value: "salary", label: "Salary" },
-  { value: "date", label: "Date" },
-];
+import { SORT_BY_OPTIONS } from "@/lib/constants/listings";
 
 /** Suggested job roles for the search dropdown; filtered by what the user types. */
 const SUGGESTED_ROLES: string[] = [
@@ -102,7 +104,6 @@ function BrowseContent() {
   const [hasSearched, setHasSearched] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [resumeSearchMessage, setResumeSearchMessage] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -232,26 +233,6 @@ function BrowseContent() {
     [updateSearchInput]
   );
 
-  /** Fetches profile and runs search using skills as keyword; shows message if no profile. */
-  const handleSearchWithResume = useCallback(async () => {
-    setResumeSearchMessage(null);
-    try {
-      const profile = await fetchProfile();
-      const skills = profile?.skills ?? [];
-      if (skills.length === 0) {
-        setResumeSearchMessage("Add a resume in Profile to search by your skills.");
-        return;
-      }
-      const keywordFromSkills = skills.slice(0, 10).join(" ");
-      updateSearchInput(keywordFromSkills);
-      setKeyword(keywordFromSkills);
-      setPage(1);
-      setHasSearched(true);
-    } catch {
-      setResumeSearchMessage("Failed to load profile. Add a resume in Profile first.");
-    }
-  }, [updateSearchInput]);
-
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (!suggestionsOpen || filteredSuggestions.length === 0) {
@@ -322,7 +303,7 @@ function BrowseContent() {
   const showSplitLayout = hasSearched && listings.length > 0;
 
   return (
-    <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
+    <div className="min-h-screen flex flex-col">
       <AppHeader user={user} onLogout={logout} />
 
       {/* Search bar: full-width row below nav; search UI centered. */}
@@ -398,26 +379,6 @@ function BrowseContent() {
                 </div>
               )}
             </div>
-            {user && (
-              <div className="flex flex-col gap-1">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="xs"
-                  className="w-fit"
-                  onClick={handleSearchWithResume}
-                  aria-label="Search using skills from your resume"
-                >
-                  <FileTextIcon className="mr-1.5 size-4" aria-hidden />
-                  Search with my resume
-                </Button>
-                {resumeSearchMessage && (
-                  <p className="text-sm text-muted-foreground">
-                    {resumeSearchMessage}
-                  </p>
-                )}
-              </div>
-            )}
           </form>
         </div>
       </section>
@@ -428,6 +389,7 @@ function BrowseContent() {
         id="main-content"
         className={cn(
           "mx-auto flex-1 w-full py-8",
+          PAGE_PX,
           showSplitLayout
             ? "flex flex-col lg:flex-row gap-0 min-h-0 w-full max-w-full"
             : cn(CONTENT_MAX_W, SECTION_GAP)
@@ -445,28 +407,18 @@ function BrowseContent() {
           <div
             className={cn(
               showSplitLayout &&
-                "lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:space-y-6"
+                "lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:space-y-6",
+              "space-y-6"
             )}
           >
-        {!hasSearched && user && (
-          <section
-            aria-label="Empty state"
-            className="flex max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center mx-auto"
-          >
-            <MagnifyingGlassIcon
-              className="size-12 text-muted-foreground"
-              aria-hidden
-            />
-            <p className="text-muted-foreground">
-              Search above to get started. Enter a job title, skills, or company to find listings.
-            </p>
-          </section>
-        )}
-
+        <section aria-label="Trending and recommended jobs" className="space-y-6">
+          <TrendingListings />
+          <RecommendedListings />
+        </section>
         {!hasSearched && !user && (
           <section
             aria-label="Why sign in"
-            className="mx-auto max-w-2xl space-y-6 rounded-xl border border-border bg-muted/40 p-6 text-center shadow-blue ring-1 ring-primary/20 sm:p-8"
+            className={cn("mx-auto max-w-2xl space-y-6 rounded-xl border border-border bg-muted/40 text-center shadow-blue ring-1 ring-primary/20", CARD_PADDING_HERO)}
           >
             <p className="text-sm text-muted-foreground">
               Search above to find jobs. Sign in to save them and get AI summaries.
@@ -481,7 +433,7 @@ function BrowseContent() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Card variant="default" className="border-border">
-                <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
+                <CardContent className={cn("flex flex-col items-center gap-3 text-center", CARD_PADDING_COMPACT)}>
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                     <BookmarkIcon className="size-5 text-primary" />
                   </div>
@@ -492,7 +444,7 @@ function BrowseContent() {
                 </CardContent>
               </Card>
               <Card variant="default" className="border-border">
-                <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
+                <CardContent className={cn("flex flex-col items-center gap-3 text-center", CARD_PADDING_COMPACT)}>
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                     <SparkleIcon className="size-5 text-primary" />
                   </div>
@@ -503,7 +455,7 @@ function BrowseContent() {
                 </CardContent>
               </Card>
               <Card variant="default" className="border-border">
-                <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
+                <CardContent className={cn("flex flex-col items-center gap-3 text-center", CARD_PADDING_COMPACT)}>
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                     <StackIcon className="size-5 text-primary" />
                   </div>
@@ -520,7 +472,7 @@ function BrowseContent() {
             <div className="flex justify-center">
               <Button
                 asChild
-                variant="cta"
+                variant="default"
                 size="default"
                 iconRight={<ArrowRightIcon weight="bold" />}
               >
@@ -548,7 +500,7 @@ function BrowseContent() {
 
         {hasSearched && !isLoading && !isError && (
           <>
-            <section aria-label="Results" className="space-y-4">
+            <section aria-label="Results" className={GAP_MD}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
                   {totalCount} result{totalCount !== 1 ? "s" : ""}
@@ -575,7 +527,7 @@ function BrowseContent() {
                       id="results-sort"
                       value={sortBy}
                       onChange={(v) => setSortBy(v)}
-                      options={SORT_OPTIONS}
+                      options={SORT_BY_OPTIONS}
                       aria-label="Sort results"
                       fullWidth={false}
                       className="min-w-[8rem]"
@@ -590,7 +542,7 @@ function BrowseContent() {
                   role="region"
                   aria-label="Filters"
                 >
-                  <div>
+                  <div className="grid gap-2">
                     <Label
                       htmlFor="search-country"
                       className="text-xs text-muted-foreground"
@@ -607,10 +559,10 @@ function BrowseContent() {
                       }))}
                       aria-label="Country"
                       fullWidth={false}
-                      className="mt-1 min-w-[8rem]"
+                      className="min-w-[8rem]"
                     />
                   </div>
-                  <div>
+                  <div className="grid gap-2">
                     <Label
                       htmlFor="filter-location"
                       className="text-xs text-muted-foreground"
@@ -623,7 +575,7 @@ function BrowseContent() {
                       placeholder="e.g. Singapore, Central"
                       value={locationInput}
                       onChange={(e) => setLocationInput(e.target.value)}
-                      className="mt-1 w-40"
+                      className="w-40"
                       aria-label="Location"
                     />
                   </div>
@@ -647,7 +599,7 @@ function BrowseContent() {
                     />
                     <span className="text-muted-foreground">Permanent</span>
                   </label>
-                  <div>
+                  <div className="grid gap-2">
                     <Label
                       htmlFor="filter-salary"
                       className="text-xs text-muted-foreground"
@@ -661,7 +613,7 @@ function BrowseContent() {
                       placeholder="e.g. 50000"
                       value={salaryMin}
                       onChange={(e) => setSalaryMin(e.target.value)}
-                      className="mt-1 w-28"
+                      className="w-28"
                       aria-label="Minimum salary"
                     />
                   </div>
@@ -689,7 +641,7 @@ function BrowseContent() {
               )}
               {listings.length === 0 ? (
                 <div
-                  className="flex flex-col items-center gap-3 rounded-xl border border-border bg-muted/30 px-6 py-12 text-center"
+                  className={cn("flex flex-col items-center gap-3 rounded-xl border border-border bg-muted/30 text-center", EMPTY_STATE_PADDING)}
                   role="status"
                   aria-label="No results"
                 >
@@ -725,7 +677,7 @@ function BrowseContent() {
                             ? () => unsaveMutation.mutate(listing.id)
                             : undefined
                         }
-                        onAddToCompare={() => addToCompare(listing.id)}
+                        onAddToCompare={() => addToCompare({ id: listing.id, title: listing.title })}
                         isInCompareSet={isInCompareSet(listing.id)}
                         compareSetSize={compareSet.length}
                       />
@@ -755,7 +707,6 @@ function BrowseContent() {
             </section>
           </>
         )}
-        <TrendingListings />
           </div>
         </div>
 
@@ -765,7 +716,10 @@ function BrowseContent() {
               listingId={selectedJobId}
               listingIdsForNav={listings.map((l) => l.id)}
               basePath="/browse"
-              onAddToCompare={() => addToCompare(selectedJobId)}
+              onAddToCompare={() => {
+                const selected = listings.find((l) => l.id === selectedJobId);
+                addToCompare({ id: selectedJobId, title: selected?.title ?? "" });
+              }}
               isInCompareSet={isInCompareSet(selectedJobId)}
               compareSetFull={compareSet.length >= 3}
             />

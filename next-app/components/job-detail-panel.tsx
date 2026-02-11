@@ -16,8 +16,8 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import DOMPurify from "isomorphic-dompurify";
 import { AuthModalLink } from "@/components/auth-modal-link";
+import { sanitizeJobDescription } from "@/lib/sanitize";
 import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,76 +27,9 @@ import { createSummary } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { listingKeys } from "@/lib/query-keys";
-
-const eyebrowClass = "text-xs uppercase tracking-widest text-muted-foreground";
-
-/** Renders AI summary: tldr, responsibilities, requirements, SG signals, caveats. */
-function SummaryPanel({ summary }: { summary: SummaryWithId }) {
-  return (
-    <Card variant="elevated" className="text-sm">
-      <CardContent className="p-4 space-y-4">
-        <p className="text-foreground">{summary.tldr}</p>
-        {summary.keyResponsibilities &&
-          summary.keyResponsibilities.length > 0 && (
-            <div>
-              <h3 className={cn(eyebrowClass, "mb-1")}>Key responsibilities</h3>
-              <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-                {summary.keyResponsibilities.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        {summary.requirements && summary.requirements.length > 0 && (
-          <div>
-            <h3 className={cn(eyebrowClass, "mb-1")}>Requirements</h3>
-            <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-              {summary.requirements.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {summary.salarySgd && (
-          <p className="text-foreground">
-            <span className={cn(eyebrowClass)}>Salary (SGD): </span>
-            {summary.salarySgd}
-          </p>
-        )}
-        {summary.jdMatch && (
-          <div className="space-y-1">
-            <p className="text-foreground">
-              <span className={eyebrowClass}>Match to your skills: </span>
-              {typeof summary.jdMatch.matchScore === "number" && (
-                <span className="font-medium">{summary.jdMatch.matchScore}%</span>
-              )}
-            </p>
-            {summary.jdMatch.matchedSkills &&
-              summary.jdMatch.matchedSkills.length > 0 && (
-                <p className="text-foreground text-xs">
-                  <span className={eyebrowClass}>Matched: </span>
-                  {summary.jdMatch.matchedSkills.join(", ")}
-                </p>
-              )}
-            {summary.jdMatch.missingSkills &&
-              summary.jdMatch.missingSkills.length > 0 && (
-                <p className="text-muted-foreground text-xs">
-                  <span className={eyebrowClass}>Missing: </span>
-                  {summary.jdMatch.missingSkills.join(", ")}
-                </p>
-              )}
-          </div>
-        )}
-        {summary.caveats && summary.caveats.length > 0 && (
-          <p className="text-muted-foreground text-xs">
-            <span className={eyebrowClass}>Caveats: </span>
-            {summary.caveats.join("; ")}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+import { CARD_PADDING_DEFAULT_RESPONSIVE, GAP_LG } from "@/lib/layout";
+import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
+import { SummaryPanel } from "@/components/summary-panel";
 
 export interface JobDetailPanelProps {
   /** Listing ID to show. */
@@ -158,28 +91,10 @@ export function JobDetailPanel({
   }, [listingId]);
 
   const description = listing?.description ?? "";
-  const sanitizedDescription = useMemo(() => {
-    if (!description) return "";
-    const sanitized = DOMPurify.sanitize(description, {
-      ALLOWED_TAGS: [
-        "p",
-        "br",
-        "ul",
-        "ol",
-        "li",
-        "strong",
-        "b",
-        "em",
-        "i",
-        "a",
-        "h1",
-        "h2",
-        "h3",
-      ],
-      ADD_ATTR: ["href", "target", "rel"],
-    });
-    return sanitized.trim();
-  }, [description]);
+  const sanitizedDescription = useMemo(
+    () => sanitizeJobDescription(description),
+    [description]
+  );
 
   const currentIndex =
     listingIdsForNav && basePath
@@ -229,7 +144,7 @@ export function JobDetailPanel({
 
   if (isLoading) {
     return (
-      <div className="space-y-6 p-4 sm:p-6">
+      <div className={cn(GAP_LG, CARD_PADDING_DEFAULT_RESPONSIVE)}>
         <div className="h-8 w-24 animate-pulse rounded bg-muted" />
         <div className="h-64 animate-pulse rounded-xl bg-muted" />
       </div>
@@ -238,7 +153,7 @@ export function JobDetailPanel({
 
   if (isError || !listing) {
     return (
-      <div className="p-4 sm:p-6">
+      <div className={CARD_PADDING_DEFAULT_RESPONSIVE}>
         <p className="text-destructive">Listing not found.</p>
         <Link
           href="/browse"
@@ -348,7 +263,7 @@ export function JobDetailPanel({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-6 p-4 sm:p-6 sm:space-y-8">
+      <div className={cn("flex-1 overflow-y-auto sm:space-y-8", GAP_LG, CARD_PADDING_DEFAULT_RESPONSIVE)}>
         <div>
           <h1 className="text-xl font-semibold text-foreground">
             {listing.title}
@@ -389,7 +304,7 @@ export function JobDetailPanel({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
           {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
             <section className="space-y-2">
-              <h2 className={cn(eyebrowClass, "mb-2")}>Description</h2>
+              <h2 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Description</h2>
               <Card variant="elevated" className="text-sm">
                 {sanitizedDescription.length > 0 && (
                   <CardContent
@@ -422,7 +337,7 @@ export function JobDetailPanel({
           )}
 
           <section className="space-y-3">
-            <h2 className={eyebrowClass}>AI Summary</h2>
+            <h2 className={EYEBROW_CLASS}>AI Summary</h2>
             {summary ? (
               <SummaryPanel summary={summary} />
             ) : user ? (

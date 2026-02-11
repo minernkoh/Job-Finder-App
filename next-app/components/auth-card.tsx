@@ -4,12 +4,17 @@
 
 import { XIcon } from "@phosphor-icons/react";
 import { Card, CardContent } from "@ui/components";
-
-const eyebrowClass = "text-xs uppercase tracking-widest text-muted-foreground";
+import { CARD_PADDING_AUTH } from "@/lib/layout";
+import { EYEBROW_CLASS } from "@/lib/styles";
 
 /** Same close button style as auth modal for consistency. */
 export const authCloseButtonClass =
   "rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors";
+
+/** Narrow width for auth modal card; matches AuthCard layout. */
+export const authModalNarrowWidthClass = "w-full max-w-lg";
+/** Min height for auth modal content; matches AuthCard CardContent. */
+export const authModalHeightClass = "min-h-[22rem]";
 
 interface AuthCardProps {
   title: string;
@@ -51,10 +56,10 @@ export function AuthCard({
             </button>
           </div>
         )}
-        <CardContent className="min-h-[22rem] space-y-6 p-10">
+        <CardContent className={`min-h-[22rem] space-y-6 ${CARD_PADDING_AUTH}`}>
           {!hideTitle && (
             <div className="space-y-1 text-center">
-              {eyebrow != null && <p className={eyebrowClass}>{eyebrow}</p>}
+              {eyebrow != null && <p className={EYEBROW_CLASS}>{eyebrow}</p>}
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                 {title}
               </h1>

@@ -3,47 +3,43 @@
  */
 
 import { generateObject } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import mongoose from "mongoose";
 import {
   type DashboardMetrics,
   DashboardSummarySchema,
   type AdminDashboardResponse,
-  type WordCloudTerm,
-  type AISummaryMetrics,
-  type JDMatchMetrics,
+  type UserGrowthBucket,
+  type PopularListingItem,
+  type RecentUser,
 } from "@schemas";
 import { connectDB } from "@/lib/db";
+import {
+  executeWithGeminiFallback,
+  retryWithBackoff,
+} from "@/lib/ai/gemini";
 import { getEnv } from "@/lib/env";
 import { User } from "@/lib/models/User";
 import { AISummary } from "@/lib/models/AISummary";
 import { SavedListing } from "@/lib/models/SavedListing";
+import { Listing } from "@/lib/models/Listing";
 import { ListingView } from "@/lib/models/ListingView";
-import { UserProfile } from "@/lib/models/UserProfile";
 
 const SUMMARY_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 1000;
 
 let summaryCache: { summary: string; expiresAt: number } | null = null;
 
-/** Returns Gemini model for dashboard summary, or null if GEMINI_API_KEY is not set. */
-function getGeminiModelForDashboard(): ReturnType<
-  ReturnType<typeof createGoogleGenerativeAI>
-> | null {
-  const env = getEnv();
-  if (!env.GEMINI_API_KEY?.trim()) return null;
-  const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY });
-  return google("gemini-2.5-flash");
-}
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Aggregates dashboard metrics from DB (counts; no PII). */
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   await connectDB();
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS);
 
   const [
     totalUsers,
     totalSummaries,
+    totalViews,
+    totalSaves,
     summariesLast7Days,
     usersLast7Days,
     viewsLast7Days,
@@ -53,6 +49,8 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   ] = await Promise.all([
     User.countDocuments(),
     AISummary.countDocuments(),
+    ListingView.countDocuments(),
+    SavedListing.countDocuments(),
     AISummary.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
     User.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
     ListingView.countDocuments({ viewedAt: { $gte: sevenDaysAgo } }),
@@ -69,6 +67,8 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   return {
     totalUsers,
     totalSummaries,
+    totalViews,
+    totalSaves,
     summariesLast7Days,
     usersLast7Days,
     viewsLast7Days,
@@ -77,147 +77,92 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   };
 }
 
-const WORD_CLOUD_TOP = 80;
-
-/** Aggregates skills/keywords from UserProfile and AISummary into term counts; returns top N terms. */
-export async function getWordCloudData(): Promise<WordCloudTerm[]> {
-  await connectDB();
-  const termCounts = new Map<string, number>();
-
-  const addTerms = (terms: string[] | undefined) => {
-    if (!terms) return;
-    for (const t of terms) {
-      const w = t.trim().toLowerCase();
-      if (w.length < 2) continue;
-      termCounts.set(w, (termCounts.get(w) ?? 0) + 1);
-    }
-  };
-
-  const [profiles, summaries] = await Promise.all([
-    UserProfile.find({}).select("skills jobTitles").lean(),
-    AISummary.find({}).select("requirements niceToHaves jdMatch").lean(),
-  ]);
-
-  for (const p of profiles) {
-    addTerms(p.skills);
-    addTerms(p.jobTitles);
-  }
-  for (const s of summaries) {
-    addTerms(s.requirements);
-    addTerms(s.niceToHaves);
-    const jd = s as {
-      jdMatch?: { matchedSkills?: string[]; missingSkills?: string[] };
-    };
-    addTerms(jd.jdMatch?.matchedSkills);
-    addTerms(jd.jdMatch?.missingSkills);
-  }
-
-  const sorted = [...termCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, WORD_CLOUD_TOP)
-    .map(([word, count]) => ({ word, count }));
-  return sorted;
-}
-
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-
-/** AI summary counts and field-population metrics. */
-export async function getAISummaryMetrics(): Promise<AISummaryMetrics> {
+/** Returns new users per day for the last 7 days (for dashboard analytics). */
+export async function getDashboardUserGrowth(): Promise<UserGrowthBucket[]> {
   await connectDB();
   const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS);
-  const [
-    total,
-    last7Days,
-    withSalarySgd,
-    withJdMatch,
-    withKeyResponsibilities,
-    withRequirements,
-  ] = await Promise.all([
-    AISummary.countDocuments(),
-    AISummary.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
-    AISummary.countDocuments({
-      salarySgd: { $exists: true, $nin: [null, ""] },
-    }),
-    AISummary.countDocuments({
-      "jdMatch.matchScore": { $exists: true, $ne: null },
-    }),
-    AISummary.countDocuments({
-      keyResponsibilities: { $exists: true, $type: "array", $ne: [] },
-    }),
-    AISummary.countDocuments({
-      requirements: { $exists: true, $type: "array", $ne: [] },
-    }),
+  const docs = await User.aggregate<{ _id: string; count: number }>([
+    { $match: { createdAt: { $gte: sevenDaysAgo } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
   ]);
-  return {
-    total,
-    last7Days,
-    withSalarySgd,
-    withJdMatch,
-    withKeyResponsibilities,
-    withRequirements,
-  };
+  return docs.map((d) => ({ date: d._id, count: d.count }));
 }
 
-/** JD–skillset match score distribution (count with/without, avg, median, optional buckets). */
-export async function getJDMatchMetrics(): Promise<JDMatchMetrics> {
+/** Returns popular listings by view count (last 7 days) with save counts. */
+export async function getDashboardPopularListings(): Promise<PopularListingItem[]> {
   await connectDB();
-  const withMatch = await AISummary.find({
-    "jdMatch.matchScore": { $exists: true, $ne: null },
-  })
-    .select("jdMatch.matchScore")
+  const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS);
+  const viewCounts = await ListingView.aggregate<{
+    _id: mongoose.Types.ObjectId;
+    count: number;
+  }>([
+    { $match: { viewedAt: { $gte: sevenDaysAgo } } },
+    { $group: { _id: "$listingId", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 20 },
+  ]);
+  const saveCounts = await SavedListing.aggregate<{
+    _id: mongoose.Types.ObjectId;
+    count: number;
+  }>([
+    { $group: { _id: "$listingId", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 20 },
+  ]);
+  const saveMap = new Map(saveCounts.map((s) => [s._id.toString(), s.count]));
+  const listingIds = viewCounts.map((v) => v._id);
+  const listings = await Listing.find({ _id: { $in: listingIds } })
+    .select("title")
     .lean();
-  const countWithoutMatch = await AISummary.countDocuments({
-    $or: [
-      { "jdMatch.matchScore": { $exists: false } },
-      { "jdMatch.matchScore": null },
-    ],
-  });
-  const scores = withMatch
-    .map(
-      (s) => (s as { jdMatch?: { matchScore?: number } }).jdMatch?.matchScore
-    )
-    .filter((n): n is number => typeof n === "number");
-  const countWithMatch = scores.length;
-  let avgScore: number | undefined;
-  let medianScore: number | undefined;
-  if (scores.length > 0) {
-    avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-    const sorted = [...scores].sort((a, b) => a - b);
-    medianScore = sorted[Math.floor(sorted.length / 2)] ?? undefined;
-  }
-  const scoreBuckets = [
-    { min: 0, max: 25, count: scores.filter((s) => s >= 0 && s <= 25).length },
-    {
-      min: 26,
-      max: 50,
-      count: scores.filter((s) => s >= 26 && s <= 50).length,
-    },
-    {
-      min: 51,
-      max: 75,
-      count: scores.filter((s) => s >= 51 && s <= 75).length,
-    },
-    {
-      min: 76,
-      max: 100,
-      count: scores.filter((s) => s >= 76 && s <= 100).length,
-    },
-  ];
-  return {
-    countWithMatch,
-    countWithoutMatch,
-    avgScore,
-    medianScore,
-    scoreBuckets,
-  };
+  const titleMap = new Map(
+    listings.map((l) => {
+      const doc = l as { _id: mongoose.Types.ObjectId; title?: string };
+      const title = doc.title?.trim();
+      return [doc._id.toString(), title ? title : undefined];
+    })
+  );
+  return viewCounts
+    .map((v) => {
+      const idStr = v._id.toString();
+      return {
+        listingId: idStr,
+        title: titleMap.get(idStr),
+        viewCount: v.count,
+        saveCount: saveMap.get(idStr) ?? 0,
+      };
+    })
+    .filter((item) => item.title != null && item.title.length > 0);
+}
+
+const RECENT_USERS_LIMIT = 15;
+
+/** Returns the most recently created users (id, username, createdAt) for the dashboard. */
+export async function getDashboardRecentUsers(): Promise<RecentUser[]> {
+  await connectDB();
+  const docs = await User.find()
+    .select("username createdAt")
+    .sort({ createdAt: -1 })
+    .limit(RECENT_USERS_LIMIT)
+    .lean();
+  return docs.map((u) => ({
+    id: (u as { _id: mongoose.Types.ObjectId })._id.toString(),
+    username: (u as { username: string }).username,
+    createdAt: (u as { createdAt: Date }).createdAt,
+  }));
 }
 
 /** Generates a short executive summary of the metrics using Gemini. Returns fallback string if AI is unavailable. */
 export async function generateDashboardSummary(
   metrics: DashboardMetrics
 ): Promise<string> {
-  const model = getGeminiModelForDashboard();
-  if (!model) {
+  const env = getEnv();
+  if (!env.GEMINI_API_KEY?.trim()) {
     return "Summary unavailable; configure GEMINI_API_KEY.";
   }
 
@@ -226,35 +171,71 @@ export async function generateDashboardSummary(
 Metrics (JSON):
 ${JSON.stringify(metrics, null, 2)}`;
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const { object } = await generateObject({
-        model,
-        schema: DashboardSummarySchema,
-        prompt,
-      });
-      return object.summary;
-    } catch {
-      if (attempt < MAX_RETRIES - 1) {
-        const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
+  try {
+    const { object } = await retryWithBackoff(
+      () =>
+        executeWithGeminiFallback((model) =>
+          generateObject({ model, schema: DashboardSummarySchema, prompt }),
+        ),
+      {
+        fallbackMessage:
+          "Summary temporarily unavailable; please try again later.",
+      },
+    );
+    return object.summary;
+  } catch {
+    return "Summary temporarily unavailable; please try again later.";
   }
-  return "Summary temporarily unavailable; please try again later.";
 }
 
-/** Returns metrics, word cloud, AI/JD metrics, and AI summary; uses in-memory cache for summary unless skipCache is true. */
+/** Returns metrics, user growth, popular listings, and recent users only (no AI summary). Use for fast initial dashboard load. */
+export async function getDashboardWithoutSummary(): Promise<
+  Omit<AdminDashboardResponse, "summary">
+> {
+  const [metrics, userGrowth, popularListings, recentUsers] = await Promise.all([
+    getDashboardMetrics(),
+    getDashboardUserGrowth(),
+    getDashboardPopularListings(),
+    getDashboardRecentUsers(),
+  ]);
+  return {
+    metrics,
+    userGrowth,
+    popularListings,
+    recentUsers,
+  };
+}
+
+/** Returns only the AI-generated dashboard summary; uses in-memory cache unless skipCache is true. Fetches metrics for the prompt. */
+export async function getDashboardSummaryOnly(options?: {
+  skipCache?: boolean;
+}): Promise<string> {
+  const now = Date.now();
+  const useCache =
+    !options?.skipCache && summaryCache && summaryCache.expiresAt > now;
+
+  if (useCache) {
+    return summaryCache!.summary;
+  }
+  const metrics = await getDashboardMetrics();
+  const summary = await generateDashboardSummary(metrics);
+  summaryCache = {
+    summary,
+    expiresAt: now + SUMMARY_CACHE_TTL_MS,
+  };
+  return summary;
+}
+
+/** Returns metrics, user growth, popular listings, recent users, and AI summary; uses in-memory cache for summary unless skipCache is true. */
 export async function getDashboardWithSummary(options?: {
   skipCache?: boolean;
 }): Promise<AdminDashboardResponse> {
-  const [metrics, wordCloud, aiSummaryMetrics, jdMatchMetrics] =
-    await Promise.all([
-      getDashboardMetrics(),
-      getWordCloudData(),
-      getAISummaryMetrics(),
-      getJDMatchMetrics(),
-    ]);
+  const [metrics, userGrowth, popularListings, recentUsers] = await Promise.all([
+    getDashboardMetrics(),
+    getDashboardUserGrowth(),
+    getDashboardPopularListings(),
+    getDashboardRecentUsers(),
+  ]);
   const now = Date.now();
   const useCache =
     !options?.skipCache && summaryCache && summaryCache.expiresAt > now;
@@ -272,9 +253,9 @@ export async function getDashboardWithSummary(options?: {
 
   return {
     metrics,
-    wordCloud,
-    aiSummaryMetrics,
-    jdMatchMetrics,
     summary,
+    userGrowth,
+    popularListings,
+    recentUsers,
   };
 }

@@ -1,5 +1,5 @@
 /**
- * Wraps pages that require login. If the user is not logged in, opens the auth modal on the current page so they can sign in and stay in context.
+ * Wraps pages that require login and/or block admins. Single component for auth and user-only routes.
  */
 
 "use client";
@@ -7,34 +7,49 @@
 import { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { PageLoading } from "@/components/page-state";
 
-/** Renders children only when the user is logged in; otherwise shows the auth modal on the same page via URL. */
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export interface ProtectedRouteProps {
+  children: React.ReactNode;
+  /** When true, redirect unauthenticated users to home with auth=login. Default true. */
+  requireAuth?: boolean;
+  /** When true, redirect admin users to /admin (for user-facing pages like browse, profile). Default false. */
+  blockAdmins?: boolean;
+}
+
+/** Renders children when auth and role conditions pass; otherwise redirects or returns null until redirect. */
+export function ProtectedRoute({
+  children,
+  requireAuth = true,
+  blockAdmins = false,
+}: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
-  const pathname = usePathname();
   const router = useRouter();
+  const pathname = usePathname() ?? "/";
   const searchParams = useSearchParams();
+  const search = searchParams?.toString() ? `?${searchParams.toString()}` : "";
+  const redirectPath = pathname + search;
 
   useEffect(() => {
     if (isLoading) return;
-    if (!user) {
-      const next = new URLSearchParams(searchParams);
-      next.set("auth", "login");
-      const query = next.toString();
-      const url = query ? `${pathname ?? "/browse"}?${query}` : `${pathname ?? "/browse"}?auth=login`;
-      router.replace(url);
+    if (requireAuth && !user) {
+      router.replace(`/?auth=login&redirect=${encodeURIComponent(redirectPath)}`);
+      return;
     }
-  }, [user, isLoading, pathname, router, searchParams]);
+    if (blockAdmins && user?.role === "admin") {
+      router.replace("/admin");
+    }
+  }, [user, isLoading, router, requireAuth, blockAdmins, redirectPath]);
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <PageLoading fullScreen />;
   }
 
-  if (!user) {
+  if (blockAdmins && user?.role === "admin") {
+    return null;
+  }
+
+  if (requireAuth && !user) {
     return null;
   }
 

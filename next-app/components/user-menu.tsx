@@ -1,9 +1,10 @@
 /**
- * UserMenu: circular avatar with user's first initial. Click or focus opens dropdown with Logout; Escape closes. Accessible aria-expanded and keyboard support.
+ * UserMenu: circular avatar with user's first initial. Hover or click opens dropdown with Logout; Escape or click outside closes. Accessible aria-expanded and keyboard support.
  */
 
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@ui/components";
 import type { AuthUser } from "@/contexts/AuthContext";
@@ -13,22 +14,43 @@ interface UserMenuProps {
   onLogout: () => void;
 }
 
-/** Derives the first letter to show in the avatar (name, then email, else '?'). */
+/** Derives the first letter to show in the avatar (username, then email, else '?'). */
 function getInitial(user: AuthUser): string {
   return (
-    user.name?.charAt(0)?.toUpperCase() ??
+    user.username?.charAt(0)?.toUpperCase() ??
     user.email?.charAt(0)?.toUpperCase() ??
     "?"
   );
 }
 
-/** Renders a circular avatar; click or focus opens dropdown with Logout. Escape closes; aria-expanded reflects open state. */
+/** Renders a circular avatar; hover or click opens dropdown with Logout. Escape or click outside closes; aria-expanded reflects open state. */
 export function UserMenu({ user, onLogout }: UserMenuProps) {
   const initial = getInitial(user);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const close = useCallback(() => setOpen(false), []);
+
+  const clearCloseTimeout = useCallback(() => {
+    if (closeTimeoutRef.current !== null) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleMouseEnter = useCallback(() => {
+    clearCloseTimeout();
+    setOpen(true);
+  }, [clearCloseTimeout]);
+
+  const handleMouseLeave = useCallback(() => {
+    closeTimeoutRef.current = setTimeout(() => setOpen(false), 150);
+  }, []);
+
+  useEffect(() => {
+    return () => clearCloseTimeout();
+  }, [clearCloseTimeout]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,13 +79,20 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
   }, [close, onLogout]);
 
   return (
-    <div ref={containerRef} className="relative" role="group" aria-label="User menu">
+    <div
+      ref={containerRef}
+      className="relative"
+      role="group"
+      aria-label="User menu"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <button
         type="button"
         className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground outline-none transition-colors hover:bg-muted/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-haspopup="true"
         aria-expanded={open}
-        aria-label={`User menu for ${user.name ?? user.email}`}
+        aria-label={`User menu for ${user.username ?? user.email}`}
         onClick={() => setOpen((o) => !o)}
       >
         {initial}
@@ -74,6 +103,17 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
         }`}
         role="menu"
       >
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start rounded-lg px-3 font-normal"
+          asChild
+          role="menuitem"
+        >
+          <Link href={user.role === "admin" ? "/admin/settings" : "/profile/settings"} onClick={close}>
+            Settings
+          </Link>
+        </Button>
         <Button
           variant="ghost"
           size="sm"

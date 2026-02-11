@@ -42,6 +42,28 @@ export const ListingResultSchema = z.object({
 
 export type ListingResult = z.infer<typeof ListingResultSchema>;
 
+/** Body for admin creating a listing (sourceId/expiresAt set server-side). */
+export const ListingCreateSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  company: z.string().min(1, "Company is required"),
+  location: z.string().optional(),
+  description: z.string().optional(),
+  country: z.string().length(2).optional().default("sg"),
+  sourceUrl: z.string().url().optional(),
+});
+export type ListingCreate = z.infer<typeof ListingCreateSchema>;
+
+/** Body for admin updating a listing (partial; only these fields may be updated). */
+export const ListingUpdateSchema = z.object({
+  title: z.string().min(1).optional(),
+  company: z.string().min(1).optional(),
+  location: z.string().optional(),
+  description: z.string().optional(),
+  country: z.string().length(2).optional(),
+  sourceUrl: z.string().url().optional().nullable(),
+});
+export type ListingUpdate = z.infer<typeof ListingUpdateSchema>;
+
 /** Query params for admin GET listings list (pagination). */
 export const AdminListingsQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),

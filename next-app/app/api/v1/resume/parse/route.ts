@@ -8,13 +8,14 @@ import { requireAuth } from "@/lib/auth/request";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
 import { getEnv } from "@/lib/env";
 import {
+  DOCX_EXTRACT_ERROR_MESSAGE,
   extractTextFromDocx,
   extractTextFromPdf,
+  MAX_FILE_BYTES,
+  PDF_EXTRACT_ERROR_MESSAGE,
   parseResumeWithRetry,
   upsertProfileForUser,
 } from "@/lib/services/resume.service";
-
-const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -85,21 +86,35 @@ export async function POST(request: NextRequest) {
         ? await extractTextFromPdf(buffer)
         : await extractTextFromDocx(buffer);
     } else {
-      const body = await request.json();
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return NextResponse.json(
+          { success: false, message: "Request body must be JSON with a text field." },
+          { status: 400 }
+        );
+      }
       const parsed = ParseResumeBodySchema.safeParse(body);
-      if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
-      text = parsed.data.text;
+      if (!parsed.success)
+        return validationErrorResponse(parsed.error, "Invalid body");
+      text = parsed.data.text.trim();
+      if (!text) {
+        return NextResponse.json(
+          { success: false, message: "Resume text is required." },
+          { status: 400 }
+        );
+      }
     }
 
     const result = await parseResumeWithRetry(text);
     await upsertProfileForUser(payload.sub, {
-      skills: result.skills,
       jobTitles: result.jobTitles,
       resumeSummary: result.resumeSummary,
+      ...(result.yearsOfExperience != null ? { yearsOfExperience: result.yearsOfExperience } : {}),
     });
     return NextResponse.json({ success: true, data: result });
   } catch (err) {
-    console.error("POST /api/v1/resume/parse", err);
     const message = err instanceof Error ? err.message : "Failed to parse resume";
     if (message === "Resume parsing is not configured") {
       return NextResponse.json({ success: false, message }, { status: 503 });
@@ -109,8 +124,8 @@ export async function POST(request: NextRequest) {
     }
     if (
       message === "File must be 5MB or smaller" ||
-      message === "Could not extract text from PDF" ||
-      message === "Could not extract text from DOCX" ||
+      message === PDF_EXTRACT_ERROR_MESSAGE ||
+      message === DOCX_EXTRACT_ERROR_MESSAGE ||
       message === "Only PDF or DOCX files up to 5MB are supported."
     ) {
       return NextResponse.json({ success: false, message }, { status: 400 });

@@ -3,20 +3,29 @@
  */
 
 import Link from "next/link";
+import { cn } from "@ui/components/lib/utils";
 
-const iconSize = 24;
+const iconSizes = { default: 24, sm: 18 } as const;
 
 /** Renders the JobFinder logo (icon + text) as a link to home. Use in headers for consistent branding. */
 export function Logo({
+  size = "default",
   className = "",
 }: {
+  /** Size variant: default (full) or sm (compact for sticky bars). */
+  size?: "default" | "sm";
   /** Optional Tailwind classes for the wrapper link (e.g. text size, hover). */
   className?: string;
 }) {
+  const iconSize = iconSizes[size];
   return (
     <Link
       href="/"
-      className={`flex shrink-0 items-center gap-2 underline-offset-4 hover:underline ${className}`}
+      className={cn(
+        "flex shrink-0 items-center gap-2 no-underline transition-opacity hover:opacity-80",
+        size === "sm" && "gap-1.5",
+        className
+      )}
       aria-label="JobFinder home"
     >
       <svg
@@ -53,7 +62,12 @@ export function Logo({
           opacity="0.9"
         />
       </svg>
-      <span className="text-xl font-semibold tracking-tight text-foreground">
+      <span
+        className={cn(
+          "font-semibold tracking-tight text-foreground",
+          size === "default" ? "text-xl" : "text-base"
+        )}
+      >
         JobFinder
       </span>
     </Link>

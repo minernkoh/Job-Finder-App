@@ -21,14 +21,14 @@ export async function GET(request: NextRequest) {
     const profile = await getProfileByUserId(payload.sub);
     return NextResponse.json({
       success: true,
-      data: profile ?? { skills: [], jobTitles: [], resumeSummary: undefined },
+      data: profile ?? { skills: [], jobTitles: [], resumeSummary: undefined, yearsOfExperience: undefined },
     });
   } catch (err) {
     return toErrorResponse(err, "Failed to get profile");
   }
 }
 
-/** Upserts the current user's profile with optional skills, jobTitles, resumeSummary. */
+/** Upserts the current user's profile with optional skills, jobTitles, resumeSummary, yearsOfExperience. */
 export async function PUT(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -48,6 +48,8 @@ export async function PUT(request: NextRequest) {
         data.resumeSummary !== undefined
           ? data.resumeSummary
           : existing?.resumeSummary,
+      yearsOfExperience:
+        data.yearsOfExperience !== undefined ? data.yearsOfExperience : existing?.yearsOfExperience,
     };
     const profile = await upsertProfileForUser(payload.sub, merged);
     return NextResponse.json({ success: true, data: profile });

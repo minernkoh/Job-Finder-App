@@ -8,8 +8,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
-import DOMPurify from "isomorphic-dompurify";
 import { Card, CardContent } from "@ui/components";
+import { sanitizeJobDescription } from "@/lib/sanitize";
 import { cn } from "@ui/components/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/app-header";
@@ -17,49 +17,32 @@ import { formatSalaryRange } from "@/lib/format";
 import { fetchListing } from "@/lib/api/listings";
 import { createComparisonSummary } from "@/lib/api/summaries";
 import { listingKeys } from "@/lib/query-keys";
-import { CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
+import {
+  CARD_PADDING_DEFAULT,
+  CARD_PADDING_DEFAULT_RESPONSIVE,
+  CONTENT_MAX_W,
+  GAP_MD,
+  PAGE_PX,
+  SECTION_GAP,
+} from "@/lib/layout";
+import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
 
-const eyebrowClass = "text-xs uppercase tracking-widest text-muted-foreground";
-
-/** One column: listing meta, description, and optional per-listing AI summary (no summarize button). */
-function CompareColumn({
-  listingId,
-  summary,
-}: {
-  listingId: string;
-  summary: { tldr: string; keyResponsibilities?: string[] } | null;
-}) {
+/** One column: listing meta, description, and link to full page for AI summary. */
+function CompareColumn({ listingId }: { listingId: string }) {
   const { data: listing, isLoading } = useQuery({
     queryKey: listingKeys(listingId),
     queryFn: () => fetchListing(listingId),
   });
 
   const description = listing?.description ?? "";
-  const sanitizedDescription = useMemo(() => {
-    if (!description.trim()) return "";
-    return DOMPurify.sanitize(description, {
-      ALLOWED_TAGS: [
-        "p",
-        "br",
-        "ul",
-        "ol",
-        "li",
-        "strong",
-        "b",
-        "em",
-        "i",
-        "a",
-        "h1",
-        "h2",
-        "h3",
-      ],
-      ADD_ATTR: ["href", "target", "rel"],
-    }).trim();
-  }, [description]);
+  const sanitizedDescription = useMemo(
+    () => sanitizeJobDescription(description),
+    [description]
+  );
 
   if (isLoading || !listing) {
     return (
-      <div className="flex min-h-[20rem] animate-pulse flex-col gap-4 rounded-xl border border-border bg-muted/30 p-5 sm:p-6">
+      <div className={cn("flex min-h-[20rem] animate-pulse flex-col gap-4 rounded-xl border border-border bg-muted/30", CARD_PADDING_DEFAULT_RESPONSIVE)}>
         <div className="h-6 w-3/4 rounded bg-muted" />
         <div className="mt-2 h-4 w-1/2 rounded bg-muted" />
       </div>
@@ -73,7 +56,7 @@ function CompareColumn({
   );
 
   return (
-    <div className="flex min-h-[20rem] flex-col gap-4 rounded-xl border border-border bg-card p-5 sm:p-6">
+    <div className={cn("flex min-h-[20rem] flex-col gap-4 rounded-xl border border-border bg-card", CARD_PADDING_DEFAULT_RESPONSIVE)}>
       <div>
         <h3 className="font-semibold text-foreground">{listing.title}</h3>
         <p className="text-sm text-muted-foreground">{listing.company}</p>
@@ -86,7 +69,7 @@ function CompareColumn({
       </div>
       {sanitizedDescription.length > 0 && (
         <div className="border-t border-border pt-4">
-          <h4 className={cn(eyebrowClass, "mb-2")}>Description</h4>
+          <h4 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Description</h4>
           <div
             className={cn(
               "max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground",
@@ -111,24 +94,10 @@ function CompareColumn({
         </Link>
       )}
       <div className="border-t border-border pt-4">
-        <h4 className={cn(eyebrowClass, "mb-2")}>AI Summary</h4>
-        {summary ? (
-          <div className="space-y-2 text-sm text-foreground">
-            <p>{summary.tldr}</p>
-            {summary.keyResponsibilities &&
-              summary.keyResponsibilities.length > 0 && (
-                <ul className="list-disc pl-5">
-                  {summary.keyResponsibilities.slice(0, 3).map((r, i) => (
-                    <li key={i}>{r}</li>
-                  ))}
-                </ul>
-              )}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Open full page for AI summary.
-          </p>
-        )}
+        <h4 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>AI Summary</h4>
+        <p className="text-sm text-muted-foreground">
+          Open full page for AI summary.
+        </p>
       </div>
     </div>
   );
@@ -163,9 +132,9 @@ function ComparePageInner() {
 
   if (!listingIds) {
     return (
-      <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
-        <AppHeader backHref="/browse" backLabel="Back to browse" title="Compare jobs" user={user} onLogout={logout} />
-        <main id="main-content" className={cn("mx-auto w-full flex-1 py-8", CONTENT_MAX_W)}>
+      <div className="min-h-screen flex flex-col">
+        <AppHeader user={user} onLogout={logout} />
+        <main id="main-content" className={cn("mx-auto w-full flex-1 py-8", PAGE_PX, CONTENT_MAX_W)}>
           <h1 className="text-2xl font-semibold text-foreground">Compare jobs</h1>
           <p className="mt-2 text-muted-foreground">
             Select 2–3 jobs to compare.{" "}
@@ -179,24 +148,18 @@ function ComparePageInner() {
   }
 
   return (
-    <div className={cn("min-h-screen flex flex-col", PAGE_PX)}>
-      <AppHeader
-        backHref="/browse"
-        backLabel="Back to browse"
-        title="Compare jobs"
-        user={user}
-        onLogout={logout}
-      />
+    <div className="min-h-screen flex flex-col">
+      <AppHeader user={user} onLogout={logout} />
 
-      <main id="main-content" className={cn("mx-auto w-full py-8", CONTENT_MAX_W, SECTION_GAP)}>
+      <main id="main-content" className={cn("mx-auto w-full py-8", PAGE_PX, CONTENT_MAX_W, SECTION_GAP)}>
         <h1 className="mb-6 text-2xl font-semibold text-foreground sm:mb-8">
           Comparing {listingIds.length} jobs
         </h1>
 
         <section aria-label="Unified comparison">
-          <h2 className={cn(eyebrowClass, "mb-4")}>Comparison summary</h2>
+          <h2 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Comparison summary</h2>
           {!user && (
-            <Card variant="elevated" className="p-6">
+            <Card variant="elevated" className={CARD_PADDING_DEFAULT}>
               <h3 className="mb-2 font-medium text-foreground">
                 Sign in to compare jobs
               </h3>
@@ -224,14 +187,14 @@ function ComparePageInner() {
           )}
           {comparisonQuery.data && (
             <Card variant="elevated" className="text-sm">
-              <CardContent className="space-y-4 p-6 sm:space-y-5">
+              <CardContent className={cn(CARD_PADDING_DEFAULT, "space-y-4 sm:space-y-5")}>
                 <p className="text-foreground">
                   {comparisonQuery.data.summary}
                 </p>
                 {comparisonQuery.data.similarities &&
                   comparisonQuery.data.similarities.length > 0 && (
                     <div>
-                      <h3 className={cn(eyebrowClass, "mb-1")}>
+                      <h3 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>
                         Similarities
                       </h3>
                       <ul className="list-disc pl-5 space-y-0.5 text-foreground">
@@ -244,7 +207,7 @@ function ComparePageInner() {
                 {comparisonQuery.data.differences &&
                   comparisonQuery.data.differences.length > 0 && (
                     <div>
-                      <h3 className={cn(eyebrowClass, "mb-1")}>
+                      <h3 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>
                         Differences
                       </h3>
                       <ul className="list-disc pl-5 space-y-0.5 text-foreground">
@@ -265,7 +228,7 @@ function ComparePageInner() {
                 {comparisonQuery.data.recommendedListingId &&
                   comparisonQuery.data.recommendationReason && (
                     <div className="rounded-lg bg-primary/10 p-3 text-foreground">
-                      <span className={eyebrowClass}>Better fit: </span>
+                      <span className={EYEBROW_CLASS}>Better fit: </span>
                       {comparisonQuery.data.recommendationReason}
                     </div>
                   )}
@@ -279,7 +242,7 @@ function ComparePageInner() {
           className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8"
         >
           {listingIds.map((id) => (
-            <CompareColumn key={id} listingId={id} summary={null} />
+            <CompareColumn key={id} listingId={id} />
           ))}
         </section>
       </main>

@@ -6,12 +6,14 @@ import { CompareSummaryBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/request";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
+import { getProfileByUserId } from "@/lib/services/resume.service";
 import { generateComparisonSummary } from "@/lib/services/summaries.service";
 import { getEnv } from "@/lib/env";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const payload = auth;
 
   const env = getEnv();
   if (!env.GEMINI_API_KEY?.trim()) {
@@ -26,10 +28,17 @@ export async function POST(request: NextRequest) {
     const parsed = CompareSummaryBodySchema.safeParse(body);
     if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
 
-    const comparison = await generateComparisonSummary(parsed.data.listingIds);
+    const profile = await getProfileByUserId(payload.sub);
+    const userSkills = profile?.skills ?? [];
+    const currentRole =
+      profile?.jobTitles?.length ? profile.jobTitles[0] : undefined;
+    const comparison = await generateComparisonSummary(parsed.data.listingIds, {
+      userSkills,
+      currentRole,
+      yearsOfExperience: profile?.yearsOfExperience,
+    });
     return NextResponse.json({ success: true, data: comparison });
   } catch (err) {
-    console.error("POST /api/v1/summaries/compare", err);
     const message =
       err instanceof Error ? err.message : "Failed to compare listings";
     if (message === "AI summarization is not configured") {

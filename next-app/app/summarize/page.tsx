@@ -17,52 +17,9 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { createSummary } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
 import { useState, Suspense } from "react";
-
-const eyebrowClass = "text-xs uppercase tracking-widest text-muted-foreground";
-
-/** Renders AI summary: tldr, responsibilities, requirements, SG signals, caveats. */
-function SummaryPanel({ summary }: { summary: SummaryWithId }) {
-  return (
-    <Card variant="elevated" className="text-sm">
-      <CardContent className="p-4 space-y-4">
-        <p className="text-foreground">{summary.tldr}</p>
-        {summary.keyResponsibilities &&
-          summary.keyResponsibilities.length > 0 && (
-            <div>
-              <h3 className={cn(eyebrowClass, "mb-1")}>Key responsibilities</h3>
-              <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-                {summary.keyResponsibilities.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        {summary.requirements && summary.requirements.length > 0 && (
-          <div>
-            <h3 className={cn(eyebrowClass, "mb-1")}>Requirements</h3>
-            <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-              {summary.requirements.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {summary.salarySgd && (
-          <p className="text-foreground">
-            <span className={cn(eyebrowClass)}>Salary (SGD): </span>
-            {summary.salarySgd}
-          </p>
-        )}
-        {summary.caveats && summary.caveats.length > 0 && (
-          <p className="text-muted-foreground text-xs">
-            <span className={eyebrowClass}>Caveats: </span>
-            {summary.caveats.join("; ")}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+import { CARD_PADDING_COMPACT, PAGE_PX } from "@/lib/layout";
+import { EYEBROW_CLASS } from "@/lib/styles";
+import { SummaryPanel } from "@/components/summary-panel";
 
 /** Inner content: paste URL or text, summarize button, summary or error. */
 function SummarizeContent() {
@@ -91,7 +48,7 @@ function SummarizeContent() {
   }
 
   return (
-    <div className={cn("min-h-screen flex flex-col", "px-4 sm:px-6")}>
+    <div className="min-h-screen flex flex-col">
       <header className="mx-auto flex w-full max-w-2xl items-center border-b border-border py-4">
         <Link
           href="/browse"
@@ -106,6 +63,7 @@ function SummarizeContent() {
         id="main-content"
         className={cn(
           "mx-auto w-full flex-1 space-y-8 py-8",
+          PAGE_PX,
           summary ? "max-w-5xl" : "max-w-2xl"
         )}
       >
@@ -119,8 +77,8 @@ function SummarizeContent() {
         {summary ? (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_1fr] lg:gap-8">
             <div className="space-y-3">
-              <h2 className={eyebrowClass}>AI Summary</h2>
-              <SummaryPanel summary={summary} />
+              <h2 className={EYEBROW_CLASS}>AI Summary</h2>
+              <SummaryPanel summary={summary} showJdMatch={false} />
               <Button
                 variant="outline"
                 onClick={() => {
@@ -132,9 +90,9 @@ function SummarizeContent() {
               </Button>
             </div>
             <div className="space-y-2">
-              <h2 className={eyebrowClass}>Description</h2>
+              <h2 className={EYEBROW_CLASS}>Description</h2>
               <Card variant="elevated" className="text-sm">
-                <CardContent className="p-4">
+                <CardContent className={CARD_PADDING_COMPACT}>
                   {/^https?:\/\//i.test(input) ? (
                     <p className="text-foreground text-sm">
                       Source:{" "}
@@ -159,7 +117,7 @@ function SummarizeContent() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="summarize-input" className={eyebrowClass}>
+              <Label htmlFor="summarize-input" className={EYEBROW_CLASS}>
                 URL or job description
               </Label>
               <textarea
@@ -173,7 +131,7 @@ function SummarizeContent() {
             </div>
             <Button
               type="submit"
-              variant="cta"
+              variant="default"
               disabled={mutation.isPending || !input.trim()}
               icon={
                 !mutation.isPending ? (

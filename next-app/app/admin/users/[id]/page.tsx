@@ -1,5 +1,5 @@
 /**
- * Admin user detail page: view user and activity counts; promote/demote, suspend/activate, delete with confirmation.
+ * Admin user detail page: view user and activity counts; edit email/username; promote/demote, suspend/activate, delete with confirmation.
  */
 
 "use client";
@@ -14,15 +14,20 @@ import {
   UserIcon,
   ProhibitIcon,
   CheckCircleIcon,
+  PencilSimpleIcon,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api/client";
-import { Button, Card, CardContent, CardHeader, CardTitle } from "@ui/components";
+import { getErrorMessage } from "@/lib/api/errors";
+import { FormField } from "@/components/form-field";
+import { InlineError, PageLoading } from "@/components/page-state";
+import { PageShell } from "@/components/page-shell";
+import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@ui/components";
 
 interface UserDetail {
   id: string;
-  name: string;
   email: string;
+  username: string;
   role: string;
   status: string;
   createdAt: string;
@@ -43,6 +48,10 @@ export default function AdminUserDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editEmail, setEditEmail] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const fetchUser = useCallback(async () => {
     if (!id) return;
@@ -65,6 +74,43 @@ export default function AdminUserDetailPage() {
     fetchUser();
   }, [fetchUser]);
 
+  useEffect(() => {
+    if (user) {
+      setEditEmail(user.email);
+      setEditUsername(user.username);
+    }
+  }, [user]);
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionError(null);
+    const usernameTrimmed = editUsername.trim();
+    if (usernameTrimmed.length < 3) {
+      setActionError("Username must be at least 3 characters");
+      return;
+    }
+    setEditSubmitting(true);
+    try {
+      const res = await apiClient.patch<{ success: boolean; data: UserDetail }>(
+        `/api/v1/admin/users/${id}`,
+        {
+          email: editEmail.trim(),
+          username: usernameTrimmed,
+        }
+      );
+      if (res.data.success && res.data.data) {
+        setUser(res.data.data);
+        setEditing(false);
+      } else {
+        setActionError("Failed to update");
+      }
+    } catch (e: unknown) {
+      setActionError(getErrorMessage(e, "Failed to update"));
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   const updateRole = async (role: "admin" | "user") => {
     setActionError(null);
     try {
@@ -78,11 +124,7 @@ export default function AdminUserDetailPage() {
         setActionError("Failed to update role");
       }
     } catch (e: unknown) {
-      const msg =
-        e && typeof e === "object" && "response" in e
-          ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-          : "Request failed";
-      setActionError(String(msg ?? "Request failed"));
+      setActionError(getErrorMessage(e, "Request failed"));
     }
   };
 
@@ -99,11 +141,7 @@ export default function AdminUserDetailPage() {
         setActionError("Failed to update status");
       }
     } catch (e: unknown) {
-      const msg =
-        e && typeof e === "object" && "response" in e
-          ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-          : "Request failed";
-      setActionError(String(msg ?? "Request failed"));
+      setActionError(getErrorMessage(e, "Request failed"));
     }
   };
 
@@ -115,22 +153,14 @@ export default function AdminUserDetailPage() {
       await apiClient.delete(`/api/v1/admin/users/${id}`);
       router.replace("/admin/users");
     } catch (e: unknown) {
-      const msg =
-        e && typeof e === "object" && "response" in e
-          ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-          : "Delete failed";
-      setActionError(String(msg ?? "Delete failed"));
+      setActionError(getErrorMessage(e, "Delete failed"));
     } finally {
       setDeleting(false);
     }
   };
 
   if (loading && !user) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center p-4">
-        <p className="text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <PageLoading fullScreen={false} />;
   }
   if (error || !user) {
     return (
@@ -149,61 +179,104 @@ export default function AdminUserDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
+    <PageShell
+      title="User detail"
+      headerAction={
         <Link href="/admin/users">
           <Button variant="ghost" size="sm">
             <ArrowLeftIcon className="size-4" weight="regular" />
             Users
           </Button>
         </Link>
-      </div>
-      <h1 className="text-2xl font-semibold text-foreground">User detail</h1>
-      {actionError && (
-        <p className="text-destructive text-sm" role="alert">
-          {actionError}
-        </p>
-      )}
+      }
+    >
+      {actionError && <InlineError message={actionError} />}
       <Card>
-        <CardHeader className="flex flex-row items-center gap-2">
-          <UserCircleIcon className="size-5 text-muted-foreground" weight="regular" />
-          <CardTitle>{user.name}</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <UserCircleIcon className="size-5 text-muted-foreground" weight="regular" />
+            <CardTitle>{user.username}</CardTitle>
+          </div>
+          {!editing ? (
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <PencilSimpleIcon className="size-4" weight="regular" />
+              Edit
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
-          <dl className="grid gap-2 text-sm">
-            <div>
-              <dt className="text-muted-foreground">Email</dt>
-              <dd className="text-foreground">{user.email}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Role</dt>
-              <dd className="text-foreground">{user.role}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Status</dt>
-              <dd className="text-foreground">{user.status}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Summaries</dt>
-              <dd className="text-foreground">{user.summaryCount}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Saved listings</dt>
-              <dd className="text-foreground">{user.savedCount}</dd>
-            </div>
-            {user.lastSummaryAt && (
+          {editing ? (
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <FormField id="edit-email" label="Email" required>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  required
+                  disabled={editSubmitting}
+                />
+              </FormField>
+              <FormField id="edit-username" label="Username" required>
+                <Input
+                  id="edit-username"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  placeholder="3–30 chars, letters, numbers, _ -"
+                  required
+                  minLength={3}
+                  maxLength={30}
+                  disabled={editSubmitting}
+                />
+              </FormField>
+              <Button type="submit" disabled={editSubmitting}>
+                {editSubmitting ? "Saving…" : "Save"}
+              </Button>
+            </form>
+          ) : (
+            <dl className="grid gap-2 text-sm">
               <div>
-                <dt className="text-muted-foreground">Last summary</dt>
-                <dd className="text-foreground">{new Date(user.lastSummaryAt).toLocaleString()}</dd>
+                <dt className="text-muted-foreground">Email</dt>
+                <dd className="text-foreground">{user.email}</dd>
               </div>
-            )}
-            {user.lastSavedAt && (
               <div>
-                <dt className="text-muted-foreground">Last saved</dt>
-                <dd className="text-foreground">{new Date(user.lastSavedAt).toLocaleString()}</dd>
+                <dt className="text-muted-foreground">Username</dt>
+                <dd className="text-foreground">{user.username}</dd>
               </div>
-            )}
-          </dl>
+              <div>
+                <dt className="text-muted-foreground">Role</dt>
+                <dd className="text-foreground">{user.role}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className="text-foreground">{user.status}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Summaries</dt>
+                <dd className="text-foreground">{user.summaryCount}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Saved listings</dt>
+                <dd className="text-foreground">{user.savedCount}</dd>
+              </div>
+              {user.lastSummaryAt && (
+                <div>
+                  <dt className="text-muted-foreground">Last summary</dt>
+                  <dd className="text-foreground">{new Date(user.lastSummaryAt).toLocaleString()}</dd>
+                </div>
+              )}
+              {user.lastSavedAt && (
+                <div>
+                  <dt className="text-muted-foreground">Last saved</dt>
+                  <dd className="text-foreground">{new Date(user.lastSavedAt).toLocaleString()}</dd>
+                </div>
+              )}
+            </dl>
+          )}
           <div className="flex flex-wrap gap-2 border-t border-border pt-4">
             <span className="text-muted-foreground text-sm">Actions:</span>
             {user.role === "admin" ? (
@@ -251,6 +324,6 @@ export default function AdminUserDetailPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

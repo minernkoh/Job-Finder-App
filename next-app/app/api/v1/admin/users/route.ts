@@ -1,11 +1,11 @@
 /**
- * Admin users list API: GET returns paginated users with optional search and filters. Admin only.
+ * Admin users list API: GET returns paginated users with optional search and filters; POST creates a new user. Admin only.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { AdminUsersQuerySchema } from "@schemas";
+import { AdminUsersQuerySchema, AdminCreateUserBodySchema } from "@schemas";
 import { requireAdmin } from "@/lib/auth/guard";
-import { listUsers } from "@/lib/services/admin-users.service";
+import { listUsers, createUser } from "@/lib/services/admin-users.service";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
 
 /** Returns paginated users with optional search, role, status filters. */
@@ -26,5 +26,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data });
   } catch (e) {
     return toErrorResponse(e, "Failed to list users");
+  }
+}
+
+/** Creates a new user (email, username, password, role). Returns 201 with user or 409 if email exists. */
+export async function POST(request: NextRequest) {
+  try {
+    const result = await requireAdmin(request);
+    if (result instanceof NextResponse) return result;
+    const body = await request.json();
+    const parsed = AdminCreateUserBodySchema.safeParse(body);
+    if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid input");
+    const outcome = await createUser(parsed.data);
+    if (!outcome.success) {
+      return NextResponse.json(
+        { success: false, message: outcome.reason },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(
+      { success: true, data: outcome.user },
+      { status: 201 }
+    );
+  } catch (e) {
+    return toErrorResponse(e, "Failed to create user");
   }
 }

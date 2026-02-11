@@ -12,25 +12,27 @@ interface AuthTabsProps {
 /** Renders Log in and Sign up tabs with consistent styling; used by login and admin auth pages. */
 export function AuthTabs({ value, onChange }: AuthTabsProps) {
   return (
-    <div className="flex gap-2 rounded-xl border border-border p-1">
+    <div className="flex gap-2 border-b border-border" role="tablist">
       <button
         type="button"
+        role="tab"
         onClick={() => onChange("login")}
-        className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+        className={`flex-1 px-4 pt-2 pb-3 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors ${
           value === "login"
-            ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:text-foreground"
+            ? "border-primary text-foreground"
+            : "border-transparent text-muted-foreground hover:text-foreground"
         }`}
       >
         Log in
       </button>
       <button
         type="button"
+        role="tab"
         onClick={() => onChange("signup")}
-        className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+        className={`flex-1 px-4 pt-2 pb-3 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors ${
           value === "signup"
-            ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:text-foreground"
+            ? "border-primary text-foreground"
+            : "border-transparent text-muted-foreground hover:text-foreground"
         }`}
       >
         Sign up

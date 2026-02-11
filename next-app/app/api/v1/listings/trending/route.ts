@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse } from "@/lib/api/errors";
 import { getTrendingListingIds } from "@/lib/services/listing-views.service";
-import { getListingById } from "@/lib/services/listings.service";
+import { getListingsByIds } from "@/lib/services/listings.service";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,14 +14,10 @@ export async function GET(request: NextRequest) {
       10,
       Math.max(1, parseInt(searchParams.get("limit") ?? "5", 10) || 5)
     );
-    const timeframe = parseInt(searchParams.get("timeframe") ?? "24", 10) || 24;
+    const timeframe = parseInt(searchParams.get("timeframe") ?? "168", 10) || 168;
 
     const ids = await getTrendingListingIds(limit, timeframe);
-    const listings: Awaited<ReturnType<typeof getListingById>>[] = [];
-    for (const id of ids) {
-      const listing = await getListingById(id);
-      if (listing) listings.push(listing);
-    }
+    const listings = await getListingsByIds(ids);
 
     return NextResponse.json({
       success: true,

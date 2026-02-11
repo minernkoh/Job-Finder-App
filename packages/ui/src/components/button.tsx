@@ -17,7 +17,6 @@ const buttonVariants = cva(
       variant: {
         default:
           "bg-primary text-primary-foreground hover:bg-primary-foreground hover:text-primary",
-        cta: "bg-primary text-primary-foreground hover:bg-primary-foreground hover:text-primary",
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
@@ -31,10 +30,10 @@ const buttonVariants = cva(
           "border border-white bg-transparent text-white hover:bg-white hover:text-primary focus-visible:ring-white/50",
       },
       size: {
-        default: "h-14 min-w-[6.5rem] px-5 py-3.5 has-[>svg]:px-4",
+        default: "h-11 min-w-[6.5rem] px-5 py-2.5 has-[>svg]:px-4",
         xs: "h-8 min-w-0 gap-1 rounded-lg px-2.5 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-12 min-w-[5.5rem] rounded-xl gap-1.5 px-4 py-3 has-[>svg]:px-3",
-        lg: "h-12 min-w-[8rem] rounded-xl px-6 py-3 has-[>svg]:px-5",
+        sm: "h-9 min-w-[5.5rem] rounded-xl gap-1.5 px-4 py-2 has-[>svg]:px-3",
+        lg: "h-11 min-w-[8rem] rounded-xl px-6 py-2.5 has-[>svg]:px-5",
         icon: "size-10 min-w-0",
         "icon-xs":
           "size-8 min-w-0 rounded-lg [&_svg:not([class*='size-'])]:size-3",
@@ -95,6 +94,7 @@ function Button({
   iconRight,
   children,
   disabled,
+  type,
   ...props
 }: ButtonProps) {
   const Comp = asChild ? Slot : "button";
@@ -106,6 +106,7 @@ function Button({
       data-slot="button"
       data-variant={variant}
       data-size={size}
+      type={asChild ? undefined : (type ?? "button")}
       className={cn(
         hasIconRight && "group",
         buttonVariants({ variant, size, className })

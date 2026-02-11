@@ -3,6 +3,7 @@
  */
 
 import { connectDB } from "@/lib/db";
+import { calculatePagination } from "@/lib/pagination";
 import { Listing } from "@/lib/models/Listing";
 
 export interface ListListingsParams {
@@ -31,9 +32,7 @@ export async function listListings(
   params: ListListingsParams
 ): Promise<ListListingsResult> {
   await connectDB();
-  const page = Math.max(1, params.page ?? 1);
-  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
-  const skip = (page - 1) * limit;
+  const { page, limit, skip } = calculatePagination(params);
 
   const [listings, total] = await Promise.all([
     Listing.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),

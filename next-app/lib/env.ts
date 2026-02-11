@@ -17,6 +17,8 @@ const envSchema = z.object({
   JOB_SEARCH_CACHE_TTL: z.coerce.number().default(3600),
   /** Optional so app starts without it; summary endpoints return 503 if unset. */
   GEMINI_API_KEY: z.string().min(1).optional(),
+  /** Optional fallback key used on 429/rate limit when primary key is exhausted. */
+  GEMINI_API_KEY_FALLBACK: z.string().min(1).optional(),
   /** Cache TTL for AI summaries by inputTextHash (seconds). Default 7 days. */
   AI_SUMMARY_CACHE_TTL: z.coerce.number().default(604800),
 });
@@ -34,6 +36,7 @@ function validateEnv(): Env {
     ADZUNA_APP_KEY: process.env.ADZUNA_APP_KEY,
     JOB_SEARCH_CACHE_TTL: process.env.JOB_SEARCH_CACHE_TTL,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY?.trim() || undefined,
+    GEMINI_API_KEY_FALLBACK: process.env.GEMINI_API_KEY_FALLBACK?.trim() || undefined,
     AI_SUMMARY_CACHE_TTL: process.env.AI_SUMMARY_CACHE_TTL,
   });
   if (!parsed.success) {

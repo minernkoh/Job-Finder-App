@@ -4,9 +4,11 @@
 
 "use client";
 
+import { toast } from "sonner";
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
   fetchSavedListings,
   saveListing,
@@ -37,6 +39,10 @@ export function useSavedListings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: savedKeys.all });
       queryClient.invalidateQueries({ queryKey: savedCheckKeys.all });
+      toast.success("Listing saved");
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, "Failed to save listing"));
     },
   });
 
@@ -45,6 +51,10 @@ export function useSavedListings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: savedKeys.all });
       queryClient.invalidateQueries({ queryKey: savedCheckKeys.all });
+      toast.success("Listing removed from saved");
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, "Failed to remove from saved"));
     },
   });
 

@@ -9,8 +9,11 @@ import {
   BookmarkIcon,
   BookmarkSimpleIcon,
   ArrowsLeftRightIcon,
+  PencilSimpleIcon,
+  TrashIcon,
 } from "@phosphor-icons/react";
 import { Button, Card, CardContent, CardHeader } from "@ui/components";
+import { cn } from "@ui/components/lib/utils";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
 import type { ListingResult } from "@schemas";
 
@@ -29,6 +32,12 @@ interface ListingCardProps {
   isInCompareSet?: boolean;
   /** Current compare set size; when 3, adding is disabled unless isInCompareSet. */
   compareSetSize?: number;
+  /** Whether this listing is the one currently shown in the detail panel (for split layout). */
+  isSelected?: boolean;
+  /** When "admin", show Edit and Delete controls. */
+  userRole?: "admin" | "user";
+  /** Called when admin confirms delete; parent should call API and invalidate queries. */
+  onDeleteListing?: (listingId: string) => void;
 }
 
 /** Renders a job listing card with title, company, location, and optional save and compare. */
@@ -43,14 +52,37 @@ export function ListingCard({
   onAddToCompare,
   isInCompareSet = false,
   compareSetSize = 0,
+  isSelected = false,
+  userRole,
+  onDeleteListing,
 }: ListingCardProps) {
-  const cardHref = href ?? `/browse/${listing.id}`;
+  const cardHref = href ?? `/browse?job=${listing.id}`;
   const compareSetFull = compareSetSize >= 3;
-  const canAddToCompare =
-    onAddToCompare && (isInCompareSet || !compareSetFull);
+  const canAddToCompare = onAddToCompare && (isInCompareSet || !compareSetFull);
+  const isAdmin = userRole === "admin";
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      typeof window !== "undefined" &&
+      window.confirm("Delete this listing? This cannot be undone.")
+    ) {
+      onDeleteListing?.(listing.id);
+    }
+  };
 
   return (
-    <Card interactive variant="default" className="cursor-pointer">
+    <Card
+      interactive
+      variant="default"
+      className={cn(
+        "cursor-pointer",
+        isSelected && "border-2 border-primary",
+        isSelected &&
+          "hover:ring-0 hover:ring-offset-0 focus-within:ring-0 focus-within:ring-offset-0",
+      )}
+    >
       <Link
         href={cardHref}
         className="block"
@@ -86,13 +118,19 @@ export function ListingCard({
                 title={
                   compareSetFull && !isInCompareSet
                     ? "You can compare up to 3 jobs. Remove one to add another."
-                    : "Add to compare"
+                    : isInCompareSet
+                      ? "Remove"
+                      : "Add to compare"
                 }
-                aria-label="Add to compare"
+                aria-label={
+                  isInCompareSet ? "Remove from comparison" : "Add to compare"
+                }
               >
                 <ArrowsLeftRightIcon
                   size={16}
-                  className={isInCompareSet ? "text-primary" : "text-muted-foreground"}
+                  className={
+                    isInCompareSet ? "text-primary" : "text-muted-foreground"
+                  }
                 />
               </Button>
             )}
@@ -119,6 +157,34 @@ export function ListingCard({
                 )}
               </Button>
             )}
+            {isAdmin && (
+              <>
+                <Link
+                  href={`/admin/listings?edit=${listing.id}`}
+                  className="shrink-0 inline-flex items-center justify-center rounded-md hover:bg-muted p-1.5"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Edit listing"
+                  aria-label="Edit listing"
+                >
+                  <PencilSimpleIcon
+                    size={16}
+                    className="text-muted-foreground"
+                  />
+                </Link>
+                {onDeleteListing && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0"
+                    onClick={handleDelete}
+                    title="Delete listing"
+                    aria-label="Delete listing"
+                  >
+                    <TrashIcon size={16} className="text-muted-foreground" />
+                  </Button>
+                )}
+              </>
+            )}
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-1">
@@ -131,7 +197,7 @@ export function ListingCard({
             const salary = formatSalaryRange(
               listing.salaryMin,
               listing.salaryMax,
-              listing.country
+              listing.country,
             );
             return salary ? (
               <p className="text-sm font-medium text-foreground">{salary}</p>
@@ -145,9 +211,7 @@ export function ListingCard({
           {(() => {
             const posted = formatPostedDate(listing.postedAt);
             return posted ? (
-              <p className="text-xs text-muted-foreground">
-                Posted {posted}
-              </p>
+              <p className="text-xs text-muted-foreground">Posted {posted}</p>
             ) : null;
           })()}
         </CardContent>
