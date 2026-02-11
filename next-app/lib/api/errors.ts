@@ -22,6 +22,19 @@ export function getErrorMessage(err: unknown, fallback: string): string {
 }
 
 /**
+ * Returns true if the error message indicates Gemini API rate limit (429 or quota exhausted).
+ * Safe for client use; no server-only imports.
+ */
+export function isRateLimitMessage(message: string): boolean {
+  const m = message.toUpperCase();
+  return (
+    m.includes("429") ||
+    m.includes("RESOURCE_EXHAUSTED") ||
+    m.includes("QUOTA")
+  );
+}
+
+/**
  * Asserts that an API response has success: true and defined data. Throws with response.message or fallbackError otherwise.
  */
 export function assertApiSuccess<T>(

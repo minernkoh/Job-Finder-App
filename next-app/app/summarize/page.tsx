@@ -17,6 +17,8 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { fetchProfile } from "@/lib/api/profile";
 import { createSummaryStream, consumeSummaryStream } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
+import { isRateLimitMessage } from "@/lib/api/errors";
+import { toast } from "sonner";
 import { useState, useCallback, Suspense } from "react";
 import { CARD_PADDING_COMPACT, PAGE_PX, TEXTAREA_BASE_CLASS } from "@/lib/layout";
 import { InlineError } from "@/components/page-state";
@@ -61,8 +63,15 @@ function SummarizeContent() {
         });
         setIsLoading(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to summarize");
+        const message =
+          err instanceof Error ? err.message : "Failed to summarize";
+        setError(message);
         setIsLoading(false);
+        if (isRateLimitMessage(message)) {
+          toast.error(
+            "AI summary is temporarily unavailable due to rate limits. Please try again in a few minutes.",
+          );
+        }
       }
     },
     [input],

@@ -26,6 +26,8 @@ import { fetchListing, recordListingView } from "@/lib/api/listings";
 import { fetchProfile } from "@/lib/api/profile";
 import { createSummaryStream, consumeSummaryStream } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
+import { isRateLimitMessage } from "@/lib/api/errors";
+import { toast } from "sonner";
 import { useIsMdViewport } from "@/hooks/useIsMdViewport";
 import { useSavedListings } from "@/hooks/useSavedListings";
 import { listingKeys } from "@/lib/query-keys";
@@ -107,10 +109,15 @@ export function JobDetailPanel({
       });
       setIsSummarizing(false);
     } catch (err) {
-      setSummaryError(
-        err instanceof Error ? err.message : "Failed to summarize",
-      );
+      const message =
+        err instanceof Error ? err.message : "Failed to summarize";
+      setSummaryError(message);
       setIsSummarizing(false);
+      if (isRateLimitMessage(message)) {
+        toast.error(
+          "AI summary is temporarily unavailable due to rate limits. Please try again in a few minutes.",
+        );
+      }
     }
   }, [listingId]);
 

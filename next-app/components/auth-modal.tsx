@@ -183,7 +183,7 @@ function AuthModalContent({
           <XIcon className="size-5" />
         </button>
       </div>
-      <CardContent className={cn("flex flex-col gap-6 pt-0", CARD_PADDING_AUTH)}>
+      <CardContent className={cn("flex flex-col gap-6", CARD_PADDING_AUTH, "pt-0")}>
         <AuthTabs value={tab} onChange={setTab} />
         <div className="min-h-0 overflow-auto">
           {tab === "login" ? (

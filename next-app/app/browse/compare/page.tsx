@@ -6,7 +6,7 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useMemo, Suspense } from "react";
+import { useEffect, useMemo, useRef, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@ui/components";
 import { sanitizeJobDescription } from "@/lib/sanitize";
@@ -17,7 +17,9 @@ import { formatSalaryRange } from "@/lib/format";
 import { fetchListing } from "@/lib/api/listings";
 import { fetchProfile } from "@/lib/api/profile";
 import { createComparisonSummary } from "@/lib/api/summaries";
+import { isRateLimitMessage } from "@/lib/api/errors";
 import { listingKeys } from "@/lib/query-keys";
+import { toast } from "sonner";
 import {
   CARD_PADDING_DEFAULT,
   CARD_PADDING_DEFAULT_RESPONSIVE,
@@ -117,6 +119,24 @@ function ComparePageInner() {
     queryFn: () => createComparisonSummary(listingIds!),
     enabled: !!listingIds && listingIds.length >= 2 && !!user,
   });
+
+  const lastToastedMessageRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!comparisonQuery.isError || !comparisonQuery.error) {
+      lastToastedMessageRef.current = null;
+      return;
+    }
+    const message =
+      comparisonQuery.error instanceof Error
+        ? comparisonQuery.error.message
+        : "Failed to load comparison";
+    if (isRateLimitMessage(message) && lastToastedMessageRef.current !== message) {
+      lastToastedMessageRef.current = message;
+      toast.error(
+        "AI summary is temporarily unavailable due to rate limits. Please try again in a few minutes.",
+      );
+    }
+  }, [comparisonQuery.isError, comparisonQuery.error]);
 
   const { data: profile } = useQuery({
     queryKey: ["profile"],

@@ -86,6 +86,10 @@ export interface SkillsEditorProps {
   yearsLabel?: string;
   /** Optional id for the input (default: `${idPrefix}-years`). */
   yearsInputId?: string;
+  /** When true, do not render the "Your skills" section (e.g. when it is shown in a separate card). */
+  hideYourSkillsBlock?: boolean;
+  /** When true, do not render suggested skills pills (role or resume); use when they are shown in a separate unified card. */
+  hideSuggestedSkillsPills?: boolean;
 }
 
 /** Renders role input, suggest pills, custom skill, optional resume block, and skills list with optional save. */
@@ -122,6 +126,8 @@ export function SkillsEditor({
   onYearsChange,
   yearsLabel,
   yearsInputId,
+  hideYourSkillsBlock = false,
+  hideSuggestedSkillsPills = false,
 }: SkillsEditorProps) {
   const fileInputId = `${idPrefix}-resume-file`;
   const yearsId = yearsInputId ?? `${idPrefix}-years`;
@@ -129,10 +135,10 @@ export function SkillsEditor({
     yearsValue !== undefined && typeof onYearsChange === "function";
 
   return (
-    <Card variant="default" className="border-border">
-      <CardContent className={cn(CARD_PADDING_COMPACT, "space-y-6")}>
+    <Card variant="default" className="border-border h-full min-h-0 flex flex-col">
+      <CardContent className={cn(CARD_PADDING_COMPACT, "space-y-6 flex-1 min-h-0 overflow-y-auto")}>
         {introText && (
-          <p className="text-sm text-muted-foreground">{introText}</p>
+          <p className="eyebrow">{introText}</p>
         )}
         {showRoleBlock && (
           <section className="space-y-4">
@@ -201,7 +207,7 @@ export function SkillsEditor({
                 {suggestPending ? "Suggesting…" : "Suggest skills"}
               </Button>
             </div>
-            {suggestedSkills.length > 0 && (
+            {!hideSuggestedSkillsPills && suggestedSkills.length > 0 && (
               <div className="space-y-2">
                 <p className="eyebrow">Suggested skills — click to add</p>
                 <div className="flex flex-wrap gap-2">
@@ -219,6 +225,69 @@ export function SkillsEditor({
               </div>
             )}
           </section>
+        )}
+        {!hideYourSkillsBlock && (
+          <div className="space-y-3 border-t border-border pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="eyebrow m-0">{yourSkillsHeading ?? "Your skills"}</p>
+              {onRemoveAllSkills && skills.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground hover:text-destructive h-auto py-1"
+                  onClick={onRemoveAllSkills}
+                  aria-label="Remove all skills"
+                >
+                  <TrashIcon className="mr-1 size-3.5" aria-hidden />
+                  Remove all
+                </Button>
+              )}
+            </div>
+            {skills.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {emptySkillsMessage}
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {skills.map((skill, index) => (
+                  <span
+                    key={`${skill}-${index}`}
+                    className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm bg-muted border border-border text-foreground"
+                  >
+                    {skill}
+                    <button
+                      type="button"
+                      onClick={() => onRemoveSkill(index)}
+                      className="rounded-full p-0.5 hover:bg-muted-foreground/20"
+                      aria-label={`Remove ${skill}`}
+                    >
+                      <XIcon className="size-3.5" aria-hidden />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {showSaveBlock && (
+              <>
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    disabled={skills.length === 0 || savePending}
+                    onClick={onSave}
+                    aria-label={saveButtonLabel}
+                  >
+                    {savePending ? "Saving…" : saveButtonLabel}
+                  </Button>
+                </div>
+                {saveError && (
+                  <InlineError message={saveError} />
+                )}
+              </>
+            )}
+          </div>
         )}
         {!showRoleBlock && hasYearsField && (
           <section className="space-y-3">
@@ -242,7 +311,7 @@ export function SkillsEditor({
         )}
         {showCustomBlock && (
           <section className="space-y-3 border-t border-border pt-4">
-            <p className="eyebrow">Or add manually</p>
+            <p className="eyebrow">Add skills manually</p>
             <div className="space-y-2">
               <Label htmlFor={`${idPrefix}-custom`} className="text-sm">
                 Skill name
@@ -277,7 +346,7 @@ export function SkillsEditor({
         )}
         {showResumeBlock && resumeProps && (
           <section className="space-y-4 border-t border-border pt-4">
-            <p className="eyebrow">Scan resume for skills</p>
+            <p className="eyebrow">Scan resume</p>
             <div className="space-y-3">
               <input
                 id={fileInputId}
@@ -389,23 +458,25 @@ export function SkillsEditor({
                 <p className="text-sm text-foreground">{resumeAssessment}</p>
               </div>
             )}
-            {resumeSuggestedSkills.length > 0 && onAddResumeSuggestedSkill && (
-              <div className="space-y-2 border-t border-border pt-4">
-                <p className="eyebrow">Skills from resume — click to add</p>
-                <div className="flex flex-wrap gap-2">
-                  {resumeSuggestedSkills.map((skill) => (
-                    <button
-                      key={skill}
-                      type="button"
-                      onClick={() => onAddResumeSuggestedSkill(skill)}
-                      className={SKILL_PILL_CLASS}
-                    >
-                      {skill}
-                    </button>
-                  ))}
+            {!hideSuggestedSkillsPills &&
+              resumeSuggestedSkills.length > 0 &&
+              onAddResumeSuggestedSkill && (
+                <div className="space-y-2 border-t border-border pt-4">
+                  <p className="eyebrow">Skills from resume — click to add</p>
+                  <div className="flex flex-wrap gap-2">
+                    {resumeSuggestedSkills.map((skill) => (
+                      <button
+                        key={skill}
+                        type="button"
+                        onClick={() => onAddResumeSuggestedSkill(skill)}
+                        className={SKILL_PILL_CLASS}
+                      >
+                        {skill}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
           </section>
         )}
         {!showResumeBlock && resumeAssessment != null && resumeAssessment.trim() !== "" && (
@@ -414,7 +485,8 @@ export function SkillsEditor({
             <p className="text-sm text-foreground">{resumeAssessment}</p>
           </div>
         )}
-        {!showResumeBlock &&
+        {!hideSuggestedSkillsPills &&
+          !showResumeBlock &&
           resumeSuggestedSkills.length > 0 &&
           onAddResumeSuggestedSkill && (
             <div className="space-y-2 border-t border-border pt-4">
@@ -433,67 +505,6 @@ export function SkillsEditor({
               </div>
             </div>
           )}
-        <div className="space-y-3 border-t border-border pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="eyebrow m-0">{yourSkillsHeading ?? "Your skills"}</p>
-            {onRemoveAllSkills && skills.length > 0 && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="text-muted-foreground hover:text-destructive h-auto py-1"
-                onClick={onRemoveAllSkills}
-                aria-label="Remove all skills"
-              >
-                <TrashIcon className="mr-1 size-3.5" aria-hidden />
-                Remove all
-              </Button>
-            )}
-          </div>
-          {skills.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {emptySkillsMessage}
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {skills.map((skill, index) => (
-                <span
-                  key={`${skill}-${index}`}
-                  className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm bg-muted border border-border text-foreground"
-                >
-                  {skill}
-                  <button
-                    type="button"
-                    onClick={() => onRemoveSkill(index)}
-                    className="rounded-full p-0.5 hover:bg-muted-foreground/20"
-                    aria-label={`Remove ${skill}`}
-                  >
-                    <XIcon className="size-3.5" aria-hidden />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          {showSaveBlock && (
-            <>
-              <div className="flex justify-center">
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  disabled={skills.length === 0 || savePending}
-                  onClick={onSave}
-                  aria-label={saveButtonLabel}
-                >
-                  {savePending ? "Saving…" : saveButtonLabel}
-                </Button>
-              </div>
-              {saveError && (
-                <InlineError message={saveError} />
-              )}
-            </>
-          )}
-        </div>
       </CardContent>
     </Card>
   );
