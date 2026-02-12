@@ -255,8 +255,8 @@ function ComparePageInner() {
                 onClick={handleRegenerate}
                 disabled={isStreaming}
                 className="w-fit"
+                icon={<ArrowsClockwiseIcon size={16} weight="regular" />}
               >
-                <ArrowsClockwiseIcon size={16} className="mr-1" />
                 Regenerate summary
               </Button>
             )}

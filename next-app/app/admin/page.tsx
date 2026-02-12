@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { ArrowRightIcon, SparkleIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, ArrowsClockwiseIcon } from "@phosphor-icons/react";
 import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
@@ -148,15 +148,13 @@ function AdminDashboard() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Dashboard summary</CardTitle>
             <Button
+              variant="outline"
               size="sm"
-              variant={data?.summary ? "secondary" : "default"}
               onClick={handleGenerateSummary}
               disabled={generatingSummary}
-              iconRight={
-                generatingSummary ? undefined : (
-                  <SparkleIcon className="size-4" weight="regular" />
-                )
-              }
+              loading={generatingSummary}
+              icon={<ArrowsClockwiseIcon size={16} weight="regular" />}
+              className="w-fit"
             >
               {generatingSummary
                 ? "Generating…"
