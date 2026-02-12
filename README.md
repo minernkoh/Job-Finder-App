@@ -1,12 +1,40 @@
-# Job Finder App
+# 💼 Job Finder App
 
 AI-assisted job search built with Next.js. Browse listings from the Adzuna API, save jobs,
 compare up to 3 roles side by side, and generate AI summaries powered by Gemini.
 Admins manage users, listings, and summaries from a dedicated dashboard.
 
+**✨ Core features**
+
+- **Browse & search** — Job listings from the Adzuna API (20+ countries); keyword search, filters, trending and recommended sections
+- **Compare jobs** — Select 2–3 roles and get a unified AI comparison (similarities, differences, recommendation, match scores)
+- **AI summaries** — Gemini-powered TL;DR, key responsibilities, requirements, and optional JD–skillset match per listing
+- **Profile & skills** — Store skills and job titles; AI skill suggestions and resume parsing (PDF/DOCX) to prefill your profile
+- **Admin dashboard** — Manage users, listings, and summaries; stream AI dashboard summary; admin-only settings
+
 ![App Screenshot](image/appscreenshot.png)
 
-## Tech Stack
+## 📑 Table of contents
+
+- [Tech Stack](#-tech-stack)
+- [Monorepo layout](#-monorepo-layout)
+- [High-level React component tree](#-high-level-react-component-tree)
+- [API routes](#-api-routes)
+- [Database schemas](#-database-schemas)
+  - [User](#-user)
+  - [UserProfile](#-userprofile)
+  - [Listing](#-listing)
+  - [SearchCache](#-searchcache)
+  - [AISummary](#-aisummary)
+  - [SavedListing](#-savedlisting)
+  - [ListingView](#-listingview)
+- [Useful scripts](#-useful-scripts)
+- [Environment variables](#-environment-variables)
+- [Cache duration](#-cache-duration)
+- [Getting started](#-getting-started)
+- [Next steps](#-next-steps)
+
+## 🛠️ Tech Stack
 
 | Layer             | Technology                                                                  |
 | ----------------- | --------------------------------------------------------------------------- |
@@ -20,7 +48,7 @@ Admins manage users, listings, and summaries from a dedicated dashboard.
 | **AI**            | Google Gemini (via `ai` SDK) — summaries, resume parsing, skill suggestions |
 | **External data** | Adzuna API — job listings for 20+ countries                                 |
 
-## Monorepo layout
+## 📁 Monorepo layout
 
 ```
 Job-Finder-App/
@@ -36,7 +64,7 @@ Job-Finder-App/
 └── package.json          # Root workspace config (pnpm Workspaces)
 ```
 
-## High-level React component tree
+## 🌳 High-level React component tree
 
 ```
 RootLayout                          # app/layout.tsx — fonts, metadata
@@ -98,58 +126,61 @@ RootLayout                          # app/layout.tsx — fonts, metadata
     ├── /admin/listings             # Listings management + ListingForm
     │   └── PageShell → ListingCard[], ListingForm, TablePagination
     │
+    ├── /admin/listings/[id]        # Admin full-page listing detail (back link, JobDetailPanel)
+    │   └── AdminLayout → JobDetailPanel
+    │
     └── /admin/settings             # Admin account form
         └── PageShell → AccountSettingsForm
 ```
 
-**Shared components** used across multiple pages: `AppHeader`, `ListingCard`, `ListingCarousel`, `ListingSection`, `SkillsEditor`, `AccountSettingsForm`, `PageShell`, `PageLoading`/`PageError`, `CompareBar`, `AISummaryCard`, `AuthFormFields`, `FormField`, `TablePagination`, `AdminTable`, `ProtectedRoute`.
+**Shared components** used across multiple pages: `AppHeader`, `ListingCard`, `ListingCarousel`, `ListingSection`, `SkillsEditor`, `AccountSettingsForm`, `PageShell`, `PageLoading`/`PageError`, `CompareBar`, `AISummaryCard`, `AuthFormFields`, `FormField`, `TablePagination`, `AdminTable`, `ProtectedRoute`, `UserOnlyRoute`.
 
-## API routes
+## 🔌 API routes
 
 All routes are under `/api/v1/`. Protected routes require a Bearer token; admin routes also require `role: "admin"`.
 
-| Route                      | Methods          | Auth   | Description                                       |
-| -------------------------- | ---------------- | ------ | ------------------------------------------------- |
-| `/auth/login`              | POST             | —      | Log in (email or username + password)             |
-| `/auth/register`           | POST             | —      | Create account                                    |
-| `/auth/refresh`            | POST             | Cookie | Rotate access + refresh tokens                    |
-| `/auth/logout`             | POST             | —      | Clear refresh cookie                              |
-| `/auth/admin/register`     | POST             | Admin  | Create admin user                                 |
-| `/users`                   | GET              | Admin  | List users                                        |
-| `/users/me`                | GET              | Auth   | Current user                                      |
-| `/users/:id`               | GET, PATCH, DELETE | Auth   | User by ID (own or admin); DELETE = delete own account |
-| `/profile`                 | GET, PUT         | Auth   | User profile (skills, job titles, resume summary) |
-| `/profile/suggest-skills`  | POST             | Auth   | AI skill suggestions from role                    |
-| `/resume/parse`            | POST             | Auth   | Parse resume (PDF, DOCX, or text) via AI          |
-| `/listings`                | GET              | —      | Search listings (keyword, country, filters)       |
-| `/listings/:id`            | GET              | —      | Single listing                                    |
-| `/listings/:id/view`       | POST             | —      | Record a view                                     |
-| `/listings/categories`     | GET              | —      | Categories by country                             |
-| `/listings/trending`       | GET              | —      | Trending listings                                 |
-| `/listings/recommended`    | GET              | Auth   | Recommended listings                              |
-| `/saved`                   | GET              | Auth   | Saved listings                                    |
-| `/saved/:listingId`        | DELETE           | Auth   | Unsave a listing                                  |
-| `/saved/check`             | GET              | Auth   | Check if listings are saved                       |
-| `/summaries`               | GET, POST        | Auth   | List / create AI summary                          |
-| `/summaries/:id`           | GET, DELETE      | Auth   | Get / delete summary                              |
-| `/summaries/compare`           | POST             | Auth   | Compare 2–3 listings via AI (non-stream)         |
-| `/summaries/compare/stream`   | POST             | Auth   | Stream comparison of 2–3 listings via AI         |
-| `/summaries/stream`           | POST             | Auth   | Stream AI summary (cache hit returns JSON)        |
-| `/admin/dashboard`           | GET              | Admin  | Dashboard metrics                                 |
-| `/admin/dashboard/summary/stream` | POST         | Admin  | Stream AI dashboard summary                       |
-| `/admin/users`               | GET              | Admin  | User management                                   |
-| `/admin/users/:id`           | GET, PATCH       | Admin  | User detail                                       |
-| `/admin/users/:id/role`      | PATCH            | Admin  | Change user role                                  |
-| `/admin/users/:id/status`    | PATCH            | Admin  | Suspend / activate                                |
-| `/admin/summaries`           | GET              | Admin  | All summaries                                     |
-| `/admin/summaries/:id`       | DELETE           | Admin  | Delete summary by ID                              |
-| `/admin/listings`            | GET, POST, PATCH | Admin  | Listing management                                |
+| Route                             | Methods            | Auth      | Description                                                                         |
+| --------------------------------- | ------------------ | --------- | ----------------------------------------------------------------------------------- |
+| `/auth/login`                     | POST               | —         | Log in (email or username + password)                                               |
+| `/auth/register`                  | POST               | —         | Create account                                                                      |
+| `/auth/refresh`                   | POST               | Cookie    | Rotate access + refresh tokens                                                      |
+| `/auth/logout`                    | POST               | —         | Clear refresh cookie                                                                |
+| `/auth/admin/register`            | POST               | Admin     | Create admin user                                                                   |
+| `/users`                          | GET                | Admin     | List users                                                                          |
+| `/users/me`                       | GET                | Auth      | Current user                                                                        |
+| `/users/:id`                      | GET, PATCH, DELETE | Auth      | User by ID (own or admin); DELETE = delete own account                              |
+| `/profile`                        | GET, PUT           | Auth      | User profile (skills, job titles, resume summary)                                   |
+| `/profile/suggest-skills`         | POST               | Auth      | AI skill suggestions from role                                                      |
+| `/resume/parse`                   | POST               | Auth      | Parse resume (PDF, DOCX, or text) via AI                                            |
+| `/listings`                       | GET, POST          | — / Admin | Search listings; POST = create listing (admin only)                                 |
+| `/listings/:id`                   | GET, PATCH, DELETE | — / Admin | Single listing; PATCH/DELETE = update/delete (admin)                                |
+| `/listings/:id/view`              | POST               | —         | Record a view                                                                       |
+| `/listings/categories`            | GET                | —         | Categories by country                                                               |
+| `/listings/trending`              | GET                | —         | Trending listings                                                                   |
+| `/listings/recommended`           | GET                | Auth      | Recommended listings                                                                |
+| `/saved`                          | GET, POST          | Auth      | List saved listings; POST = save a listing                                          |
+| `/saved/:listingId`               | DELETE             | Auth      | Unsave a listing                                                                    |
+| `/saved/check`                    | GET                | Auth      | Check if listings are saved                                                         |
+| `/summaries`                      | GET, POST          | Auth      | List / create AI summary                                                            |
+| `/summaries/:id`                  | GET, DELETE        | Auth      | Get / delete summary                                                                |
+| `/summaries/compare`              | POST               | Auth      | Compare 2–3 listings via AI (non-stream)                                            |
+| `/summaries/compare/stream`       | POST               | Auth      | Stream comparison of 2–3 listings via AI                                            |
+| `/summaries/stream`               | POST               | Auth      | Stream AI summary (cache hit returns JSON)                                          |
+| `/admin/dashboard`                | GET                | Admin     | Dashboard metrics                                                                   |
+| `/admin/dashboard/summary/stream` | POST               | Admin     | Stream AI dashboard summary                                                         |
+| `/admin/users`                    | GET                | Admin     | User management                                                                     |
+| `/admin/users/:id`                | GET, PATCH, DELETE | Admin     | User detail; DELETE = delete user                                                   |
+| `/admin/users/:id/role`           | PATCH              | Admin     | Change user role                                                                    |
+| `/admin/users/:id/status`         | PATCH              | Admin     | Suspend / activate                                                                  |
+| `/admin/summaries`                | GET                | Admin     | All summaries                                                                       |
+| `/admin/summaries/:id`            | DELETE             | Admin     | Delete summary by ID                                                                |
+| `/admin/listings`                 | GET                | Admin     | List listings (create/update/delete use POST /listings, PATCH/DELETE /listings/:id) |
 
-## Database schemas
+## 🗄️ Database schemas
 
 MongoDB collections (Mongoose models in `next-app/lib/models/`). Zod schemas in `packages/schemas` define the contract; Mongoose schemas align with them.
 
-### User
+### 👤 User
 
 | Field     | Type                        | Optional                  |
 | --------- | --------------------------- | ------------------------- |
@@ -163,7 +194,7 @@ MongoDB collections (Mongoose models in `next-app/lib/models/`). Zod schemas in 
 
 Index: `email` + `role` (unique).
 
-### UserProfile
+### 📋 UserProfile
 
 | Field             | Type                 | Optional            |
 | ----------------- | -------------------- | ------------------- |
@@ -174,7 +205,7 @@ Index: `email` + `role` (unique).
 | yearsOfExperience | Number               | yes                 |
 | updatedAt         | Date                 | no (auto)           |
 
-### Listing
+### 📄 Listing
 
 | Field       | Type   | Optional                  |
 | ----------- | ------ | ------------------------- |
@@ -195,7 +226,7 @@ Index: `email` + `role` (unique).
 
 Indexes: `sourceId` + `country` (unique); TTL on `expiresAt`.
 
-### SearchCache
+### 💾 SearchCache
 
 | Field      | Type                      | Optional        |
 | ---------- | ------------------------- | --------------- |
@@ -207,7 +238,7 @@ Indexes: `sourceId` + `country` (unique); TTL on `expiresAt`.
 
 Indexes: `cacheKey` (unique); TTL on `expiresAt`.
 
-### AISummary
+### 🤖 AISummary
 
 | Field               | Type                                            | Optional  |
 | ------------------- | ----------------------------------------------- | --------- |
@@ -225,7 +256,7 @@ Indexes: `cacheKey` (unique); TTL on `expiresAt`.
 
 Indexes: `inputTextHash` + `userId`; `userId`.
 
-### SavedListing
+### 🔖 SavedListing
 
 | Field     | Type                    | Optional  |
 | --------- | ----------------------- | --------- |
@@ -241,7 +272,7 @@ Indexes: `inputTextHash` + `userId`; `userId`.
 
 Index: `userId` + `listingId` (unique).
 
-### ListingView
+### 👁️ ListingView
 
 | Field     | Type                    | Optional          |
 | --------- | ----------------------- | ----------------- |
@@ -250,7 +281,7 @@ Index: `userId` + `listingId` (unique).
 
 Indexes: `listingId` + `viewedAt`; `viewedAt`.
 
-## Useful scripts
+## 📜 Useful scripts
 
 | Command      | Description                  |
 | ------------ | ---------------------------- |
@@ -259,57 +290,60 @@ Indexes: `listingId` + `viewedAt`; `viewedAt`.
 | `pnpm lint`  | Lint all workspace packages  |
 | `pnpm test`  | Run unit tests (vitest)      |
 
-## Getting started
+## 🔐 Environment variables
+
+All keys are configured in `next-app/.env.local` (copy from `next-app/.env.example`). Server-side variables are validated at startup in `next-app/lib/env.ts`.
+
+| Variable                         | Required | Default  | Description                                                                                                                                                                                                           |
+| -------------------------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MONGODB_URI**                  | Yes      | —        | MongoDB connection string (e.g. `mongodb://localhost:27017/jobfinder` or Atlas). Used for auth, listings, search cache, AI summaries.                                                                                 |
+| **JWT_SECRET**                   | Yes      | —        | Secret for signing access tokens; min 32 characters (e.g. `openssl rand -base64 32`).                                                                                                                                 |
+| **JWT_REFRESH_SECRET**           | Yes      | —        | Secret for signing refresh tokens; min 32 characters (use a different value than `JWT_SECRET`).                                                                                                                       |
+| **ADZUNA_APP_ID**                | No       | —        | Adzuna API app ID; required for job search and listing data. [Get credentials](https://developer.adzuna.com/signup).                                                                                                  |
+| **ADZUNA_APP_KEY**               | No       | —        | Adzuna API app key; required for job search and listing data.                                                                                                                                                         |
+| **GEMINI_API_KEY**               | No       | —        | Gemini API key for AI summaries, resume parsing, skill suggestions. Without it, summary endpoints return 503. [Get key](https://ai.google.dev/) or [makersuite.google.com](https://makersuite.google.com/app/apikey). |
+| **JWT_ACCESS_TOKEN_EXPIRES_IN**  | No       | `15m`    | Access token lifetime (e.g. `15m`, `1h`).                                                                                                                                                                             |
+| **JWT_REFRESH_TOKEN_EXPIRES_IN** | No       | `7d`     | Refresh token lifetime (e.g. `7d`).                                                                                                                                                                                   |
+| **JOB_SEARCH_CACHE_TTL**         | No       | `604800` | Job search (Adzuna) cache TTL in **seconds** (default 7 days).                                                                                                                                                        |
+| **AI_SUMMARY_CACHE_TTL**         | No       | `604800` | AI summary cache TTL in **seconds** (default 7 days) per `inputTextHash`.                                                                                                                                             |
+| **ADMIN_REGISTER_SECRET**        | No       | —        | If set, allows creating an admin via `POST /api/v1/auth/admin/register`; if unset, that endpoint returns 403.                                                                                                         |
+| **NEXT_PUBLIC_API_URL**          | No       | —        | Backend API base URL (e.g. `http://localhost:3000/api/v1`). Used by the client; same-origin if omitted.                                                                                                               |
+| **NODE_ENV**                     | No       | —        | Node environment (`development` / `production`); used by Next.js and cookie `secure` flag. Not validated in `env.ts`.                                                                                                 |
+
+## ⏱️ Cache duration
+
+Every cache in the app, where it lives, and when entries expire:
+
+| Cache                       | Where                                                                                 | Duration / expiry                           | Config / notes                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Job search (Adzuna)**     | MongoDB: `SearchCache` (query → listing IDs) and `Listing` documents with `expiresAt` | TTL in seconds; default **7 days** (604800) | Env: `JOB_SEARCH_CACHE_TTL` (`next-app/lib/services/listings.service.ts`). Entries expire at `expiresAt`; TTL index can remove expired docs.   |
+| **AI summaries**            | MongoDB: `AISummary`; lookup by `inputTextHash` and `createdAt` within TTL window     | TTL in seconds; default **7 days** (604800) | Env: `AI_SUMMARY_CACHE_TTL` (`next-app/lib/services/summaries.service.ts`). Summaries older than TTL are not reused; new generation is stored. |
+| **Admin dashboard summary** | In-memory only (process lifetime)                                                     | **10 minutes**                              | Hardcoded in `next-app/lib/services/admin-dashboard.service.ts`. Bypass with `?refresh=1` on dashboard summary endpoints.                      |
+
+JWT access and refresh tokens have their own expiry (see env vars above); they are not caches. Manual listings (admin-created) get `expiresAt` set to 1 year in `next-app/lib/services/listings.service.ts`.
+
+## 🚀 Getting started
 
 1. Install dependencies:
    ```bash
    pnpm install
    ```
 2. Configure environment variables:
+
    ```bash
    cp next-app/.env.example next-app/.env.local
    ```
-   Edit `next-app/.env.local` with real values. Full keys and comments are in `next-app/.env.example`.
 
-   **Required (app will fail without them):**
-   - **MONGODB_URI** — MongoDB connection string; used for all persistence (auth, listings, search cache, AI summaries). Must be reachable (e.g. local or Atlas).
-   - **JWT_SECRET** — Secret used to sign access tokens; must be at least 32 characters (e.g. `openssl rand -base64 32`).
-   - **JWT_REFRESH_SECRET** — Secret used to sign refresh tokens; must be at least 32 characters (use a different value than `JWT_SECRET`).
+   Edit `next-app/.env.local` with real values. See [Environment variables](#-environment-variables) above for all keys, defaults, and descriptions.
 
-   **Optional but needed for full functionality:**
-   - **ADZUNA_APP_ID** / **ADZUNA_APP_KEY** — Credentials for the Adzuna job search API; required for job search and listing data. Get from [developer.adzuna.com](https://developer.adzuna.com/signup).
-   - **GEMINI_API_KEY** — Primary API key for Gemini; used for AI job summaries and resume parsing. Without it, summary endpoints return 503. Get from [ai.google.dev](https://ai.google.dev/) or [makersuite.google.com](https://makersuite.google.com/app/apikey).
-
-   **Optional (have defaults or only affect specific features):**
-   - **JWT_ACCESS_TOKEN_EXPIRES_IN** — Access token lifetime (default `15m`). Used when issuing JWTs.
-   - **JWT_REFRESH_TOKEN_EXPIRES_IN** — Refresh token lifetime (default `7d`). Used when issuing refresh tokens.
-   - **JOB_SEARCH_CACHE_TTL** — Job search cache TTL in **seconds** (default `604800` = 7 days). How long Adzuna search results are cached before refetching.
-   - **AI_SUMMARY_CACHE_TTL** — AI summary cache TTL in **seconds** (default `604800` = 7 days). How long summaries are considered valid per `inputTextHash`.
-   - **ADMIN_REGISTER_SECRET** — If set, allows creating an admin account via `POST /api/v1/auth/admin/register`; if unset, that endpoint returns 403.
-
-   **Other (document for completeness):**
-   - **NEXT_PUBLIC_API_URL** — Backend API base URL (e.g. `http://localhost:3000/api/v1`). Used by the client for API calls; defaults in app may assume same-origin.
-   - **NODE_ENV** — Standard Node environment (`development` / `production`); not validated in `next-app/lib/env.ts` but used by Next.js.
 3. Run the app:
    ```bash
    pnpm dev
    ```
    Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to `/browse`.
 
-## Cache duration
+## 📌 Next steps
 
-Every cache in the app, where it lives, and when entries expire:
-
-| Cache                       | Where                                                                                 | Duration / expiry                           | Config / notes                                                                                                                                 |
-| --------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Job search (Adzuna)**     | MongoDB: `SearchCache` (query → listing IDs) and `Listing` documents with `expiresAt` | TTL in seconds; default **7 days** (604800)  | Env: `JOB_SEARCH_CACHE_TTL` (`next-app/lib/services/listings.service.ts`). Entries expire at `expiresAt`; TTL index can remove expired docs.      |
-| **AI summaries**            | MongoDB: `AISummary`; lookup by `inputTextHash` and `createdAt` within TTL window      | TTL in seconds; default **7 days** (604800)  | Env: `AI_SUMMARY_CACHE_TTL` (`next-app/lib/services/summaries.service.ts`). Summaries older than TTL are not reused; new generation is stored.   |
-| **Admin dashboard summary** | In-memory only (process lifetime)                                                     | **10 minutes**                              | Hardcoded in `next-app/lib/services/admin-dashboard.service.ts`. Bypass with `?refresh=1` on dashboard summary endpoints.                         |
-
-JWT access and refresh tokens have their own expiry (see env vars above); they are not caches. Manual listings (admin-created) get `expiresAt` set to 1 year in `next-app/lib/services/listings.service.ts`.
-
-## Next steps
-
-- Add screenshot or logo after deployment
-- WCAG contrast audit across all pages
-- Additional unit and integration tests for services and API routes
+- Consider deploying app on Vercel in accordance to API guidelines
+- Add EventBrite API to discover networking events or career fairs
+- Job alerts via email

@@ -5,7 +5,7 @@
 "use client";
 
 import { toast } from "sonner";
-import { Suspense, useState, useCallback, useMemo } from "react";
+import { Suspense, useState, useCallback, useMemo, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompare } from "@/contexts/CompareContext";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -80,6 +80,14 @@ function ProfileContent() {
     queryKey: profileKeys.all,
     queryFn: fetchProfile,
   });
+
+  /** Sync role field from saved profile so it does not disappear after refresh. */
+  useEffect(() => {
+    if (profile?.jobTitles?.length) {
+      setCurrentRole(profile.jobTitles[0] ?? "");
+    }
+  }, [profile?.jobTitles]);
+
   const profileSkills = useMemo(() => profile?.skills ?? [], [profile?.skills]);
   const skills = draftSkills ?? profileSkills;
   /** Unified list of suggested skills (from role + resume) not already in skills; shown in the "Skills to add" card. */
@@ -117,6 +125,7 @@ function ProfileContent() {
   const updateMutation = useMutation({
     mutationFn: (payload: {
       skills: string[];
+      jobTitles?: string[];
       yearsOfExperience?: number | null;
     }) => updateProfile(payload),
     onSuccess: () => {
@@ -196,8 +205,13 @@ function ProfileContent() {
             YEARS_OF_EXPERIENCE_MAX,
             Math.max(0, parseInt(rawYears, 10) || 0),
           );
-    updateMutation.mutate({ skills: nextSkills, yearsOfExperience });
-  }, [skills, yearsDisplayValue, updateMutation]);
+    const jobTitles = currentRole.trim() ? [currentRole.trim()] : [];
+    updateMutation.mutate({
+      skills: nextSkills,
+      jobTitles,
+      yearsOfExperience,
+    });
+  }, [skills, yearsDisplayValue, currentRole, updateMutation]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
