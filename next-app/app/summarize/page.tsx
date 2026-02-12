@@ -129,7 +129,7 @@ function SummarizeContent() {
               <AISummaryCard
                 summary={summary as SummaryWithId}
                 showJdMatch={false}
-                hasSkills={(profile?.skills?.length ?? 0) > 0}
+                hasSkills={profile !== undefined ? (profile?.skills?.length ?? 0) > 0 : undefined}
               />
               {!isLoading && (
                 <Button

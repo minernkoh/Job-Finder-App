@@ -3,9 +3,14 @@
  */
 
 import type { AISummary, ComparisonSummary, CreateSummaryBody } from "@schemas";
-import { apiClient, buildAuthHeaders } from "./client";
-import { consumeNdjsonStream, createAuthenticatedStream } from "./stream";
+import { apiClient, buildAuthHeaders, refreshAccessToken } from "./client";
+import { consumeNdjsonStream } from "./stream";
 import type { ApiResponse } from "./types";
+
+/** Result from the comparison stream endpoint: cache hit (JSON) or stream (NDJSON). */
+export type ComparisonStreamResult =
+  | { stream: false; data: ComparisonSummary }
+  | { stream: true; reader: ReadableStreamDefaultReader<Uint8Array> };
 
 export type SummaryWithId = AISummary & { id: string };
 
@@ -16,10 +21,11 @@ export type { CreateSummaryBody };
  */
 export async function createComparisonSummary(
   listingIds: string[],
+  options?: { forceRegenerate?: boolean }
 ): Promise<ComparisonSummary> {
   const res = await apiClient.post<ApiResponse<ComparisonSummary>>(
     "/api/v1/summaries/compare",
-    { listingIds },
+    { listingIds, forceRegenerate: options?.forceRegenerate },
   );
   const json = res.data;
   if (!json.success || !json.data) {
@@ -29,16 +35,70 @@ export async function createComparisonSummary(
 }
 
 /**
- * Calls the streaming comparison endpoint. Returns a reader for the NDJSON stream (no cache; always streams).
+ * Calls the streaming comparison endpoint. Returns cache-hit JSON (stream: false) or NDJSON reader (stream: true).
  */
 export async function createComparisonSummaryStream(
   listingIds: string[],
-): Promise<{
-  reader: ReadableStreamDefaultReader<Uint8Array>;
-}> {
-  return createAuthenticatedStream("/api/v1/summaries/compare/stream", {
+  options?: { forceRegenerate?: boolean }
+): Promise<ComparisonStreamResult> {
+  const body = {
     listingIds,
-  });
+    forceRegenerate: options?.forceRegenerate,
+  };
+  const doFetch = (headers: Record<string, string>) =>
+    fetch("/api/v1/summaries/compare/stream", {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+
+  const res = await doFetch(buildAuthHeaders());
+
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      const retryRes = await doFetch({
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${newToken}`,
+      });
+      if (retryRes.ok) {
+        return await processComparisonResponse(retryRes);
+      }
+      const errBody = await retryRes.json().catch(() => null);
+      const message =
+        (errBody as { message?: string } | null)?.message ??
+        `Request failed (${retryRes.status})`;
+      throw new Error(message);
+    }
+    throw new Error("Session expired. Please sign in again.");
+  }
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    const message =
+      (errBody as { message?: string } | null)?.message ??
+      `Request failed (${res.status})`;
+    throw new Error(message);
+  }
+
+  return await processComparisonResponse(res);
+}
+
+/** Handles comparison response: JSON cache hit or NDJSON stream. */
+async function processComparisonResponse(
+  res: Response
+): Promise<ComparisonStreamResult> {
+  const contentType = res.headers.get("Content-Type") ?? "";
+  if (contentType.includes("application/json")) {
+    const json = (await res.json()) as ApiResponse<ComparisonSummary>;
+    if (!json.success || !json.data) {
+      throw new Error(json.message ?? "Failed to load comparison");
+    }
+    return { stream: false, data: json.data };
+  }
+  if (!res.body) throw new Error("No response body for stream");
+  return { stream: true, reader: res.body.getReader() };
 }
 
 /**

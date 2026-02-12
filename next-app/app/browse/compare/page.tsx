@@ -40,6 +40,7 @@ import {
 } from "@/lib/layout";
 import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
 import { UserOnlyRoute } from "@/components/user-only-route";
+import { ArrowsClockwiseIcon } from "@phosphor-icons/react";
 
 /** One column: listing meta, description, and link to the full listing page. */
 function CompareColumn({ listingId }: { listingId: string }) {
@@ -130,7 +131,10 @@ function ComparePageInner() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
+  const [regenerateTrigger, setRegenerateTrigger] = useState(0);
   const streamStartedRef = useRef<string | null>(null);
+
+  const forceRegenerate = regenerateTrigger > 0;
 
   const handleRetry = useCallback(() => {
     streamStartedRef.current = null;
@@ -138,9 +142,16 @@ function ComparePageInner() {
     setRetryTrigger((t) => t + 1);
   }, []);
 
+  const handleRegenerate = useCallback(() => {
+    streamStartedRef.current = null;
+    setStreamError(null);
+    setRegenerateTrigger((t) => t + 1);
+  }, []);
+
   useEffect(() => {
     if (!listingIds || listingIds.length < 2 || !user || authLoading) return;
-    const key = listingIds.join(",") + (user.id ?? "");
+    const key =
+      listingIds.join(",") + (user.id ?? "") + String(forceRegenerate);
     if (streamStartedRef.current === key) return;
     streamStartedRef.current = key;
 
@@ -151,9 +162,15 @@ function ComparePageInner() {
     setComparison(null);
 
     const tryStream = () =>
-      createComparisonSummaryStream(listingIds).then(({ reader }) => {
-        activeReader = reader;
-        return consumeComparisonStream(reader, (partial) => {
+      createComparisonSummaryStream(listingIds, {
+        forceRegenerate,
+      }).then((result) => {
+        if (result.stream === false) {
+          if (!cancelled) setComparison(result.data);
+          return result.data;
+        }
+        activeReader = result.reader;
+        return consumeComparisonStream(result.reader, (partial) => {
           if (!cancelled) {
             setComparison((prev) => ({ ...prev, ...partial }));
           }
@@ -161,7 +178,7 @@ function ComparePageInner() {
       });
 
     const tryFallback = () =>
-      createComparisonSummary(listingIds).then((data) => {
+      createComparisonSummary(listingIds, { forceRegenerate }).then((data) => {
         if (!cancelled) setComparison(data);
       });
 
@@ -194,7 +211,7 @@ function ComparePageInner() {
       streamStartedRef.current = null;
       activeReader?.cancel();
     };
-  }, [listingIds, user, authLoading, retryTrigger]);
+  }, [listingIds, user, authLoading, retryTrigger, regenerateTrigger, forceRegenerate]);
 
   const { data: profile } = useQuery({
     queryKey: profileKeys.all,
@@ -229,8 +246,22 @@ function ComparePageInner() {
         </h1>
 
         <section aria-label="Unified comparison">
-          <h2 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Comparison summary</h2>
-          {user && comparison && (profile?.skills?.length ?? 0) === 0 && (
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className={cn(EYEBROW_CLASS, "mb-0")}>Comparison summary</h2>
+            {user && comparison && !isStreaming && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRegenerate}
+                disabled={isStreaming}
+                className="w-fit"
+              >
+                <ArrowsClockwiseIcon size={16} className="mr-1" />
+                Regenerate summary
+              </Button>
+            )}
+          </div>
+          {user && comparison && profile !== undefined && (profile?.skills?.length ?? 0) === 0 && (
             <div className="mb-4 rounded-lg bg-primary/10 p-3 text-foreground">
               <p className="text-sm">
                 Add your skills in your profile to get personalized match scores and recommendations.{" "}

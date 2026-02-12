@@ -377,7 +377,7 @@ export function JobDetailPanel({
             {summary && summary.tldr ? (
               <AISummaryCard
                 summary={summary as SummaryWithId}
-                hasSkills={(profile?.skills?.length ?? 0) > 0}
+                hasSkills={profile !== undefined ? (profile?.skills?.length ?? 0) > 0 : undefined}
               />
             ) : user ? (
               <>

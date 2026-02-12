@@ -7,7 +7,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
 import { withAuth } from "@/lib/api/with-auth";
 import { getProfileByUserId } from "@/lib/services/resume.service";
-import { generateComparisonSummary } from "@/lib/services/summaries.service";
+import {
+  prepareComparisonStream,
+  generateComparisonSummary,
+  saveComparisonSummaryToDb,
+} from "@/lib/services/summaries.service";
 import { getEnv } from "@/lib/env";
 
 async function postCompareHandler(
@@ -27,6 +31,14 @@ async function postCompareHandler(
   if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
 
   try {
+    const cacheResult = await prepareComparisonStream(payload.sub, {
+      listingIds: parsed.data.listingIds,
+      forceRegenerate: parsed.data.forceRegenerate,
+    });
+    if (cacheResult.cached) {
+      return NextResponse.json({ success: true, data: cacheResult.data });
+    }
+
     const profile = await getProfileByUserId(payload.sub);
     const userSkills = profile?.skills ?? [];
     const currentRole =
@@ -36,6 +48,11 @@ async function postCompareHandler(
       currentRole,
       yearsOfExperience: profile?.yearsOfExperience,
     });
+    await saveComparisonSummaryToDb(
+      payload.sub,
+      parsed.data.listingIds,
+      comparison
+    );
     return NextResponse.json({ success: true, data: comparison });
   } catch (err) {
     const message =

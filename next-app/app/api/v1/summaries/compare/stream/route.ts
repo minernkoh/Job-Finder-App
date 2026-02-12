@@ -8,7 +8,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
 import { withAuth } from "@/lib/api/with-auth";
 import { getProfileByUserId } from "@/lib/services/resume.service";
-import { generateComparisonSummaryStream } from "@/lib/services/summaries.service";
+import {
+  prepareComparisonStream,
+  generateComparisonSummaryStream,
+  saveComparisonSummaryToDb,
+} from "@/lib/services/summaries.service";
 import { getEnv } from "@/lib/env";
 
 async function postCompareStreamHandler(
@@ -39,6 +43,14 @@ async function postCompareStreamHandler(
   }
 
   try {
+    const cacheResult = await prepareComparisonStream(payload.sub, {
+      listingIds: parsed.data.listingIds,
+      forceRegenerate: parsed.data.forceRegenerate,
+    });
+    if (cacheResult.cached) {
+      return NextResponse.json({ success: true, data: cacheResult.data });
+    }
+
     const profile = await getProfileByUserId(payload.sub);
     const userSkills = profile?.skills ?? [];
     const currentRole =
@@ -59,6 +71,11 @@ async function postCompareStreamHandler(
             controller.enqueue(encoder.encode(line));
           }
           const finalObject = await object;
+          await saveComparisonSummaryToDb(
+            payload.sub,
+            parsed.data.listingIds,
+            finalObject
+          );
           const completeLine =
             JSON.stringify({ _complete: true, ...finalObject }) + "\n";
           controller.enqueue(encoder.encode(completeLine));

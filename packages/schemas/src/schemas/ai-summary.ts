@@ -77,6 +77,8 @@ export type ComparisonSummary = z.infer<typeof ComparisonSummarySchema>;
 /** POST body for compare summaries: exactly 2 or 3 listing IDs. */
 export const CompareSummaryBodySchema = z.object({
   listingIds: z.array(z.string().min(1)).min(2).max(3),
+  /** When true, skip cache and always generate a new comparison. */
+  forceRegenerate: z.boolean().optional(),
 });
 
 export type CompareSummaryBody = z.infer<typeof CompareSummaryBodySchema>;

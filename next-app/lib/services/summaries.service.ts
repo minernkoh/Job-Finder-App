@@ -19,6 +19,10 @@ import {
   AISummary as AISummaryModel,
   type IAISummaryDocument,
 } from "@/lib/models/AISummary";
+import {
+  ComparisonSummary as ComparisonSummaryModel,
+  type IComparisonSummaryDocument,
+} from "@/lib/models/ComparisonSummary";
 import { getListingById } from "./listings.service";
 import { getProfileByUserId } from "./resume.service";
 
@@ -485,6 +489,107 @@ export async function deleteSummary(
   if (!isValidObjectId(id)) return false;
   const result = await AISummaryModel.deleteOne({ _id: id, userId: uid });
   return result.deletedCount === 1;
+}
+
+/** Builds canonical cache key from listing IDs (sorted so [a,b] and [b,a] match). */
+function toListingIdsKey(listingIds: string[]): string {
+  return [...listingIds].sort().join(",");
+}
+
+/** Maps ComparisonSummary document to plain ComparisonSummary for API response. */
+function docToComparisonSummary(
+  doc: IComparisonSummaryDocument
+): ComparisonSummary {
+  return {
+    summary: doc.summary,
+    similarities: doc.similarities,
+    differences: doc.differences,
+    comparisonPoints: doc.comparisonPoints,
+    recommendedListingId: doc.recommendedListingId,
+    recommendationReason: doc.recommendationReason,
+    listingMatchScores: doc.listingMatchScores,
+  };
+}
+
+/**
+ * Checks the cache for an existing comparison summary; if found returns { cached: true, data }.
+ * On cache miss returns { cached: false } so the caller can generate and stream.
+ */
+export async function prepareComparisonStream(
+  userId: string,
+  input: {
+    listingIds: string[];
+    forceRegenerate?: boolean;
+  }
+): Promise<
+  | { cached: true; data: ComparisonSummary }
+  | { cached: false }
+> {
+  if (input.listingIds.length < 2 || input.listingIds.length > 3) {
+    throw new Error("Exactly 2 or 3 listing IDs are required");
+  }
+  const listingIdsKey = toListingIdsKey(input.listingIds);
+  const env = getEnv();
+  const ttlSeconds = env.AI_SUMMARY_CACHE_TTL ?? 604800;
+  const since = new Date(Date.now() - ttlSeconds * 1000);
+
+  await connectDB();
+  const uid = toObjectIdOrThrow(userId);
+
+  if (input.forceRegenerate !== true) {
+    const existing = await ComparisonSummaryModel.findOne({
+      userId: uid,
+      listingIdsKey,
+      updatedAt: { $gte: since },
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    if (existing) {
+      return {
+        cached: true,
+        data: docToComparisonSummary(existing as IComparisonSummaryDocument),
+      };
+    }
+  }
+
+  return { cached: false };
+}
+
+/**
+ * Saves a generated comparison summary to MongoDB after streaming completes.
+ */
+export async function saveComparisonSummaryToDb(
+  userId: string,
+  listingIds: string[],
+  comparison: ComparisonSummary
+): Promise<ComparisonSummary> {
+  const parsed = ComparisonSummarySchema.safeParse(comparison);
+  const safe = parsed.success
+    ? parsed.data
+    : { summary: String(comparison?.summary ?? "Comparison unavailable.") };
+  const listingIdsKey = toListingIdsKey(listingIds);
+
+  await connectDB();
+  const uid = toObjectIdOrThrow(userId);
+
+  const doc = await ComparisonSummaryModel.findOneAndUpdate(
+    { userId: uid, listingIdsKey },
+    {
+      userId: uid,
+      listingIdsKey,
+      summary: safe.summary,
+      similarities: safe.similarities,
+      differences: safe.differences,
+      comparisonPoints: safe.comparisonPoints,
+      recommendedListingId: safe.recommendedListingId,
+      recommendationReason: safe.recommendationReason,
+      listingMatchScores: safe.listingMatchScores,
+    },
+    { upsert: true, new: true }
+  ).lean();
+
+  return docToComparisonSummary(doc as IComparisonSummaryDocument);
 }
 
 /** Builds a short text block for one job for the comparison prompt (title, company, description snippet). */
