@@ -14,7 +14,7 @@ import {
   SparkleIcon,
   ArrowsLeftRightIcon,
 } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { AuthModalLink } from "@/components/auth-modal-link";
 import { sanitizeJobDescription } from "@/lib/sanitize";
@@ -24,15 +24,29 @@ import { useAuth } from "@/contexts/AuthContext";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
 import { fetchListing, recordListingView } from "@/lib/api/listings";
 import { fetchProfile } from "@/lib/api/profile";
-import { createSummaryStream, consumeSummaryStream } from "@/lib/api/summaries";
+import {
+  createSummaryStream,
+  consumeSummaryStream,
+  getSummaryForListing,
+} from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
-import { isRateLimitMessage } from "@/lib/api/errors";
+import {
+  isRateLimitMessage,
+  isSummaryNotConfiguredMessage,
+  SUMMARY_NOT_AVAILABLE_UI_MESSAGE,
+} from "@/lib/api/errors";
 import { toast } from "sonner";
 import { useIsMdViewport } from "@/hooks/useIsMdViewport";
 import { useSavedListings } from "@/hooks/useSavedListings";
-import { listingKeys } from "@/lib/query-keys";
+import {
+  listingKeys,
+  profileKeys,
+  summaryKeys,
+  trendingKeys,
+} from "@/lib/query-keys";
 import { BADGE_MUTED } from "@/lib/badges";
 import { CARD_PADDING_DEFAULT_RESPONSIVE, GAP_LG } from "@/lib/layout";
+import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
 import { InlineError, PageLoadingSkeleton } from "@/components/page-state";
 import { AISummaryCard } from "@/components/ai-summary-card";
 
@@ -82,15 +96,33 @@ export function JobDetailPanel({
   });
 
   const { data: profile } = useQuery({
-    queryKey: ["profile"],
+    queryKey: profileKeys.all,
     queryFn: fetchProfile,
     enabled: !!user,
   });
 
+  const { data: cachedSummary } = useQuery({
+    queryKey: summaryKeys(listingId),
+    queryFn: () => getSummaryForListing(listingId),
+    enabled: !!user && !!listingId,
+  });
+
+  const queryClient = useQueryClient();
   const { isSaved, saveMutation, unsaveMutation } = useSavedListings();
   const [summary, setSummary] = useState<Partial<SummaryWithId> | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
+
+  /* Reset summary when listing changes so the new listing's cache can be shown. */
+  useEffect(() => {
+    setSummary(null);
+    setSummaryError(null);
+  }, [listingId]);
+
+  /* Seed summary from cached GET result so refresh shows the cached AI summary. */
+  useEffect(() => {
+    if (cachedSummary != null && summary === null) setSummary(cachedSummary);
+  }, [cachedSummary, summary]);
 
   /** Triggers streaming AI summary generation for the current listing. */
   const handleSummarize = useCallback(async () => {
@@ -101,17 +133,27 @@ export function JobDetailPanel({
       const result = await createSummaryStream({ listingId });
       if (!result.stream) {
         setSummary(result.data);
+        queryClient.setQueryData(summaryKeys(listingId), result.data);
         setIsSummarizing(false);
         return;
       }
-      await consumeSummaryStream(result.reader, (partial) => {
+      const final = await consumeSummaryStream(result.reader, (partial) => {
         setSummary((prev) => ({ ...prev, ...partial }));
       });
+      queryClient.setQueryData(summaryKeys(listingId), final);
       setIsSummarizing(false);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to summarize";
-      setSummaryError(message);
+      const status =
+        err && typeof err === "object" && "status" in err
+          ? (err as { status: number }).status
+          : undefined;
+      setSummaryError(
+        status === 503 || isSummaryNotConfiguredMessage(message)
+          ? SUMMARY_NOT_AVAILABLE_UI_MESSAGE
+          : message,
+      );
       setIsSummarizing(false);
       if (isRateLimitMessage(message)) {
         toast.error(
@@ -119,11 +161,14 @@ export function JobDetailPanel({
         );
       }
     }
-  }, [listingId]);
+  }, [listingId, queryClient]);
 
   useEffect(() => {
-    if (listingId) recordListingView(listingId);
-  }, [listingId]);
+    if (listingId)
+      recordListingView(listingId).then(() =>
+        queryClient.invalidateQueries({ queryKey: trendingKeys.all }),
+      );
+  }, [listingId, queryClient]);
 
   const description = listing?.description ?? "";
   const sanitizedDescription = useMemo(
@@ -326,11 +371,9 @@ export function JobDetailPanel({
           })()}
         </div>
 
-        <div className="space-y-6">
+        <div className={GAP_LG}>
           <section className="space-y-3">
-            <h2 className="eyebrow">
-              AI Summary
-            </h2>
+            <h2 className={EYEBROW_CLASS}>AI Summary</h2>
             {summary && summary.tldr ? (
               <AISummaryCard
                 summary={summary as SummaryWithId}
@@ -348,9 +391,7 @@ export function JobDetailPanel({
                     </>
                   )}
                 </Button>
-                {summaryError && (
-                  <InlineError message={summaryError} />
-                )}
+                {summaryError && <InlineError message={summaryError} />}
               </>
             ) : (
               <Button asChild variant="default" size="sm">
@@ -366,7 +407,7 @@ export function JobDetailPanel({
 
           {(sanitizedDescription.length > 0 || listing.sourceUrl) && (
             <section className="space-y-2">
-              <h2 className="eyebrow mb-2">Description</h2>
+              <h2 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Description</h2>
               <Card variant="elevated" className="text-sm">
                 {sanitizedDescription.length > 0 && (
                   <CardContent

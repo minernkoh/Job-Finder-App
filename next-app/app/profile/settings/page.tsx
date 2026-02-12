@@ -13,6 +13,7 @@ import { AppHeader } from "@/components/app-header";
 import { AccountSettingsForm } from "@/components/account-settings-form";
 import { PageShell } from "@/components/page-shell";
 import { CARD_PADDING_COMPACT, CONTENT_MAX_W, PAGE_PX, SECTION_GAP } from "@/lib/layout";
+import { EYEBROW_CLASS } from "@/lib/styles";
 import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { deleteOwnAccount } from "@/lib/api/users";
@@ -59,7 +60,7 @@ function SettingsContent() {
       <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
         <PageShell title="Settings">
           <section aria-label="Account" className="space-y-3">
-            <h2 className="eyebrow">Account</h2>
+            <h2 className={EYEBROW_CLASS}>Account</h2>
             <AccountSettingsForm
               user={user}
               onSuccess={(data) => user && setUser({ ...user, email: data.email, username: data.username })}
@@ -68,7 +69,7 @@ function SettingsContent() {
           </section>
 
           <section aria-label="Delete account" className="mt-8 space-y-3">
-            <h2 className="eyebrow text-destructive">Danger zone</h2>
+            <h2 className={cn(EYEBROW_CLASS, "text-destructive")}>Danger zone</h2>
             <Card variant="default" className="border-border border-destructive/50">
               <CardContent className={CARD_PADDING_COMPACT}>
                 <p className="text-sm text-muted-foreground mb-4">
@@ -127,7 +128,7 @@ function SettingsContent() {
 export default function SettingsPage() {
   return (
     <Suspense fallback={null}>
-      <ProtectedRoute>
+      <ProtectedRoute blockAdmins>
         <SettingsContent />
       </ProtectedRoute>
     </Suspense>

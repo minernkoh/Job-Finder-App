@@ -1,5 +1,6 @@
 /**
- * Auth modal: user log in / sign up in a modal when URL has ?auth=login or ?auth=signup. Close clears params; success navigates then clears params.
+ * Auth surface variant: modal overlay. Log in / sign up when URL has ?auth=login or ?auth=signup.
+ * Shares tokens with AuthCard (authCloseButtonClass, authModalNarrowWidthClass, CARD_PADDING_AUTH).
  */
 
 "use client";
@@ -22,7 +23,7 @@ import { AuthFormFields } from "@/components/auth-form-fields";
 import { validatePassword, validateUsername } from "@/lib/validation";
 import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
-import { CARD_PADDING_AUTH } from "@/lib/layout";
+import { CARD_PADDING_AUTH, GAP_MD } from "@/lib/layout";
 
 /** Builds pathname + search string without auth and redirect params. */
 function stripAuthParams(
@@ -190,7 +191,7 @@ function AuthModalContent({
             <form
               id="modal-login-form"
               onSubmit={handleLogin}
-              className="space-y-4"
+              className={GAP_MD}
             >
               <AuthFormFields
                 mode="login"
@@ -207,7 +208,7 @@ function AuthModalContent({
             <form
               id="modal-signup-form"
               onSubmit={handleSignup}
-              className="space-y-4"
+              className={GAP_MD}
             >
               <AuthFormFields
                 mode="signup"
@@ -257,7 +258,8 @@ export function AuthModal() {
   const searchParams = useSearchParams();
   const auth = searchParams.get("auth");
   const redirectParam = searchParams.get("redirect");
-  const redirectTo = redirectParam ?? pathname ?? "/";
+  const redirectTo =
+    redirectParam ?? stripAuthParams(pathname ?? "/", searchParams) ?? "/";
   const [dismissedAfterSuccess, setDismissedAfterSuccess] = useState(false);
 
   useEffect(() => {

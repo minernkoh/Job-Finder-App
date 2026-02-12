@@ -8,7 +8,7 @@ import { Button, Input, Label } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { FormField } from "@/components/form-field";
 import { InlineError } from "@/components/page-state";
-import { TEXTAREA_BASE_CLASS } from "@/lib/layout";
+import { GAP_MD, TEXTAREA_BASE_CLASS } from "@/lib/layout";
 
 export interface ListingFormValue {
   title: string;
@@ -48,7 +48,7 @@ export function ListingForm({
 }: ListingFormProps) {
   const p = idPrefix;
   return (
-    <form onSubmit={onSubmit} className="space-y-4 max-w-xl">
+    <form onSubmit={onSubmit} className={`${GAP_MD} max-w-xl`}>
       <FormField id={`${p}title`} label="Title *" required>
         <Input
           id={`${p}title`}

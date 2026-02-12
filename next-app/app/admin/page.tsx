@@ -7,12 +7,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { ArrowRightIcon, ArrowClockwiseIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, SparkleIcon } from "@phosphor-icons/react";
 import { AuthCard } from "@/components/auth-card";
 import { AuthTabs, type AuthTab } from "@/components/auth-tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
+import {
+  createDashboardSummaryStream,
+  consumeDashboardSummaryStream,
+} from "@/lib/api/admin-dashboard";
 import { AuthFormFields } from "@/components/auth-form-fields";
 import { InlineError, PageError, PageLoading } from "@/components/page-state";
 import {
@@ -24,6 +28,7 @@ import {
   Input,
   Label,
 } from "@ui/components";
+import { toast } from "sonner";
 
 interface DashboardData {
   metrics: {
@@ -58,33 +63,13 @@ interface AuthResponse {
   user: { id: string; email: string; role: "admin" | "user"; username: string };
 }
 
-/** Admin dashboard: metrics cards and AI summary; loads dashboard first then summary for fast initial paint. */
+/** Admin dashboard: metrics cards and AI summary. Summary is generated on demand via "Generate summary" button (streaming). */
 function AdminDashboard() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshingSummary, setRefreshingSummary] = useState(false);
-
-  const fetchSummary = async (skipCache: boolean) => {
-    setRefreshingSummary(true);
-    try {
-      const url = skipCache
-        ? "/api/v1/admin/dashboard/summary?refresh=1"
-        : "/api/v1/admin/dashboard/summary";
-      const res = await apiClient.get<{
-        success: boolean;
-        data: { summary: string };
-      }>(url);
-      if (res.data.success && res.data.data?.summary !== undefined) {
-        setData((prev) =>
-          prev ? { ...prev, summary: res.data.data!.summary } : null
-        );
-      }
-    } finally {
-      setRefreshingSummary(false);
-    }
-  };
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -106,14 +91,31 @@ function AdminDashboard() {
     }
   };
 
+  const handleGenerateSummary = async () => {
+    if (!data) return;
+    setGeneratingSummary(true);
+    setData((prev) => (prev ? { ...prev, summary: "" } : null));
+    try {
+      const { reader } = await createDashboardSummaryStream();
+      await consumeDashboardSummaryStream(reader, (partial) => {
+        setData((prev) =>
+          prev
+            ? { ...prev, summary: partial.summary ?? prev.summary ?? "" }
+            : null,
+        );
+      });
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to generate summary",
+      );
+    } finally {
+      setGeneratingSummary(false);
+    }
+  };
+
   useEffect(() => {
     fetchDashboard();
   }, []);
-
-  useEffect(() => {
-    if (!data || data.summary !== undefined) return;
-    fetchSummary(false);
-  }, [data]);
 
   if (loading && !data) {
     return (
@@ -138,40 +140,43 @@ function AdminDashboard() {
   return (
     <div className="min-h-0">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold text-foreground">
-            Admin Dashboard
-          </h1>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchSummary(true)}
-            disabled={refreshingSummary}
-            iconRight={
-              refreshingSummary ? undefined : (
-                <ArrowClockwiseIcon className="size-4" weight="regular" />
-              )
-            }
-          >
-            {refreshingSummary ? "Refreshing…" : "Refresh summary"}
-          </Button>
-        </div>
+        <h1 className="text-2xl font-semibold text-foreground">
+          Admin Dashboard
+        </h1>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Dashboard summary</CardTitle>
+            <Button
+              size="sm"
+              variant={data?.summary ? "secondary" : "default"}
+              onClick={handleGenerateSummary}
+              disabled={generatingSummary}
+              iconRight={
+                generatingSummary ? undefined : (
+                  <SparkleIcon className="size-4" weight="regular" />
+                )
+              }
+            >
+              {generatingSummary
+                ? "Generating…"
+                : data?.summary
+                  ? "Refresh summary"
+                  : "Generate summary"}
+            </Button>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-relaxed text-foreground">
-              {(() => {
-                if (data?.summary !== undefined && data.summary !== "")
-                  return data.summary;
-                if (refreshingSummary) return "Refreshing…";
-                if (data?.summary === "") return "—";
-                return "Loading summary…";
-              })()}
-            </p>
-          </CardContent>
+          {((data?.summary !== undefined && data.summary !== "") ||
+            generatingSummary) && (
+            <CardContent>
+              <p className="text-sm leading-relaxed text-foreground">
+                {data?.summary !== undefined && data.summary !== ""
+                  ? data.summary
+                  : generatingSummary
+                    ? "…"
+                    : ""}
+              </p>
+            </CardContent>
+          )}
         </Card>
 
         <section className="grid grid-cols-1 gap-6 md:grid-cols-5 md:gap-4">
@@ -321,7 +326,7 @@ function AdminDashboard() {
                   {data.popularListings.slice(0, 10).map((p) => (
                     <li key={p.listingId}>
                       <Link
-                        href={`/browse/${p.listingId}`}
+                        href={`/admin/listings/${p.listingId}`}
                         title={p.title ?? p.listingId}
                         className="flex justify-between rounded-lg px-2 py-1.5 text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
                       >

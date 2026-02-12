@@ -7,6 +7,7 @@ import { User } from "@/lib/models/User";
 import { UserUpdateSchema } from "@schemas";
 import { parseJsonBody, validationErrorResponse } from "@/lib/api/errors";
 import { withAuth } from "@/lib/api/with-auth";
+import { requireOwnOrAdmin } from "@/lib/auth/guard";
 import { isValidObjectId } from "@/lib/objectid";
 import { deleteUser } from "@/lib/services/admin-users.service";
 import { serializeUser } from "@/lib/user-serializer";
@@ -17,14 +18,8 @@ async function getUserIdHandler(
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   const { id } = await context.params;
-  const isOwn = payload.sub === id;
-  const isAdmin = payload.role === "admin";
-  if (!isOwn && !isAdmin) {
-    return NextResponse.json(
-      { success: false, message: "Forbidden" },
-      { status: 403 },
-    );
-  }
+  const forbidden = requireOwnOrAdmin(payload, id);
+  if (forbidden) return forbidden;
 
   if (!isValidObjectId(id)) {
     return NextResponse.json(
@@ -53,14 +48,8 @@ async function patchUserIdHandler(
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   const { id } = await context.params;
-  const isOwn = payload.sub === id;
-  const isAdmin = payload.role === "admin";
-  if (!isOwn && !isAdmin) {
-    return NextResponse.json(
-      { success: false, message: "Forbidden" },
-      { status: 403 },
-    );
-  }
+  const forbidden = requireOwnOrAdmin(payload, id);
+  if (forbidden) return forbidden;
 
   if (!isValidObjectId(id)) {
     return NextResponse.json(

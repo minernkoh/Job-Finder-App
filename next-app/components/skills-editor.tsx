@@ -14,7 +14,8 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@ui/components/lib/utils";
 import { InlineError } from "@/components/page-state";
-import { CARD_PADDING_COMPACT, TEXTAREA_BASE_CLASS } from "@/lib/layout";
+import { CARD_PADDING_COMPACT, GAP_LG, GAP_MD, TEXTAREA_BASE_CLASS } from "@/lib/layout";
+import { EYEBROW_CLASS } from "@/lib/styles";
 
 /** Shared Tailwind class for clickable skill pill buttons (suggest, resume suggested). */
 const SKILL_PILL_CLASS =
@@ -136,12 +137,12 @@ export function SkillsEditor({
 
   return (
     <Card variant="default" className="border-border h-full min-h-0 flex flex-col">
-      <CardContent className={cn(CARD_PADDING_COMPACT, "space-y-6 flex-1 min-h-0 overflow-y-auto")}>
+      <CardContent className={cn(CARD_PADDING_COMPACT, GAP_LG, "flex-1 min-h-0 overflow-y-auto")}>
         {introText && (
-          <p className="eyebrow">{introText}</p>
+          <p className={EYEBROW_CLASS}>{introText}</p>
         )}
         {showRoleBlock && (
-          <section className="space-y-4">
+          <section className={GAP_MD}>
             {hasYearsField ? (
               <>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -209,7 +210,7 @@ export function SkillsEditor({
             </div>
             {!hideSuggestedSkillsPills && suggestedSkills.length > 0 && (
               <div className="space-y-2">
-                <p className="eyebrow">Suggested skills — click to add</p>
+                <p className={EYEBROW_CLASS}>Suggested skills — click to add</p>
                 <div className="flex flex-wrap gap-2">
                   {suggestedSkills.map((skill) => (
                     <button
@@ -228,28 +229,13 @@ export function SkillsEditor({
         )}
         {!hideYourSkillsBlock && (
           <div className="space-y-3 border-t border-border pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="eyebrow m-0">{yourSkillsHeading ?? "Your skills"}</p>
-              {onRemoveAllSkills && skills.length > 0 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="text-muted-foreground hover:text-destructive h-auto py-1"
-                  onClick={onRemoveAllSkills}
-                  aria-label="Remove all skills"
-                >
-                  <TrashIcon className="mr-1 size-3.5" aria-hidden />
-                  Remove all
-                </Button>
-              )}
-            </div>
+            <p className={cn(EYEBROW_CLASS, "m-0")}>{yourSkillsHeading ?? "Your skills"}</p>
             {skills.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {emptySkillsMessage}
               </p>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {skills.map((skill, index) => (
                   <span
                     key={`${skill}-${index}`}
@@ -266,6 +252,19 @@ export function SkillsEditor({
                     </button>
                   </span>
                 ))}
+                {onRemoveAllSkills && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="text-muted-foreground hover:text-destructive h-auto py-1 shrink-0"
+                    onClick={onRemoveAllSkills}
+                    aria-label="Remove all skills"
+                  >
+                    <TrashIcon className="mr-1 size-3.5" aria-hidden />
+                    Remove all
+                  </Button>
+                )}
               </div>
             )}
             {showSaveBlock && (
@@ -291,7 +290,7 @@ export function SkillsEditor({
         )}
         {!showRoleBlock && hasYearsField && (
           <section className="space-y-3">
-            <p className="eyebrow">Experience</p>
+            <p className={EYEBROW_CLASS}>Experience</p>
             <div className="space-y-2">
               <Label htmlFor={yearsId} className="text-sm">
                 {yearsLabel ?? "Years of experience"}
@@ -311,7 +310,7 @@ export function SkillsEditor({
         )}
         {showCustomBlock && (
           <section className="space-y-3 border-t border-border pt-4">
-            <p className="eyebrow">Add skills manually</p>
+            <p className={EYEBROW_CLASS}>Add skills manually</p>
             <div className="space-y-2">
               <Label htmlFor={`${idPrefix}-custom`} className="text-sm">
                 Skill name
@@ -345,8 +344,8 @@ export function SkillsEditor({
           </section>
         )}
         {showResumeBlock && resumeProps && (
-          <section className="space-y-4 border-t border-border pt-4">
-            <p className="eyebrow">Scan resume</p>
+          <section className={cn(GAP_MD, "border-t border-border pt-4")}>
+            <p className={EYEBROW_CLASS}>Scan resume</p>
             <div className="space-y-3">
               <input
                 id={fileInputId}
@@ -454,7 +453,7 @@ export function SkillsEditor({
             )}
             {resumeAssessment != null && resumeAssessment.trim() !== "" && (
               <div className="space-y-1 border-t border-border pt-4">
-                <p className="eyebrow">Resume feedback</p>
+                <p className={EYEBROW_CLASS}>Resume feedback</p>
                 <p className="text-sm text-foreground">{resumeAssessment}</p>
               </div>
             )}
@@ -462,7 +461,7 @@ export function SkillsEditor({
               resumeSuggestedSkills.length > 0 &&
               onAddResumeSuggestedSkill && (
                 <div className="space-y-2 border-t border-border pt-4">
-                  <p className="eyebrow">Skills from resume — click to add</p>
+                  <p className={EYEBROW_CLASS}>Skills from resume — click to add</p>
                   <div className="flex flex-wrap gap-2">
                     {resumeSuggestedSkills.map((skill) => (
                       <button
@@ -481,7 +480,7 @@ export function SkillsEditor({
         )}
         {!showResumeBlock && resumeAssessment != null && resumeAssessment.trim() !== "" && (
           <div className="space-y-1 border-t border-border pt-4">
-            <p className="eyebrow">Resume feedback</p>
+            <p className={EYEBROW_CLASS}>Resume feedback</p>
             <p className="text-sm text-foreground">{resumeAssessment}</p>
           </div>
         )}
@@ -490,7 +489,7 @@ export function SkillsEditor({
           resumeSuggestedSkills.length > 0 &&
           onAddResumeSuggestedSkill && (
             <div className="space-y-2 border-t border-border pt-4">
-              <p className="eyebrow">Skills from resume — click to add</p>
+              <p className={EYEBROW_CLASS}>Skills from resume — click to add</p>
               <div className="flex flex-wrap gap-2">
                 {resumeSuggestedSkills.map((skill) => (
                   <button

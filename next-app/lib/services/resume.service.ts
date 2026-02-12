@@ -8,7 +8,7 @@ import pdf from "pdf-parse";
 import { ResumeParseResultSchema, type ResumeParseResult } from "@schemas";
 import { connectDB } from "@/lib/db";
 import {
-  executeWithGeminiFallback,
+  executeWithGemini,
   retryWithBackoff,
 } from "@/lib/ai/gemini";
 import { isValidObjectId } from "@/lib/objectid";
@@ -82,7 +82,7 @@ ${text.slice(0, 30000)}`;
 
   const { object } = await retryWithBackoff(
     () =>
-      executeWithGeminiFallback((model) =>
+      executeWithGemini((model) =>
         generateObject({ model, schema: ResumeParseResultSchema, prompt }),
       ),
     { fallbackMessage: "Resume parsing failed. Please try again." }

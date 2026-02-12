@@ -32,6 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           </Suspense>
           {children}
           <Toaster
+            position="top-right"
             theme="dark"
             richColors
             toastOptions={{

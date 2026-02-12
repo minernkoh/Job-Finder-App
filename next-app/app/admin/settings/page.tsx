@@ -7,6 +7,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { AccountSettingsForm } from "@/components/account-settings-form";
 import { PageShell } from "@/components/page-shell";
+import { EYEBROW_CLASS } from "@/lib/styles";
 
 /** Admin settings: PageShell + Account section with shared account form. */
 export default function AdminSettingsPage() {
@@ -15,7 +16,7 @@ export default function AdminSettingsPage() {
   return (
     <PageShell title="Settings">
       <section aria-label="Account" className="space-y-3">
-        <h2 className="eyebrow">Account</h2>
+        <h2 className={EYEBROW_CLASS}>Account</h2>
         <AccountSettingsForm
           user={user}
           onSuccess={(data) => user && setUser({ ...user, email: data.email, username: data.username })}

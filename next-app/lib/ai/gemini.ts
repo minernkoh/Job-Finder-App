@@ -55,24 +55,12 @@ export function getGeminiModelOptional(): GeminiModel | null {
   return google("gemini-2.5-flash");
 }
 
-/**
- * Executes an AI operation with primary key; on 429 or RESOURCE_EXHAUSTED, retries once with GEMINI_API_KEY_FALLBACK if set.
- */
-export async function executeWithGeminiFallback<T>(
+/** Runs an AI operation with the configured Gemini model (single key, no fallback). */
+export async function executeWithGemini<T>(
   fn: (model: GeminiModel) => Promise<T>,
 ): Promise<T> {
   const model = getGeminiModel();
-  try {
-    return await fn(model);
-  } catch (err) {
-    if (!isRateLimitError(err)) throw err;
-    const env = getEnv();
-    const fallbackKey = env.GEMINI_API_KEY_FALLBACK?.trim();
-    if (!fallbackKey) throw err;
-    const google = createGoogleGenerativeAI({ apiKey: fallbackKey });
-    const fallbackModel = google("gemini-2.5-flash");
-    return fn(fallbackModel);
-  }
+  return fn(model);
 }
 
 export interface RetryOptions {

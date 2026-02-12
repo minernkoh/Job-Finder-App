@@ -4,8 +4,11 @@
 
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { recordListingView } from "@/lib/api/listings";
+import { trendingKeys } from "@/lib/query-keys";
+import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
 import { EASE_TRANSITION, staggerDelay } from "@/lib/animations";
 import { ListingCard } from "./listing-card";
 import type { ListingResult } from "@schemas";
@@ -47,12 +50,14 @@ export function ListingCarousel({
   isInCompareSet = () => false,
   compareSetSize = 0,
 }: ListingCarouselProps) {
+  const queryClient = useQueryClient();
+
   return (
     <section
       className="mt-10 min-w-0 w-full overflow-visible"
       aria-label={ariaLabel ?? undefined}
     >
-      <h2 className="eyebrow mb-3">{title}</h2>
+      <h2 className={`${EYEBROW_CLASS} ${EYEBROW_MB}`}>{title}</h2>
       {/* Breakout wrapper: full viewport width so first/last cards are not cropped by padded main content. */}
       <div className="relative left-1/2 w-screen -translate-x-1/2">
         {/* Left padding matches main content left edge so the first card aligns with the section title. */}
@@ -73,7 +78,13 @@ export function ListingCarousel({
                   listing={listing}
                   href={hrefForListing?.(listing)}
                   showTrendingBadge={showTrendingBadge}
-                  onView={() => recordListingView(listing.id)}
+                  onView={() =>
+                    recordListingView(listing.id).then(() =>
+                      queryClient.invalidateQueries({
+                        queryKey: trendingKeys.all,
+                      }),
+                    )
+                  }
                   onSave={onSave ? () => onSave(listing) : undefined}
                   onUnsave={onUnsave ? () => onUnsave(listing.id) : undefined}
                   isSaved={savedIds.has(listing.id)}

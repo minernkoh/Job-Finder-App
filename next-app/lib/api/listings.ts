@@ -89,9 +89,11 @@ export async function fetchRecommendedListings(): Promise<{
   return res.data.data;
 }
 
-/** Records a view for a listing (fire-and-forget). */
-export function recordListingView(listingId: string): void {
-  apiClient.post(`/api/v1/listings/${listingId}/view`).catch(() => {});
+/** Records a view for a listing (fire-and-forget). Returns a promise for optional chaining (e.g. invalidate queries after). */
+export function recordListingView(listingId: string): Promise<void> {
+  return apiClient
+    .post(`/api/v1/listings/${listingId}/view`)
+    .then(() => undefined, () => undefined);
 }
 
 /** Creates a listing (admin only). */

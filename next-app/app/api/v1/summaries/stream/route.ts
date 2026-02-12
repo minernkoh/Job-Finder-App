@@ -92,7 +92,7 @@ async function postStreamHandler(
       "Cache-Control": "no-cache",
       "Transfer-Encoding": "chunked",
     },
-  });
+  }) as unknown as NextResponse;
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to create summary";

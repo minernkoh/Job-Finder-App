@@ -8,7 +8,7 @@ import {
   type SuggestSkillsResponse,
 } from "@schemas";
 import {
-  executeWithGeminiFallback,
+  executeWithGemini,
   retryWithBackoff,
 } from "@/lib/ai/gemini";
 
@@ -20,7 +20,7 @@ export async function suggestSkillsWithRetry(
 
   const { object } = await retryWithBackoff(
     () =>
-      executeWithGeminiFallback((model) =>
+      executeWithGemini((model) =>
         generateObject({ model, schema: SuggestSkillsResponseSchema, prompt }),
       ),
     { fallbackMessage: "Skill suggestion failed. Please try again." }

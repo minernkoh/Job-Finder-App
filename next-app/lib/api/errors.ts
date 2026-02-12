@@ -28,18 +28,32 @@ export function getErrorMessage(err: unknown, fallback: string): string {
 export function isRateLimitMessage(message: string): boolean {
   const m = message.toUpperCase();
   return (
-    m.includes("429") ||
-    m.includes("RESOURCE_EXHAUSTED") ||
-    m.includes("QUOTA")
+    m.includes("429") || m.includes("RESOURCE_EXHAUSTED") || m.includes("QUOTA")
   );
 }
+
+/** Message returned by the API when GEMINI_API_KEY is not configured (503). */
+export const SUMMARY_NOT_CONFIGURED_MESSAGE =
+  "AI summarization is not configured";
+
+/**
+ * Returns true if the error message indicates AI summarization is not configured (503).
+ * Use in summarize and job-detail UI to show a friendly message.
+ */
+export function isSummaryNotConfiguredMessage(message: string): boolean {
+  return message === SUMMARY_NOT_CONFIGURED_MESSAGE;
+}
+
+/** User-facing message when AI summarization is unavailable (503). */
+export const SUMMARY_NOT_AVAILABLE_UI_MESSAGE =
+  "AI summarization is not available. Please try again later or contact support.";
 
 /**
  * Asserts that an API response has success: true and defined data. Throws with response.message or fallbackError otherwise.
  */
 export function assertApiSuccess<T>(
   response: { success: boolean; data?: T; message?: string },
-  fallbackError: string
+  fallbackError: string,
 ): asserts response is { success: true; data: T } {
   if (!response.success || response.data === undefined) {
     throw new Error(response.message ?? fallbackError);
@@ -52,7 +66,7 @@ export function assertApiSuccess<T>(
 export function toErrorResponse(
   err: unknown,
   defaultMessage: string,
-  status = 500
+  status = 500,
 ): NextResponse {
   const message = err instanceof Error ? err.message : defaultMessage;
   return NextResponse.json({ success: false, message }, { status });
@@ -63,7 +77,7 @@ export function toErrorResponse(
  */
 export function validationMessageFromZod(
   zodError: z.ZodError,
-  defaultMessage = "Invalid input"
+  defaultMessage = "Invalid input",
 ): string {
   const first = zodError.issues[0];
   return first?.message ? String(first.message) : defaultMessage;
@@ -75,12 +89,12 @@ export function validationMessageFromZod(
  */
 export function validationErrorResponse(
   zodError: z.ZodError,
-  message = "Invalid input"
+  message = "Invalid input",
 ): NextResponse {
   const displayMessage = validationMessageFromZod(zodError, message);
   return NextResponse.json(
     { success: false, message: displayMessage, errors: zodError.flatten() },
-    { status: 400 }
+    { status: 400 },
   );
 }
 
@@ -89,18 +103,18 @@ export function validationErrorResponse(
  */
 export function validateIdParam(
   id: string | undefined | null,
-  paramLabel: string
+  paramLabel: string,
 ): NextResponse | null {
   if (id == null || id === "") {
     return NextResponse.json(
       { success: false, message: `${paramLabel} required` },
-      { status: 400 }
+      { status: 400 },
     );
   }
   if (!isValidObjectId(id)) {
     return NextResponse.json(
       { success: false, message: `Invalid ${paramLabel}` },
-      { status: 400 }
+      { status: 400 },
     );
   }
   return null;
@@ -111,7 +125,7 @@ export function validateIdParam(
  * Use in POST/PATCH handlers to avoid SyntaxError bubbling as 500.
  */
 export async function parseJsonBody(
-  request: NextRequest
+  request: NextRequest,
 ): Promise<[unknown, null] | [null, NextResponse]> {
   try {
     const body = await request.json();
@@ -121,7 +135,7 @@ export async function parseJsonBody(
       null,
       NextResponse.json(
         { success: false, message: "Invalid or missing JSON body" },
-        { status: 400 }
+        { status: 400 },
       ),
     ];
   }

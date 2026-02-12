@@ -7,6 +7,7 @@ import type { ListingsFilters } from "@/lib/types/listings";
 
 export const savedKeys = { all: ["saved"] as const };
 export const savedCheckKeys = { all: ["savedCheck"] as const };
+export const profileKeys = { all: ["profile"] as const };
 
 export function listingsKeys(
   country: string,

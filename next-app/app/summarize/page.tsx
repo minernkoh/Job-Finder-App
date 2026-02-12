@@ -17,10 +17,20 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { fetchProfile } from "@/lib/api/profile";
 import { createSummaryStream, consumeSummaryStream } from "@/lib/api/summaries";
 import type { SummaryWithId } from "@/lib/api/summaries";
-import { isRateLimitMessage } from "@/lib/api/errors";
+import {
+  isRateLimitMessage,
+  isSummaryNotConfiguredMessage,
+  SUMMARY_NOT_AVAILABLE_UI_MESSAGE,
+} from "@/lib/api/errors";
 import { toast } from "sonner";
 import { useState, useCallback, Suspense } from "react";
-import { CARD_PADDING_COMPACT, PAGE_PX, TEXTAREA_BASE_CLASS } from "@/lib/layout";
+import { profileKeys } from "@/lib/query-keys";
+import {
+  CARD_PADDING_COMPACT,
+  PAGE_PX,
+  TEXTAREA_BASE_CLASS,
+} from "@/lib/layout";
+import { EYEBROW_CLASS } from "@/lib/styles";
 import { InlineError } from "@/components/page-state";
 import { AISummaryCard } from "@/components/ai-summary-card";
 
@@ -32,7 +42,7 @@ function SummarizeContent() {
   const [isLoading, setIsLoading] = useState(false);
 
   const { data: profile } = useQuery({
-    queryKey: ["profile"],
+    queryKey: profileKeys.all,
     queryFn: fetchProfile,
   });
 
@@ -65,7 +75,15 @@ function SummarizeContent() {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to summarize";
-        setError(message);
+        const status =
+          err && typeof err === "object" && "status" in err
+            ? (err as { status: number }).status
+            : undefined;
+        setError(
+          status === 503 || isSummaryNotConfiguredMessage(message)
+            ? SUMMARY_NOT_AVAILABLE_UI_MESSAGE
+            : message,
+        );
         setIsLoading(false);
         if (isRateLimitMessage(message)) {
           toast.error(
@@ -107,9 +125,7 @@ function SummarizeContent() {
         {summary && summary.tldr ? (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-[3fr_1fr] md:gap-8">
             <div className="space-y-3">
-              <h2 className="eyebrow">
-                AI Summary
-              </h2>
+              <h2 className={EYEBROW_CLASS}>AI Summary</h2>
               <AISummaryCard
                 summary={summary as SummaryWithId}
                 showJdMatch={false}
@@ -128,7 +144,7 @@ function SummarizeContent() {
               )}
             </div>
             <div className="space-y-2">
-              <h2 className="eyebrow">Description</h2>
+              <h2 className={EYEBROW_CLASS}>Description</h2>
               <Card variant="elevated" className="text-sm">
                 <CardContent className={CARD_PADDING_COMPACT}>
                   {/^https?:\/\//i.test(input) ? (
@@ -155,7 +171,7 @@ function SummarizeContent() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="summarize-input" className="eyebrow">
+              <Label htmlFor="summarize-input" className={EYEBROW_CLASS}>
                 URL or job description
               </Label>
               <textarea
@@ -188,11 +204,11 @@ function SummarizeContent() {
   );
 }
 
-/** Summarize page: protected. */
+/** Summarize page: protected; admins are redirected to /admin. */
 export default function SummarizePage() {
   return (
     <Suspense fallback={null}>
-      <ProtectedRoute>
+      <ProtectedRoute blockAdmins>
         <SummarizeContent />
       </ProtectedRoute>
     </Suspense>

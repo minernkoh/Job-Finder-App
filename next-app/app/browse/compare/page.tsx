@@ -4,21 +4,31 @@
 
 "use client";
 
+import type { ComparisonSummary } from "@schemas";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent } from "@ui/components";
+import { Button, Card, CardContent } from "@ui/components";
 import { sanitizeJobDescription } from "@/lib/sanitize";
 import { cn } from "@ui/components/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { AuthModalLink } from "@/components/auth-modal-link";
 import { AppHeader } from "@/components/app-header";
 import { formatSalaryRange } from "@/lib/format";
 import { fetchListing } from "@/lib/api/listings";
 import { fetchProfile } from "@/lib/api/profile";
-import { createComparisonSummary } from "@/lib/api/summaries";
-import { isRateLimitMessage } from "@/lib/api/errors";
-import { listingKeys } from "@/lib/query-keys";
+import {
+  createComparisonSummary,
+  createComparisonSummaryStream,
+  consumeComparisonStream,
+} from "@/lib/api/summaries";
+import {
+  isRateLimitMessage,
+  isSummaryNotConfiguredMessage,
+  SUMMARY_NOT_AVAILABLE_UI_MESSAGE,
+} from "@/lib/api/errors";
+import { listingKeys, profileKeys } from "@/lib/query-keys";
 import { toast } from "sonner";
 import {
   CARD_PADDING_DEFAULT,
@@ -28,6 +38,8 @@ import {
   PAGE_PX,
   SECTION_GAP,
 } from "@/lib/layout";
+import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
+import { UserOnlyRoute } from "@/components/user-only-route";
 
 /** One column: listing meta, description, and link to the full listing page. */
 function CompareColumn({ listingId }: { listingId: string }) {
@@ -71,7 +83,7 @@ function CompareColumn({ listingId }: { listingId: string }) {
       </div>
       {sanitizedDescription.length > 0 && (
         <div className="border-t border-border pt-4">
-          <h4 className="eyebrow mb-2">Description</h4>
+          <h4 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Description</h4>
           <div
             className={cn(
               "max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground",
@@ -97,7 +109,7 @@ function CompareColumn({ listingId }: { listingId: string }) {
 function ComparePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading: authLoading } = useAuth();
 
   const idsParam = searchParams?.get("ids") ?? "";
   const listingIds = useMemo(() => {
@@ -114,32 +126,78 @@ function ComparePageInner() {
     }
   }, [listingIds, router]);
 
-  const comparisonQuery = useQuery({
-    queryKey: ["comparison", listingIds?.join(",") ?? "", user?.id ?? ""],
-    queryFn: () => createComparisonSummary(listingIds!),
-    enabled: !!listingIds && listingIds.length >= 2 && !!user,
-  });
+  const [comparison, setComparison] = useState<Partial<ComparisonSummary> | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [retryTrigger, setRetryTrigger] = useState(0);
+  const streamStartedRef = useRef<string | null>(null);
 
-  const lastToastedMessageRef = useRef<string | null>(null);
+  const handleRetry = useCallback(() => {
+    streamStartedRef.current = null;
+    setStreamError(null);
+    setRetryTrigger((t) => t + 1);
+  }, []);
+
   useEffect(() => {
-    if (!comparisonQuery.isError || !comparisonQuery.error) {
-      lastToastedMessageRef.current = null;
-      return;
-    }
-    const message =
-      comparisonQuery.error instanceof Error
-        ? comparisonQuery.error.message
-        : "Failed to load comparison";
-    if (isRateLimitMessage(message) && lastToastedMessageRef.current !== message) {
-      lastToastedMessageRef.current = message;
-      toast.error(
-        "AI summary is temporarily unavailable due to rate limits. Please try again in a few minutes.",
-      );
-    }
-  }, [comparisonQuery.isError, comparisonQuery.error]);
+    if (!listingIds || listingIds.length < 2 || !user || authLoading) return;
+    const key = listingIds.join(",") + (user.id ?? "");
+    if (streamStartedRef.current === key) return;
+    streamStartedRef.current = key;
+
+    let cancelled = false;
+    let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    setIsStreaming(true);
+    setStreamError(null);
+    setComparison(null);
+
+    const tryStream = () =>
+      createComparisonSummaryStream(listingIds).then(({ reader }) => {
+        activeReader = reader;
+        return consumeComparisonStream(reader, (partial) => {
+          if (!cancelled) {
+            setComparison((prev) => ({ ...prev, ...partial }));
+          }
+        });
+      });
+
+    const tryFallback = () =>
+      createComparisonSummary(listingIds).then((data) => {
+        if (!cancelled) setComparison(data);
+      });
+
+    tryStream()
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        return tryFallback().catch((fallbackErr: unknown) => {
+          streamStartedRef.current = null;
+          let message =
+            fallbackErr instanceof Error
+              ? fallbackErr.message
+              : "Failed to load comparison";
+          if (isSummaryNotConfiguredMessage(message)) {
+            message = SUMMARY_NOT_AVAILABLE_UI_MESSAGE;
+          }
+          setStreamError(message);
+          if (isRateLimitMessage(message)) {
+            toast.error(
+              "AI summary is temporarily unavailable due to rate limits. Please try again in a few minutes.",
+            );
+          }
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setIsStreaming(false);
+      });
+
+    return () => {
+      cancelled = true;
+      streamStartedRef.current = null;
+      activeReader?.cancel();
+    };
+  }, [listingIds, user, authLoading, retryTrigger]);
 
   const { data: profile } = useQuery({
-    queryKey: ["profile"],
+    queryKey: profileKeys.all,
     queryFn: fetchProfile,
     enabled: !!user,
   });
@@ -171,8 +229,8 @@ function ComparePageInner() {
         </h1>
 
         <section aria-label="Unified comparison">
-          <h2 className="eyebrow mb-2">Comparison summary</h2>
-          {user && comparisonQuery.data && (profile?.skills?.length ?? 0) === 0 && (
+          <h2 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Comparison summary</h2>
+          {user && comparison && (profile?.skills?.length ?? 0) === 0 && (
             <div className="mb-4 rounded-lg bg-primary/10 p-3 text-foreground">
               <p className="text-sm">
                 Add your skills in your profile to get personalized match scores and recommendations.{" "}
@@ -191,38 +249,46 @@ function ComparePageInner() {
                 Get a unified AI comparison and recommendation for the jobs you
                 selected.
               </p>
-              <Link
-                href="/browse?auth=login"
+              <AuthModalLink
+                auth="login"
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 Sign in to compare
-              </Link>
+              </AuthModalLink>
             </Card>
           )}
-          {user && comparisonQuery.isLoading && (
+          {user && isStreaming && !comparison?.summary && (
             <div className="h-32 animate-pulse rounded-xl border border-border bg-muted" />
           )}
-          {user && comparisonQuery.isError && (
-            <p className="my-4 text-destructive" role="alert">
-              {comparisonQuery.error instanceof Error
-                ? comparisonQuery.error.message
-                : "Failed to load comparison"}
-            </p>
+          {user && streamError && (
+            <div className="my-4 flex flex-col gap-3">
+              <p className="text-destructive" role="alert">
+                {streamError}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetry}
+                className="w-fit"
+              >
+                Retry
+              </Button>
+            </div>
           )}
-          {comparisonQuery.data && (
+          {comparison && (
             <Card variant="elevated" className="text-sm">
               <CardContent className={cn(CARD_PADDING_DEFAULT, "space-y-4 sm:space-y-5")}>
                 <p className="text-foreground">
-                  {comparisonQuery.data.summary}
+                  {comparison.summary}
                 </p>
-                {comparisonQuery.data.listingMatchScores &&
-                  comparisonQuery.data.listingMatchScores.length > 0 && (
+                {comparison.listingMatchScores &&
+                  comparison.listingMatchScores.length > 0 && (
                     <div className="space-y-3">
-                      <h3 className="eyebrow mb-2">
+                      <h3 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>
                         Match to your skills
                       </h3>
                       <div className="space-y-2">
-                        {comparisonQuery.data.listingMatchScores.map((m) => {
+                        {comparison.listingMatchScores.map((m) => {
                           const jobLabel =
                             `Job ${(listingIds?.indexOf(m.listingId) ?? -1) + 1}`;
                           return (
@@ -241,14 +307,14 @@ function ComparePageInner() {
                               {m.matchedSkills &&
                                 m.matchedSkills.length > 0 && (
                                   <p className="mt-1 text-xs text-foreground">
-                                    <span className="eyebrow">Matched: </span>
+                                    <span className={EYEBROW_CLASS}>Matched: </span>
                                     {m.matchedSkills.join(", ")}
                                   </p>
                                 )}
                               {m.missingSkills &&
                                 m.missingSkills.length > 0 && (
                                   <p className="mt-0.5 text-xs text-muted-foreground">
-                                    <span className="eyebrow">Missing: </span>
+                                    <span className={EYEBROW_CLASS}>Missing: </span>
                                     {m.missingSkills.join(", ")}
                                   </p>
                                 )}
@@ -258,45 +324,45 @@ function ComparePageInner() {
                       </div>
                     </div>
                   )}
-                {comparisonQuery.data.similarities &&
-                  comparisonQuery.data.similarities.length > 0 && (
+                {comparison.similarities &&
+                  comparison.similarities.length > 0 && (
                     <div>
-                      <h3 className="eyebrow mb-2">
+                      <h3 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>
                         Similarities
                       </h3>
                       <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-                        {comparisonQuery.data.similarities.map((s, i) => (
+                        {comparison.similarities.map((s, i) => (
                           <li key={i}>{s}</li>
                         ))}
                       </ul>
                     </div>
                   )}
-                {comparisonQuery.data.differences &&
-                  comparisonQuery.data.differences.length > 0 && (
+                {comparison.differences &&
+                  comparison.differences.length > 0 && (
                     <div>
-                      <h3 className="eyebrow mb-2">
+                      <h3 className={cn(EYEBROW_CLASS, EYEBROW_MB)}>
                         Differences
                       </h3>
                       <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-                        {comparisonQuery.data.differences.map((d, i) => (
+                        {comparison.differences.map((d, i) => (
                           <li key={i}>{d}</li>
                         ))}
                       </ul>
                     </div>
                   )}
-                {comparisonQuery.data.comparisonPoints &&
-                  comparisonQuery.data.comparisonPoints.length > 0 && (
+                {comparison.comparisonPoints &&
+                  comparison.comparisonPoints.length > 0 && (
                     <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-                      {comparisonQuery.data.comparisonPoints.map((point, i) => (
+                      {comparison.comparisonPoints.map((point, i) => (
                         <li key={i}>{point}</li>
                       ))}
                     </ul>
                   )}
-                {comparisonQuery.data.recommendedListingId &&
-                  comparisonQuery.data.recommendationReason && (
+                {comparison.recommendedListingId &&
+                  comparison.recommendationReason && (
                     <div className="rounded-lg bg-primary/10 p-3 text-foreground">
-                      <span className="eyebrow">Better fit: </span>
-                      {comparisonQuery.data.recommendationReason}
+                      <span className={EYEBROW_CLASS}>Better fit: </span>
+                      {comparison.recommendationReason}
                     </div>
                   )}
               </CardContent>
@@ -317,10 +383,13 @@ function ComparePageInner() {
   );
 }
 
+/** Compare page: admins are redirected to /admin; others may view (auth required for AI comparison). */
 export default function ComparePage() {
   return (
     <Suspense fallback={null}>
-      <ComparePageInner />
+      <UserOnlyRoute requireAuth={false}>
+        <ComparePageInner />
+      </UserOnlyRoute>
     </Suspense>
   );
 }

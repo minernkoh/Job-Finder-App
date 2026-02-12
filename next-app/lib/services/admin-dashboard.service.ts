@@ -2,11 +2,12 @@
  * Admin dashboard service: aggregates metrics from DB, generates an AI narrative summary via Gemini, and caches the summary in memory.
  */
 
-import { generateObject } from "ai";
+import { generateObject, streamObject } from "ai";
 import mongoose from "mongoose";
 import {
   type DashboardMetrics,
   DashboardSummarySchema,
+  type DashboardSummary,
   type AdminDashboardResponse,
   type UserGrowthBucket,
   type PopularListingItem,
@@ -14,7 +15,7 @@ import {
 } from "@schemas";
 import { connectDB } from "@/lib/db";
 import {
-  executeWithGeminiFallback,
+  executeWithGemini,
   retryWithBackoff,
 } from "@/lib/ai/gemini";
 import { getEnv } from "@/lib/env";
@@ -174,7 +175,7 @@ ${JSON.stringify(metrics, null, 2)}`;
   try {
     const { object } = await retryWithBackoff(
       () =>
-        executeWithGeminiFallback((model) =>
+        executeWithGemini((model) =>
           generateObject({ model, schema: DashboardSummarySchema, prompt }),
         ),
       {
@@ -186,6 +187,40 @@ ${JSON.stringify(metrics, null, 2)}`;
   } catch {
     return "Summary temporarily unavailable; please try again later.";
   }
+}
+
+export interface DashboardStreamResult {
+  partialObjectStream: AsyncIterable<Partial<DashboardSummary>>;
+  object: Promise<DashboardSummary>;
+}
+
+/** Streams the dashboard executive summary using Gemini via streamObject. Same prompt as generateDashboardSummary. Throws if GEMINI_API_KEY is not set. */
+export async function generateDashboardSummaryStream(
+  metrics: DashboardMetrics,
+): Promise<DashboardStreamResult> {
+  const env = getEnv();
+  if (!env.GEMINI_API_KEY?.trim()) {
+    throw new Error("AI summarization is not configured");
+  }
+
+  const prompt = `Given these dashboard metrics for a job-finder app, write a 2–4 sentence executive summary for an admin. Be factual and neutral. Do not invent numbers. Use only the metrics provided.
+
+Metrics (JSON):
+${JSON.stringify(metrics, null, 2)}`;
+
+  return executeWithGemini((model) => {
+    const result = streamObject({
+      model,
+      schema: DashboardSummarySchema,
+      prompt,
+    });
+    return Promise.resolve({
+      partialObjectStream: result.partialObjectStream as AsyncIterable<
+        Partial<DashboardSummary>
+      >,
+      object: result.object as Promise<DashboardSummary>,
+    });
+  });
 }
 
 /** Returns metrics, user growth, popular listings, and recent users only (no AI summary). Use for fast initial dashboard load. */

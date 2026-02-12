@@ -28,7 +28,16 @@ export function AuthModalLink({ auth, redirect, className, children }: AuthModal
   const searchParams = useSearchParams();
   const next = new URLSearchParams(searchParams);
   next.set("auth", auth);
-  if (redirect !== undefined) next.set("redirect", redirect);
+  if (redirect !== undefined) {
+    next.set("redirect", redirect);
+  } else {
+    const forRedirect = new URLSearchParams(searchParams);
+    forRedirect.delete("auth");
+    forRedirect.delete("redirect");
+    const q = forRedirect.toString();
+    const currentPage = q ? `${pathname}?${q}` : pathname;
+    next.set("redirect", currentPage);
+  }
   const query = next.toString();
   const href = query ? `${pathname}?${query}` : `${pathname}?auth=${auth}`;
   return (

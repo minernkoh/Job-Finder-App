@@ -358,6 +358,17 @@ export async function getRecentListings(
   return docs.map((d) => docToListingResult(d));
 }
 
+/** Fetches listings from search (Adzuna + manual) to fill a gap. Excludes already-present ids. Used by trending when view-based results are sparse. */
+export async function getListingsToFill(
+  country: string,
+  limit: number,
+  excludeIds: Set<string>
+): Promise<ListingResult[]> {
+  const { listings } = await searchListings(country, 1);
+  const filtered = listings.filter((l) => !excludeIds.has(l.id));
+  return filtered.slice(0, limit);
+}
+
 /** Creates a manual listing (admin). Sets sourceId and expiresAt server-side. */
 export async function createListing(
   body: ListingCreate

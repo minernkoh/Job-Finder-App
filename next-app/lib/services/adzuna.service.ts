@@ -2,6 +2,13 @@
  * Adzuna API client: fetches job listings from Adzuna with country support. Used by listings service.
  */
 
+import {
+  type AdzunaCountry,
+  SUPPORTED_COUNTRIES,
+} from "@/lib/constants/countries";
+
+export type { AdzunaCountry };
+
 const ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs";
 
 export interface AdzunaJob {
@@ -23,31 +30,6 @@ export interface AdzunaSearchResponse {
   results: AdzunaJob[];
   count: number;
 }
-
-const SUPPORTED_COUNTRIES = [
-  "gb",
-  "at",
-  "au",
-  "be",
-  "br",
-  "ca",
-  "ch",
-  "de",
-  "es",
-  "fr",
-  "in",
-  "it",
-  "mx",
-  "nl",
-  "nz",
-  "pl",
-  "ru",
-  "sg",
-  "us",
-  "za",
-] as const;
-
-export type AdzunaCountry = (typeof SUPPORTED_COUNTRIES)[number];
 
 /** Validates country code against Adzuna supported countries. Defaults to sg if invalid. */
 export function validateCountry(country: string): AdzunaCountry {

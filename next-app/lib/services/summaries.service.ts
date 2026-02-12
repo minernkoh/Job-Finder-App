@@ -13,12 +13,7 @@ import {
 } from "@schemas";
 import { connectDB } from "@/lib/db";
 import { getEnv } from "@/lib/env";
-import {
-  executeWithGeminiFallback,
-  retryWithBackoff,
-  getGeminiModel,
-  isRateLimitError,
-} from "@/lib/ai/gemini";
+import { executeWithGemini, retryWithBackoff } from "@/lib/ai/gemini";
 import { isValidObjectId } from "@/lib/objectid";
 import {
   AISummary as AISummaryModel,
@@ -96,7 +91,7 @@ ${inputText.slice(0, 30000)}`;
 
   const { object } = await retryWithBackoff(
     () =>
-      executeWithGeminiFallback((model) =>
+      executeWithGemini((model) =>
         generateObject({ model, schema: AISummarySchema, prompt }),
       ),
     { fallbackMessage: "Summary generation failed. Please try again." },
@@ -161,35 +156,19 @@ Rules:
 ${roleContext}Job description:
 ${inputText.slice(0, 30000)}`;
 
-  const model = getGeminiModel();
-  try {
-    const result = streamObject({ model, schema: AISummarySchema, prompt });
-    return {
+  return executeWithGemini((model) => {
+    const result = streamObject({
+      model,
+      schema: AISummarySchema,
+      prompt,
+    });
+    return Promise.resolve({
       partialObjectStream: result.partialObjectStream as AsyncIterable<
         Partial<AISummary>
       >,
       object: result.object as Promise<AISummary>,
-    };
-  } catch (err) {
-    if (!isRateLimitError(err)) throw err;
-    const env = getEnv();
-    const fallbackKey = env.GEMINI_API_KEY_FALLBACK?.trim();
-    if (!fallbackKey) throw err;
-    const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
-    const google = createGoogleGenerativeAI({ apiKey: fallbackKey });
-    const fallbackModel = google("gemini-2.5-flash");
-    const fallbackResult = streamObject({
-      model: fallbackModel,
-      schema: AISummarySchema,
-      prompt,
     });
-    return {
-      partialObjectStream: fallbackResult.partialObjectStream as AsyncIterable<
-        Partial<AISummary>
-      >,
-      object: fallbackResult.object as Promise<AISummary>,
-    };
-  }
+  });
 }
 
 /**
@@ -347,7 +326,11 @@ async function resolveInputText(input: {
     const res = await fetch(input.url, {
       headers: { "User-Agent": "JobFinderBot/1.0" },
     });
-    if (!res.ok) throw new Error("Could not fetch URL");
+    if (!res.ok) {
+      throw new Error(
+        "Could not fetch URL; the link may be invalid or inaccessible from the server.",
+      );
+    }
     const html = await res.text();
     const text = extractTextFromHtml(html) || "No text content found.";
     return { text };
@@ -583,10 +566,85 @@ Rules:
 
   const { object } = await retryWithBackoff(
     () =>
-      executeWithGeminiFallback((model) =>
+      executeWithGemini((model) =>
         generateObject({ model, schema: ComparisonSummarySchema, prompt }),
       ),
     { fallbackMessage: "Comparison generation failed. Please try again." },
   );
   return object as ComparisonSummary;
+}
+
+export interface ComparisonStreamResult {
+  partialObjectStream: AsyncIterable<Partial<ComparisonSummary>>;
+  object: Promise<ComparisonSummary>;
+}
+
+/** Streams a unified comparison for 2–3 listings using Gemini via streamObject. Same prompt as generateComparisonSummary; returns partial stream and final object promise. */
+export async function generateComparisonSummaryStream(
+  listingIds: string[],
+  options?: ComparisonSummaryOptions,
+): Promise<ComparisonStreamResult> {
+  if (listingIds.length < 2 || listingIds.length > 3) {
+    throw new Error("Exactly 2 or 3 listing IDs are required");
+  }
+  const listings = await Promise.all(
+    listingIds.map((id) => getListingById(id)),
+  );
+  for (let i = 0; i < listings.length; i++) {
+    if (!listings[i]) {
+      throw new Error("Listing not found");
+    }
+  }
+  const blocks = listings.map((l, i) =>
+    jobBlock(i + 1, l!.title, l!.company, l!.description ?? ""),
+  );
+  const userSkills = options?.userSkills ?? [];
+  const currentRole = options?.currentRole;
+  const yearsOfExperience = options?.yearsOfExperience;
+  const hasCandidateContext =
+    userSkills.length > 0 ||
+    (currentRole != null && currentRole.trim() !== "") ||
+    yearsOfExperience != null;
+  const candidateContext = hasCandidateContext
+    ? `
+Your context (use this to recommend which job is the better fit for you):
+- Skills: ${userSkills.length > 0 ? userSkills.join(", ") : "Not provided"}
+${currentRole != null && currentRole.trim() !== "" ? `- Current or target role: ${currentRole.trim()}` : ""}
+${yearsOfExperience != null ? `- Years of experience: ${yearsOfExperience}` : ""}
+
+Given your skills and experience, which listing is the better fit for you? Set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation based on your skills and experience.`
+    : `
+If one listing is clearly a better fit for a typical applicant, set "recommendedListingId" to that job's ID and "recommendationReason" to a short explanation.`;
+  const skillsMatchRules =
+    userSkills.length > 0
+      ? `
+- The "summary" paragraph MUST include how each listing matches the user's skills: which of their skills align with each role, how well each job fits their profile, and any gaps (e.g. "Both roles match your Python and data analysis skills; Job 1 emphasizes ML while Job 2 focuses on business analytics. Job 1 aligns better with your experience...").
+- Output "listingMatchScores" for each listing: an array of objects with listingId, matchScore (0-100), matchedSkills (skills from the user's list that the job requires or clearly values), and missingSkills (skills the job requires that the user does not have). Compare each job description to the user's skills and compute the score. Include experience-related gaps in missingSkills when the job requires more years than the user has. For each listing ID in ${JSON.stringify(listingIds)}, add exactly one entry to listingMatchScores.`
+      : "";
+  const prompt = `You are a job comparison assistant for the Singapore job market. Compare the following ${listings.length} job listings and produce a unified comparison that summarizes similarities and differences.
+
+${blocks.join("\n\n")}
+
+Rules:
+- Write a single "summary" paragraph that synthesizes the comparison: what the roles have in common and how they differ (e.g. seniority, focus, salary, location, requirements).${skillsMatchRules}
+- Provide "similarities": an array of 3–6 short points describing what is similar across these listings (e.g. all require X, all mention Y, similar industry).
+- Provide "differences": an array of 3–6 short points describing key differences (e.g. seniority level, salary range, remote vs on-site, different tech stacks).
+- Optionally list 3–6 "comparisonPoints" (additional comparison points if needed).
+- Use the job order (Job 1, Job 2, Job 3) – the IDs are: ${listingIds.join(", ")}. recommendedListingId must be one of: ${listingIds.join(", ")}.${candidateContext}
+- Address the user in second-person ("you", "your") in all text fields — never "the candidate".
+- Output must match the schema exactly.`;
+
+  return executeWithGemini((model) => {
+    const result = streamObject({
+      model,
+      schema: ComparisonSummarySchema,
+      prompt,
+    });
+    return Promise.resolve({
+      partialObjectStream: result.partialObjectStream as AsyncIterable<
+        Partial<ComparisonSummary>
+      >,
+      object: result.object as Promise<ComparisonSummary>,
+    });
+  });
 }

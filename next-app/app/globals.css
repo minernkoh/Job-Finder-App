@@ -208,7 +208,7 @@ body::-webkit-scrollbar,
   display: none;
 }
 
-/* Section label (eyebrow): single source of truth for the convention documented at top of file */
+/* Section label (eyebrow): deprecated. Use EYEBROW_CLASS and EYEBROW_MB from lib/styles.ts instead. */
 .eyebrow {
   font-size: 0.75rem;
   text-transform: uppercase;

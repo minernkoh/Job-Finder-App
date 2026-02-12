@@ -22,6 +22,7 @@ import {
   parseResumeFile,
 } from "@/lib/api/profile";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { profileKeys } from "@/lib/query-keys";
 import {
   CARD_PADDING_COMPACT,
   CONTENT_MAX_W,
@@ -30,6 +31,7 @@ import {
   PAGE_PX,
   SECTION_GAP,
 } from "@/lib/layout";
+import { EYEBROW_CLASS } from "@/lib/styles";
 import { SkillsEditor } from "@/components/skills-editor";
 import { InlineError } from "@/components/page-state";
 import { Button, Card, CardContent } from "@ui/components";
@@ -75,7 +77,7 @@ function ProfileContent() {
   };
 
   const { data: profile, isLoading: isLoadingProfile } = useQuery({
-    queryKey: ["profile"],
+    queryKey: profileKeys.all,
     queryFn: fetchProfile,
   });
   const profileSkills = useMemo(() => profile?.skills ?? [], [profile?.skills]);
@@ -119,7 +121,7 @@ function ProfileContent() {
     }) => updateProfile(payload),
     onSuccess: () => {
       setDraftYears(null);
-      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.invalidateQueries({ queryKey: profileKeys.all });
       toast.success("Profile saved");
     },
   });
@@ -140,7 +142,7 @@ function ProfileContent() {
       );
       if (data?.yearsOfExperience != null)
         setDraftYears(String(data.yearsOfExperience));
-      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.invalidateQueries({ queryKey: profileKeys.all });
       toast.success("Resume parsed");
     },
   });
@@ -252,132 +254,15 @@ function ProfileContent() {
         )}
       >
         <h1 className="sr-only">Profile</h1>
-        <div className="min-w-0 flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 md:items-stretch">
-          {/* Left column: Skills to add (when present) + Skills generator. */}
-          <div className="min-w-0 flex flex-col gap-6 md:gap-8">
-            {skillsToAdd.length > 0 && (
-              <section
-                aria-label="Skills to add"
-                className="min-w-0 flex flex-col min-h-0 gap-4 md:gap-6"
-              >
-                <h2 className="eyebrow shrink-0">Skills to add</h2>
-                <Card
-                  variant="default"
-                  className="border-border flex-1 min-h-0 flex flex-col"
-                >
-                  <CardContent
-                    className={cn(
-                      CARD_PADDING_COMPACT,
-                      "space-y-3 flex-1 min-h-0 flex flex-col",
-                    )}
-                  >
-                    <p className="text-sm text-muted-foreground">
-                      Click a skill to add it to Your skills (right column).
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {skillsToAdd.map((skill) => (
-                        <button
-                          key={skill}
-                          type="button"
-                          onClick={() => handleAddSuggestedSkill(skill)}
-                          className="rounded-full border border-border bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          {skill}
-                        </button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </section>
-            )}
-
+        {skillsToAdd.length > 0 ? (
+          /* Two-row grid so "Skills to add" and "Your skills" cards share row 1 and stay equal height. */
+          <div className="min-w-0 flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 md:grid-rows-[auto_1fr] gap-6 md:gap-8 md:items-stretch">
+            {/* Row 1 left: Skills to add (same row as Your skills for equal height). */}
             <section
-              aria-label="Skills generator"
-              className={cn(
-                "min-w-0 flex flex-col min-h-0 flex-1 gap-4 md:gap-6",
-              )}
+              aria-label="Skills to add"
+              className="min-w-0 flex flex-col min-h-0 gap-4 md:gap-6"
             >
-              <h2 className="eyebrow shrink-0">Skills generator</h2>
-              <div className="min-h-0 flex-1 min-w-0 flex flex-col">
-                <SkillsEditor
-                  hideYourSkillsBlock
-                  hideSuggestedSkillsPills
-                  idPrefix="profile"
-                  introText="Generate skill suggestions from current role"
-                  yearsValue={yearsDisplayValue}
-                  onYearsChange={setDraftYears}
-                  yearsLabel="Years of experience"
-                  showRoleBlock
-                  roleValue={currentRole}
-                  onRoleChange={setCurrentRole}
-                  onSuggest={() =>
-                    currentRole.trim() &&
-                    suggestMutation.mutate(currentRole.trim())
-                  }
-                  suggestPending={suggestMutation.isPending}
-                  suggestedSkills={suggestedSkills}
-                  onAddSuggestedSkill={handleAddSuggestedSkill}
-                  customSkill={customSkill}
-                  onCustomSkillChange={setCustomSkill}
-                  onAddCustom={handleAddCustom}
-                  showResumeBlock
-                  resumeProps={{
-                    selectedFile,
-                    setSelectedFile,
-                    setFileError,
-                    dragOver,
-                    setDragOver,
-                    fileError,
-                    resumeText,
-                    setResumeText,
-                    onParse: handleParseSubmit,
-                    parsePending: parseMutation.isPending,
-                    parseError: parseMutation.isError
-                      ? parseMutation.error instanceof Error
-                        ? parseMutation.error.message
-                        : "Failed to parse resume"
-                      : null,
-                    onFileChange: handleFileChange,
-                    onDrop: handleDrop,
-                  }}
-                  skills={skills}
-                  onRemoveSkill={removeFromMySkills}
-                  onRemoveAllSkills={removeAllSkills}
-                  emptySkillsMessage="No skills yet. Add your skills or generate them using your current role and/or resume on the left."
-                  showSaveBlock={!isLoadingProfile}
-                  onSave={handleSaveProfile}
-                  savePending={updateMutation.isPending}
-                  saveError={
-                    updateMutation.isError
-                      ? updateMutation.error instanceof Error
-                        ? updateMutation.error.message
-                        : "Failed to save profile"
-                      : null
-                  }
-                  saveButtonLabel="Save profile"
-                  resumeAssessment={lastParseAssessment}
-                  resumeSuggestedSkills={lastParseSuggestedSkills.filter(
-                    (s) =>
-                      !skills.some(
-                        (sk) => sk.toLowerCase() === s.toLowerCase(),
-                      ),
-                  )}
-                  onAddResumeSuggestedSkill={addToMySkills}
-                />
-              </div>
-            </section>
-          </div>
-
-          {/* Right column: Your skills + Saved listings. */}
-          <div className="min-w-0 flex flex-col gap-6 md:gap-8">
-            <section
-              aria-label="Your skills"
-              className={cn(
-                "min-w-0 flex flex-col min-h-0 gap-4 md:gap-6",
-                "md:min-h-0",
-              )}
-            >
-              <h2 className="eyebrow shrink-0">Your skills</h2>
+              <h2 className={cn(EYEBROW_CLASS, "shrink-0")}>Skills to add</h2>
               <Card
                 variant="default"
                 className="border-border flex-1 min-h-0 flex flex-col"
@@ -385,7 +270,42 @@ function ProfileContent() {
                 <CardContent
                   className={cn(
                     CARD_PADDING_COMPACT,
-                    "space-y-3 flex-1 min-h-0 flex flex-col",
+                    "space-y-3 flex-1 min-h-0 flex flex-col overflow-y-auto",
+                  )}
+                >
+                  <p className="text-sm text-muted-foreground">
+                    Click a skill to add it to Your skills (right column).
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {skillsToAdd.map((skill) => (
+                      <button
+                        key={skill}
+                        type="button"
+                        onClick={() => handleAddSuggestedSkill(skill)}
+                        className="rounded-full border border-border bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {skill}
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+
+            {/* Row 1 right: Your skills. */}
+            <section
+              aria-label="Your skills"
+              className="min-w-0 flex flex-col min-h-0 gap-4 md:gap-6"
+            >
+              <h2 className={cn(EYEBROW_CLASS, "shrink-0")}>Your skills</h2>
+              <Card
+                variant="default"
+                className="border-border flex-1 min-h-0 flex flex-col"
+              >
+                <CardContent
+                  className={cn(
+                    CARD_PADDING_COMPACT,
+                    "space-y-3 flex-1 min-h-0 flex flex-col overflow-y-auto",
                   )}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -461,13 +381,90 @@ function ProfileContent() {
               </Card>
             </section>
 
+            {/* Row 2 left: Skills generator. */}
+            <section
+              aria-label="Skills generator"
+              className="min-w-0 flex flex-col min-h-0 gap-4 md:gap-6"
+            >
+              <h2 className={cn(EYEBROW_CLASS, "shrink-0")}>Skills generator</h2>
+              <div className="min-h-0 flex-1 min-w-0 flex flex-col">
+                <SkillsEditor
+                  hideYourSkillsBlock
+                  hideSuggestedSkillsPills
+                  idPrefix="profile"
+                  introText="Generate skill suggestions from current role"
+                  yearsValue={yearsDisplayValue}
+                  onYearsChange={setDraftYears}
+                  yearsLabel="Years of experience"
+                  showRoleBlock
+                  roleValue={currentRole}
+                  onRoleChange={setCurrentRole}
+                  onSuggest={() =>
+                    currentRole.trim() &&
+                    suggestMutation.mutate(currentRole.trim())
+                  }
+                  suggestPending={suggestMutation.isPending}
+                  suggestedSkills={suggestedSkills}
+                  onAddSuggestedSkill={handleAddSuggestedSkill}
+                  customSkill={customSkill}
+                  onCustomSkillChange={setCustomSkill}
+                  onAddCustom={handleAddCustom}
+                  showResumeBlock
+                  resumeProps={{
+                    selectedFile,
+                    setSelectedFile,
+                    setFileError,
+                    dragOver,
+                    setDragOver,
+                    fileError,
+                    resumeText,
+                    setResumeText,
+                    onParse: handleParseSubmit,
+                    parsePending: parseMutation.isPending,
+                    parseError: parseMutation.isError
+                      ? parseMutation.error instanceof Error
+                        ? parseMutation.error.message
+                        : "Failed to parse resume"
+                      : null,
+                    onFileChange: handleFileChange,
+                    onDrop: handleDrop,
+                  }}
+                  skills={skills}
+                  onRemoveSkill={removeFromMySkills}
+                  onRemoveAllSkills={removeAllSkills}
+                  emptySkillsMessage="No skills yet. Add your skills or generate them using your current role and/or resume on the left."
+                  showSaveBlock={!isLoadingProfile}
+                  onSave={handleSaveProfile}
+                  savePending={updateMutation.isPending}
+                  saveError={
+                    updateMutation.isError
+                      ? updateMutation.error instanceof Error
+                        ? updateMutation.error.message
+                        : "Failed to save profile"
+                      : null
+                  }
+                  saveButtonLabel="Save profile"
+                  resumeAssessment={lastParseAssessment}
+                  resumeSuggestedSkills={lastParseSuggestedSkills.filter(
+                    (s) =>
+                      !skills.some(
+                        (sk) => sk.toLowerCase() === s.toLowerCase(),
+                      ),
+                  )}
+                  onAddResumeSuggestedSkill={addToMySkills}
+                />
+              </div>
+            </section>
+
+            {/* Row 2 right: Saved listings. */}
             <section
               aria-label="Saved listings"
               className={cn(
-                "min-w-0 flex flex-col min-h-0 flex-1 gap-4 md:gap-6",
+                "min-w-0 flex flex-col min-h-0 gap-4 md:gap-6",
+                "md:min-h-0",
               )}
             >
-              <h2 className="eyebrow shrink-0">Saved listings</h2>
+              <h2 className={cn(EYEBROW_CLASS, "shrink-0")}>Saved listings</h2>
               {isLoadingSaved && (
                 <Card
                   variant="default"
@@ -557,7 +554,273 @@ function ProfileContent() {
               )}
             </section>
           </div>
-        </div>
+        ) : (
+          /* No skills to add: keep two-column flex layout. */
+          <div className="min-w-0 flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 md:items-stretch">
+            <div className="min-w-0 flex flex-col gap-6 md:gap-8">
+              <section
+                aria-label="Skills generator"
+                className={cn(
+                  "min-w-0 flex flex-col min-h-0 flex-1 gap-4 md:gap-6",
+                )}
+              >
+                <h2 className={cn(EYEBROW_CLASS, "shrink-0")}>Skills generator</h2>
+                <div className="min-h-0 flex-1 min-w-0 flex flex-col">
+                  <SkillsEditor
+                    hideYourSkillsBlock
+                    hideSuggestedSkillsPills
+                    idPrefix="profile"
+                    introText="Generate skill suggestions from current role"
+                    yearsValue={yearsDisplayValue}
+                    onYearsChange={setDraftYears}
+                    yearsLabel="Years of experience"
+                    showRoleBlock
+                    roleValue={currentRole}
+                    onRoleChange={setCurrentRole}
+                    onSuggest={() =>
+                      currentRole.trim() &&
+                      suggestMutation.mutate(currentRole.trim())
+                    }
+                    suggestPending={suggestMutation.isPending}
+                    suggestedSkills={suggestedSkills}
+                    onAddSuggestedSkill={handleAddSuggestedSkill}
+                    customSkill={customSkill}
+                    onCustomSkillChange={setCustomSkill}
+                    onAddCustom={handleAddCustom}
+                    showResumeBlock
+                    resumeProps={{
+                      selectedFile,
+                      setSelectedFile,
+                      setFileError,
+                      dragOver,
+                      setDragOver,
+                      fileError,
+                      resumeText,
+                      setResumeText,
+                      onParse: handleParseSubmit,
+                      parsePending: parseMutation.isPending,
+                      parseError: parseMutation.isError
+                        ? parseMutation.error instanceof Error
+                          ? parseMutation.error.message
+                          : "Failed to parse resume"
+                        : null,
+                    onFileChange: handleFileChange,
+                    onDrop: handleDrop,
+                  }}
+                    skills={skills}
+                    onRemoveSkill={removeFromMySkills}
+                    onRemoveAllSkills={removeAllSkills}
+                    emptySkillsMessage="No skills yet. Add your skills or generate them using your current role and/or resume on the left."
+                    showSaveBlock={!isLoadingProfile}
+                    onSave={handleSaveProfile}
+                    savePending={updateMutation.isPending}
+                    saveError={
+                      updateMutation.isError
+                        ? updateMutation.error instanceof Error
+                          ? updateMutation.error.message
+                          : "Failed to save profile"
+                        : null
+                    }
+                    saveButtonLabel="Save profile"
+                    resumeAssessment={lastParseAssessment}
+                    resumeSuggestedSkills={lastParseSuggestedSkills.filter(
+                      (s) =>
+                        !skills.some(
+                          (sk) => sk.toLowerCase() === s.toLowerCase(),
+                        ),
+                    )}
+                    onAddResumeSuggestedSkill={addToMySkills}
+                  />
+                </div>
+              </section>
+            </div>
+
+            <div className="min-w-0 flex flex-col gap-6 md:gap-8">
+              <section
+                aria-label="Your skills"
+                className={cn(
+                  "min-w-0 flex flex-col min-h-0 gap-4 md:gap-6",
+                  "md:min-h-0",
+                )}
+              >
+                <h2 className={cn(EYEBROW_CLASS, "shrink-0")}>Your skills</h2>
+                <Card
+                  variant="default"
+                  className="border-border flex-1 min-h-0 flex flex-col"
+                >
+                <CardContent
+                  className={cn(
+                    CARD_PADDING_COMPACT,
+                    "space-y-3 flex-1 min-h-0 flex flex-col",
+                  )}
+                >
+                  {skills.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No skills yet. Add your skills or generate them using your
+                      current role and/or resume on the left.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {skills.map((skill, index) => (
+                        <span
+                          key={`${skill}-${index}`}
+                          className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm bg-muted border border-border text-foreground"
+                        >
+                          {skill}
+                          <button
+                            type="button"
+                            onClick={() => removeFromMySkills(index)}
+                            className="rounded-full p-0.5 hover:bg-muted-foreground/20"
+                            aria-label={`Remove ${skill}`}
+                          >
+                            <XIcon className="size-3.5" aria-hidden />
+                          </button>
+                        </span>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="text-muted-foreground hover:text-destructive h-auto py-1 shrink-0"
+                        onClick={removeAllSkills}
+                        aria-label="Remove all skills"
+                      >
+                        <TrashIcon className="mr-1 size-3.5" aria-hidden />
+                        Remove all
+                      </Button>
+                    </div>
+                  )}
+                  {!isLoadingProfile && (
+                    <>
+                      <div className="flex justify-center">
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="sm"
+                          disabled={
+                            skills.length === 0 || updateMutation.isPending
+                          }
+                          onClick={handleSaveProfile}
+                          aria-label="Save profile"
+                        >
+                          {updateMutation.isPending
+                            ? "Saving…"
+                            : "Save profile"}
+                        </Button>
+                      </div>
+                      {updateMutation.isError && (
+                        <InlineError
+                          message={
+                            updateMutation.error instanceof Error
+                              ? updateMutation.error.message
+                              : "Failed to save profile"
+                          }
+                        />
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+
+            <section
+              aria-label="Saved listings"
+              className={cn(
+                "min-w-0 flex flex-col min-h-0 flex-1 gap-4 md:gap-6",
+              )}
+            >
+              <h2 className={cn(EYEBROW_CLASS, "shrink-0")}>Saved listings</h2>
+              {isLoadingSaved && (
+                <Card
+                  variant="default"
+                  className="border-border flex-1 min-h-0 flex flex-col overflow-hidden"
+                >
+                  <CardContent
+                    className={cn(
+                      CARD_PADDING_COMPACT,
+                      "flex-1 min-h-0 overflow-y-auto",
+                    )}
+                  >
+                    <div className="flex flex-col gap-4">
+                      {[...Array(4)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-32 animate-pulse rounded-xl bg-muted"
+                        />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!isLoadingSaved && savedListings.length === 0 && (
+                <Card
+                  variant="default"
+                  className="border-border flex-1 min-h-0 flex flex-col overflow-hidden"
+                >
+                  <CardContent
+                    className={cn(
+                      EMPTY_STATE_PADDING,
+                      "flex flex-col flex-1 min-h-0 justify-start items-center gap-4 overflow-y-auto",
+                    )}
+                  >
+                    <p className="text-muted-foreground text-center mb-0">
+                      You haven&apos;t saved any listings yet. Browse jobs to
+                      save your favorites.
+                    </p>
+                    <Button
+                      asChild
+                      variant="default"
+                      size="sm"
+                      className="w-fit"
+                    >
+                      <Link href="/browse">Browse jobs</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!isLoadingSaved && savedListings.length > 0 && (
+                <Card
+                  variant="default"
+                  className="border-border flex-1 min-h-0 flex flex-col overflow-hidden"
+                >
+                  <CardContent
+                    className={cn(
+                      CARD_PADDING_COMPACT,
+                      "overflow-y-auto min-h-0 flex-1",
+                    )}
+                  >
+                    <div className="flex flex-col gap-4">
+                      {savedListings.map((s) => {
+                        const listing = savedListingToListingResult(s);
+                        return (
+                          <ListingCard
+                            key={s.id}
+                            listing={listing}
+                            href={`/browse?job=${listing.id}`}
+                            isSaved
+                            onUnsave={() => unsaveMutation.mutate(s.listingId)}
+                            onView={() => {}}
+                            onAddToCompare={() =>
+                              addToCompare({
+                                id: listing.id,
+                                title: listing.title,
+                              })
+                            }
+                            isInCompareSet={isInCompareSet(listing.id)}
+                            compareSetSize={compareSet.length}
+                          />
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </section>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

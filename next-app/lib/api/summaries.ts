@@ -2,49 +2,62 @@
  * API helpers for summaries: create (POST), stream (POST), get by id, and compare (POST). Used by job detail, summarize, and compare pages.
  */
 
-import type {
-  AISummary,
-  ComparisonSummary,
-  CreateSummaryBody,
-} from "@schemas";
-import { apiClient, getCurrentAccessToken } from "./client";
-import { assertApiSuccess, getErrorMessage } from "./errors";
+import type { AISummary, ComparisonSummary, CreateSummaryBody } from "@schemas";
+import { apiClient, buildAuthHeaders } from "./client";
+import { consumeNdjsonStream, createAuthenticatedStream } from "./stream";
 import type { ApiResponse } from "./types";
 
 export type SummaryWithId = AISummary & { id: string };
 
 export type { CreateSummaryBody };
 
-/** Creates or returns cached AI summary. Body: { listingId } or { text } or { url }. */
-export async function createSummary(
-  body: CreateSummaryBody,
-): Promise<SummaryWithId> {
-  try {
-    const res = await apiClient.post<ApiResponse<SummaryWithId>>(
-      "/api/v1/summaries",
-      body,
-    );
-    assertApiSuccess(res.data, "Failed to create summary");
-    return res.data.data;
-  } catch (err: unknown) {
-    throw new Error(getErrorMessage(err, "Failed to create summary"));
-  }
-}
-
-/** Generates unified comparison summary for 2–3 listing IDs. Requires auth. */
+/**
+ * Calls the non-streaming comparison endpoint. Used as fallback when streaming fails. Uses apiClient for 401 retry.
+ */
 export async function createComparisonSummary(
   listingIds: string[],
 ): Promise<ComparisonSummary> {
-  try {
-    const res = await apiClient.post<ApiResponse<ComparisonSummary>>(
-      "/api/v1/summaries/compare",
-      { listingIds },
-    );
-    assertApiSuccess(res.data, "Failed to create comparison");
-    return res.data.data;
-  } catch (err: unknown) {
-    throw new Error(getErrorMessage(err, "Failed to create comparison"));
+  const res = await apiClient.post<ApiResponse<ComparisonSummary>>(
+    "/api/v1/summaries/compare",
+    { listingIds },
+  );
+  const json = res.data;
+  if (!json.success || !json.data) {
+    throw new Error(json.message ?? "Failed to load comparison");
   }
+  return json.data;
+}
+
+/**
+ * Calls the streaming comparison endpoint. Returns a reader for the NDJSON stream (no cache; always streams).
+ */
+export async function createComparisonSummaryStream(
+  listingIds: string[],
+): Promise<{
+  reader: ReadableStreamDefaultReader<Uint8Array>;
+}> {
+  return createAuthenticatedStream("/api/v1/summaries/compare/stream", {
+    listingIds,
+  });
+}
+
+/**
+ * Reads the comparison NDJSON stream and calls `onPartial` for each partial object.
+ * Returns the final ComparisonSummary from the `_complete` line; throws on `_error`.
+ */
+export async function consumeComparisonStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  onPartial: (partial: Partial<ComparisonSummary>) => void,
+): Promise<ComparisonSummary> {
+  return consumeNdjsonStream<ComparisonSummary>(
+    reader,
+    onPartial,
+    (parsed) => {
+      const { _complete: _c, ...rest } = parsed;
+      return rest as ComparisonSummary;
+    },
+    "Stream ended without a complete comparison",
+  );
 }
 
 /** Result from the streaming summary endpoint: either a cache hit (immediate) or a stream of partials. */
@@ -53,21 +66,31 @@ export type StreamSummaryResult =
   | { stream: true; reader: ReadableStreamDefaultReader<Uint8Array> };
 
 /**
+ * Fetches an existing cached AI summary for a listing (read-only). Returns null when none exists or the request fails (e.g. 404/401).
+ */
+export async function getSummaryForListing(
+  listingId: string,
+): Promise<SummaryWithId | null> {
+  const res = await fetch(
+    `/api/v1/summaries?listingId=${encodeURIComponent(listingId)}`,
+    { headers: buildAuthHeaders(), credentials: "include" },
+  );
+  if (!res.ok) return null;
+  const json = (await res.json()) as ApiResponse<SummaryWithId>;
+  if (!json.success || !json.data) return null;
+  return json.data;
+}
+
+/**
  * Calls the streaming summary endpoint. Returns either a cache-hit result (stream: false)
  * or a ReadableStream reader (stream: true) that emits NDJSON partial objects.
  */
 export async function createSummaryStream(
   body: CreateSummaryBody,
 ): Promise<StreamSummaryResult> {
-  const token = getCurrentAccessToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
   const res = await fetch("/api/v1/summaries/stream", {
     method: "POST",
-    headers,
+    headers: buildAuthHeaders(),
     credentials: "include",
     body: JSON.stringify(body),
   });
@@ -77,7 +100,9 @@ export async function createSummaryStream(
     const message =
       (errBody as { message?: string } | null)?.message ??
       `Request failed (${res.status})`;
-    throw new Error(message);
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
 
   const contentType = res.headers.get("Content-Type") ?? "";
@@ -104,42 +129,10 @@ export async function consumeSummaryStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onPartial: (partial: Partial<SummaryWithId>) => void,
 ): Promise<SummaryWithId> {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let finalSummary: SummaryWithId | null = null;
-
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: true });
-
-    /* Process complete lines. */
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-
-      if (parsed._error) {
-        throw new Error(String(parsed.message ?? "Stream generation failed"));
-      }
-
-      if (parsed._complete) {
-        finalSummary = parsed as unknown as SummaryWithId;
-        onPartial(finalSummary);
-        continue;
-      }
-
-      onPartial(parsed as Partial<SummaryWithId>);
-    }
-
-    if (done) break;
-  }
-
-  if (!finalSummary) {
-    throw new Error("Stream ended without a complete summary");
-  }
-  return finalSummary;
+  return consumeNdjsonStream<SummaryWithId>(
+    reader,
+    onPartial,
+    (parsed) => parsed as unknown as SummaryWithId,
+    "Stream ended without a complete summary",
+  );
 }

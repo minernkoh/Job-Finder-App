@@ -5,6 +5,7 @@
 "use client";
 
 import { Button } from "@ui/components";
+import { GAP_MD } from "@/lib/layout";
 
 interface PageLoadingProps {
   /** Message to show (default "Loading…"). */
@@ -78,7 +79,7 @@ export function PageError({
 }: PageErrorProps) {
   return (
     <div
-      className={`flex flex-col items-center justify-center gap-4 p-4 ${fullScreen ? "min-h-screen" : "min-h-[40vh]"}`}
+      className={`flex flex-col items-center justify-center ${GAP_MD} p-4 ${fullScreen ? "min-h-screen" : "min-h-[40vh]"}`}
     >
       <p className="text-destructive text-sm" role="alert">
         {message}

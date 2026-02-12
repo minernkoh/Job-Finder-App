@@ -22,7 +22,7 @@ import {
   Label,
   Select,
 } from "@ui/components";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useState,
   useCallback,
@@ -58,8 +58,11 @@ import {
   SECTION_GAP,
 } from "@/lib/layout";
 import { listingsKeys, trendingKeys, recommendedKeys } from "@/lib/query-keys";
+import { isRateLimitMessage } from "@/lib/api/errors";
+import { toast } from "sonner";
 import { cn } from "@ui/components/lib/utils";
 import { SORT_BY_OPTIONS } from "@/lib/constants/listings";
+import { ProtectedRoute } from "@/components/protected-route";
 
 /** Suggested job roles for the search dropdown; filtered by what the user types. */
 const SUGGESTED_ROLES: string[] = [
@@ -87,6 +90,7 @@ function BrowseContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
   const { compareSet, addToCompare, isInCompareSet } = useCompare();
   const selectedJobId = searchParams?.get("job") ?? null;
 
@@ -150,6 +154,7 @@ function BrowseContent() {
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
+  const lastRateLimitToastRef = useRef<string | null>(null);
 
   const filters: ListingsFilters = useMemo(() => {
     const f: ListingsFilters = {};
@@ -259,6 +264,21 @@ function BrowseContent() {
       ),
     enabled: hasSearched,
   });
+
+  useEffect(() => {
+    if (!isError || !error) {
+      lastRateLimitToastRef.current = null;
+      return;
+    }
+    const message =
+      error instanceof Error ? error.message : "Failed to load listings";
+    if (isRateLimitMessage(message) && lastRateLimitToastRef.current !== message) {
+      lastRateLimitToastRef.current = message;
+      toast.error(
+        "Job search is temporarily unavailable due to rate limits. Please try again in a few minutes.",
+      );
+    }
+  }, [isError, error]);
 
   const { savedIds, saveMutation, unsaveMutation } = useSavedListings();
 
@@ -370,7 +390,7 @@ function BrowseContent() {
 
       {/* Search bar: full-width row below nav; search UI centered. */}
       <section
-        className="w-full pt-6 sm:pt-8 pb-4"
+        className="w-full pt-6 sm:pt-8 pb-4 mt-4 sm:mt-6"
         aria-label="Perform a job search"
         ref={searchDropdownRef}
       >
@@ -450,7 +470,7 @@ function BrowseContent() {
       <main
         id="main-content"
         className={cn(
-          "mx-auto flex-1 w-full pt-2 pb-8",
+          "mx-auto flex-1 w-full pt-4 sm:pt-6 pb-8",
           PAGE_PX,
           showSplitLayout
             ? "flex flex-col md:flex-row gap-0 min-h-0 overflow-hidden w-full max-w-full"
@@ -797,7 +817,13 @@ function BrowseContent() {
                             href={buildJobHref(listing.id)}
                             isSaved={savedIds.has(listing.id)}
                             isSelected={listing.id === selectedJobId}
-                            onView={() => recordListingView(listing.id)}
+                            onView={() =>
+                              recordListingView(listing.id).then(() =>
+                                queryClient.invalidateQueries({
+                                  queryKey: trendingKeys.all,
+                                }),
+                              )
+                            }
                             onSave={
                               user
                                 ? () => saveMutation.mutate(listing)
@@ -873,11 +899,13 @@ function BrowseContent() {
   );
 }
 
-/** Browse jobs page: browse listings without login; Log in for save and AI summaries. */
+/** Browse jobs page: browse listings without login; Log in for save and AI summaries. Admins are redirected to /admin. */
 export default function BrowsePage() {
   return (
     <Suspense fallback={null}>
-      <BrowseContent />
+      <ProtectedRoute blockAdmins requireAuth={false}>
+        <BrowseContent />
+      </ProtectedRoute>
     </Suspense>
   );
 }

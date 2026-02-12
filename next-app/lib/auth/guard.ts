@@ -1,5 +1,6 @@
 /**
  * Admin guard: requires authenticated user with admin role. Uses request.requireAuth and returns consistent error shape.
+ * Also provides requireOwnOrAdmin for user-by-id routes (own profile or admin).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -19,4 +20,20 @@ export async function requireAdmin(
     );
   }
   return { payload: result };
+}
+
+/** Returns 403 NextResponse if payload is not the resource owner and not admin; otherwise returns null (allowed). */
+export function requireOwnOrAdmin(
+  payload: { sub: string; role: string },
+  resourceUserId: string
+): NextResponse | null {
+  const isOwn = payload.sub === resourceUserId;
+  const isAdmin = payload.role === "admin";
+  if (!isOwn && !isAdmin) {
+    return NextResponse.json(
+      { success: false, message: "Forbidden" },
+      { status: 403 }
+    );
+  }
+  return null;
 }

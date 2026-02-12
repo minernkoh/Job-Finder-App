@@ -1,10 +1,12 @@
 /**
- * Shared auth card layout: same outer wrapper, card, title, and optional footer for login, register, and admin pages so they look consistent.
+ * Auth surface variant: full-page card. Shared auth card layout for login, register, and admin pages.
+ * Same tokens as AuthModal (authCloseButtonClass, authModalNarrowWidthClass, CARD_PADDING_AUTH).
  */
 
 import { XIcon } from "@phosphor-icons/react";
 import { Card, CardContent } from "@ui/components";
-import { CARD_PADDING_AUTH } from "@/lib/layout";
+import { CARD_PADDING_AUTH, GAP_LG } from "@/lib/layout";
+import { EYEBROW_CLASS } from "@/lib/styles";
 
 /** Same close button style as auth modal for consistency. */
 export const authCloseButtonClass =
@@ -54,10 +56,10 @@ export function AuthCard({
             </button>
           </div>
         )}
-        <CardContent className={`min-h-[22rem] space-y-6 ${CARD_PADDING_AUTH}`}>
+        <CardContent className={`min-h-[22rem] ${GAP_LG} ${CARD_PADDING_AUTH}`}>
           {!hideTitle && (
             <div className="space-y-1 text-center">
-              {eyebrow != null && <p className="eyebrow">{eyebrow}</p>}
+              {eyebrow != null && <p className={EYEBROW_CLASS}>{eyebrow}</p>}
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                 {title}
               </h1>

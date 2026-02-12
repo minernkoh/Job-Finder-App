@@ -27,6 +27,16 @@ export function getCurrentAccessToken(): string | null {
   return getAccessToken?.() ?? null;
 }
 
+/** Builds headers for authenticated fetch (e.g. streaming). Content-Type plus Bearer token when available. */
+export function buildAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const token = getCurrentAccessToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
+
 apiClient.interceptors.request.use((config) => {
   const token = getAccessToken?.() ?? null;
   if (token) {
@@ -55,6 +65,31 @@ export function setOnRefreshSuccess(callback: (newToken: string) => void) {
 /** Single in-flight refresh promise so concurrent 401s share one refresh call. */
 let refreshPromise: Promise<string | null> | null = null;
 
+/** Attempts to refresh the access token via the refresh endpoint. Returns new token or null. Used by fetch-based helpers (e.g. streaming) for 401 retry. Deduplicates concurrent refresh calls. */
+export async function refreshAccessToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const res = await fetch("/api/v1/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!res.ok) return null;
+        const json = (await res.json()) as { accessToken?: string };
+        const token = json?.accessToken ?? null;
+        if (token) onRefreshSuccess?.(token);
+        return token;
+      } catch {
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+  return refreshPromise;
+}
+
 apiClient.interceptors.response.use(
   (res) => res,
   async (err: AxiosError) => {
@@ -71,23 +106,8 @@ apiClient.interceptors.response.use(
       return Promise.reject(err);
     }
     try {
-      if (!refreshPromise) {
-        refreshPromise = (async () => {
-          try {
-            const refreshRes = await axios.post(
-              `${baseURL}/api/v1/auth/refresh`,
-              {},
-              { withCredentials: true },
-            );
-            return (refreshRes.data?.accessToken as string) ?? null;
-          } finally {
-            refreshPromise = null;
-          }
-        })();
-      }
-      const newToken = await refreshPromise;
+      const newToken = await refreshAccessToken();
       if (newToken) {
-        onRefreshSuccess?.(newToken);
         (originalRequest as { _retry?: boolean })._retry = true;
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(originalRequest);

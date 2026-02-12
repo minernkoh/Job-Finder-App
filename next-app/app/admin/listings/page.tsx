@@ -5,9 +5,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PlusIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react";
+import { EyeIcon, PlusIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react";
 import { apiClient } from "@/lib/api/client";
 import {
   createListingApi,
@@ -352,6 +353,17 @@ export default function AdminListingsPage() {
                     </td>
                     <td className={adminTableBodyCellActionsClass}>
                       <div className="flex items-center justify-end gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-muted-foreground"
+                              asChild
+                              title="View"
+                            >
+                              <Link href={`/admin/listings/${l.id}`}>
+                                <EyeIcon className="size-4" weight="regular" />
+                              </Link>
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"

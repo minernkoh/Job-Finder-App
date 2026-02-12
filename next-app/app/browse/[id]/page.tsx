@@ -41,7 +41,7 @@ function BrowseJobPageContent() {
         <main
           id="main-content"
           className={cn(
-            "mx-auto flex-1 w-full pb-8",
+            "mx-auto flex-1 w-full pt-6 sm:pt-8 pb-8",
             CONTENT_MAX_W,
             SECTION_GAP,
             PAGE_PX,
@@ -64,7 +64,7 @@ function BrowseJobPageContent() {
       <main
         id="main-content"
         className={cn(
-          "mx-auto flex-1 w-full pb-8",
+          "mx-auto flex-1 w-full pt-6 sm:pt-8 pb-8",
           CONTENT_MAX_W,
           SECTION_GAP,
           PAGE_PX,
