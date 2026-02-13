@@ -18,7 +18,7 @@ Admins manage users, listings, and summaries from a dedicated dashboard.
 
 - [Tech Stack](#-tech-stack)
 - [Monorepo Layout](#-monorepo-layout)
-- [React Component Tree](#-high-level-react-component-tree)
+- [React Component Tree](#-react-component-tree)
 - [API Routes](#-api-routes)
 - [Database Schemas](#-database-schemas)
   - [User](#-user)
@@ -296,21 +296,21 @@ Indexes: `listingId` + `viewedAt`; `viewedAt`.
 
 All keys are configured in `next-app/.env.local` (copy from `next-app/.env.example`). Server-side variables are validated at startup in `next-app/lib/env.ts`.
 
-| Variable                         | Required | Default  | Description                                                                                                                                                                                                           |
-| -------------------------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MONGODB_URI**                  | Yes      | —        | MongoDB connection string (e.g. `mongodb://localhost:27017/jobfinder` or Atlas). Used for auth, listings, search cache, AI summaries.                                                                                 |
-| **JWT_SECRET**                   | Yes      | —        | Secret for signing access tokens; min 32 characters (e.g. `openssl rand -base64 32`).                                                                                                                                 |
-| **JWT_REFRESH_SECRET**           | Yes      | —        | Secret for signing refresh tokens; min 32 characters (use a different value than `JWT_SECRET`).                                                                                                                       |
-| **ADZUNA_APP_ID**                | No       | —        | Adzuna API app ID; required for job search and listing data. [Get credentials](https://developer.adzuna.com/signup).                                                                                                  |
-| **ADZUNA_APP_KEY**               | No       | —        | Adzuna API app key; required for job search and listing data.                                                                                                                                                         |
-| **GEMINI_API_KEY**               | No       | —        | Gemini API key for AI summaries, resume parsing, skill suggestions. Without it, summary endpoints return 503. [Get key](https://ai.google.dev/) or [makersuite.google.com](https://makersuite.google.com/app/apikey). |
-| **JWT_ACCESS_TOKEN_EXPIRES_IN**  | No       | `15m`    | Access token lifetime (e.g. `15m`, `1h`).                                                                                                                                                                             |
-| **JWT_REFRESH_TOKEN_EXPIRES_IN** | No       | `7d`     | Refresh token lifetime (e.g. `7d`).                                                                                                                                                                                   |
-| **JOB_SEARCH_CACHE_TTL**         | No       | `604800` | Job search (Adzuna) cache TTL in **seconds** (default 7 days).                                                                                                                                                        |
-| **AI_SUMMARY_CACHE_TTL**         | No       | `604800` | AI summary cache TTL in **seconds** (default 7 days) per `inputTextHash`.                                                                                                                                             |
-| **ADMIN_REGISTER_SECRET**        | No       | —        | If set, allows creating an admin via `POST /api/v1/auth/admin/register`; if unset, that endpoint returns 403.                                                                                                         |
-| **NEXT_PUBLIC_API_URL**          | No       | —        | Backend API base URL (e.g. `http://localhost:3000/api/v1`). Used by the client; same-origin if omitted.                                                                                                               |
-| **NODE_ENV**                     | No       | —        | Node environment (`development` / `production`); used by Next.js and cookie `secure` flag. Not validated in `env.ts`.                                                                                                 |
+| Variable                         | Required | Default  | Description                                                                                                                                                        |
+| -------------------------------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MONGODB_URI**                  | Yes      | —        | MongoDB connection string (e.g. `mongodb://localhost:27017/jobfinder` or Atlas). Used for auth, listings, search cache, AI summaries.                              |
+| **JWT_SECRET**                   | Yes      | —        | Secret for signing access tokens; min 32 characters (e.g. `openssl rand -base64 32`).                                                                              |
+| **JWT_REFRESH_SECRET**           | Yes      | —        | Secret for signing refresh tokens; min 32 characters (use a different value than `JWT_SECRET`).                                                                    |
+| **ADZUNA_APP_ID**                | No       | —        | Adzuna API app ID; required for job search and listing data. [Get credentials](https://developer.adzuna.com/signup).                                               |
+| **ADZUNA_APP_KEY**               | No       | —        | Adzuna API app key; required for job search and listing data.                                                                                                      |
+| **GEMINI_API_KEY**               | No       | —        | Gemini API key for AI summaries, resume parsing, skill suggestions. Without it, summary endpoints return 503. [Get key](https://aistudio.google.com/app/api-keys). |
+| **JWT_ACCESS_TOKEN_EXPIRES_IN**  | No       | `15m`    | Access token lifetime (e.g. `15m`, `1h`).                                                                                                                          |
+| **JWT_REFRESH_TOKEN_EXPIRES_IN** | No       | `7d`     | Refresh token lifetime (e.g. `7d`).                                                                                                                                |
+| **JOB_SEARCH_CACHE_TTL**         | No       | `604800` | Job search (Adzuna) cache TTL in **seconds** (default 7 days).                                                                                                     |
+| **AI_SUMMARY_CACHE_TTL**         | No       | `604800` | AI summary cache TTL in **seconds** (default 7 days) per `inputTextHash`.                                                                                          |
+| **ADMIN_REGISTER_SECRET**        | No       | —        | If set, allows creating an admin via `POST /api/v1/auth/admin/register`; if unset, that endpoint returns 403.                                                      |
+| **NEXT_PUBLIC_API_URL**          | No       | —        | Backend API base URL (e.g. `http://localhost:3000/api/v1`). Used by the client; same-origin if omitted.                                                            |
+| **NODE_ENV**                     | No       | —        | Node environment (`development` / `production`); used by Next.js and cookie `secure` flag. Not validated in `env.ts`.                                              |
 
 ## ⏱️ Cache Duration
 
