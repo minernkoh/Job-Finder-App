@@ -1,5 +1,7 @@
 # 💼 Job Finder App
 
+![App Screenshot](image/app-screenshot.png)
+
 AI-assisted job search built with Next.js. Browse listings from the Adzuna API, save jobs,
 compare up to 3 roles side by side, and generate AI summaries powered by Gemini.
 Admins manage users, listings, and summaries from a dedicated dashboard.
@@ -11,8 +13,6 @@ Admins manage users, listings, and summaries from a dedicated dashboard.
 - **AI summaries** — Gemini-powered TL;DR, key responsibilities, requirements, and optional JD–skillset match per listing
 - **Profile & skills** — Store skills and job titles; AI skill suggestions and resume parsing (PDF/DOCX) to prefill your profile
 - **Admin dashboard** — Manage users, listings, and summaries; stream AI dashboard summary; admin-only settings
-
-![App Screenshot](image/app-screenshot.png)
 
 ## 📑 Table of contents
 
