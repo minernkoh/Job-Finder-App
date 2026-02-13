@@ -12,15 +12,15 @@ Admins manage users, listings, and summaries from a dedicated dashboard.
 - **Profile & skills** — Store skills and job titles; AI skill suggestions and resume parsing (PDF/DOCX) to prefill your profile
 - **Admin dashboard** — Manage users, listings, and summaries; stream AI dashboard summary; admin-only settings
 
-![App Screenshot](image/appscreenshot.png)
+![App Screenshot](image/app-screenshot.png)
 
 ## 📑 Table of contents
 
 - [Tech Stack](#-tech-stack)
-- [Monorepo layout](#-monorepo-layout)
-- [High-level React component tree](#-high-level-react-component-tree)
-- [API routes](#-api-routes)
-- [Database schemas](#-database-schemas)
+- [Monorepo Layout](#-monorepo-layout)
+- [React Component Tree](#-high-level-react-component-tree)
+- [API Routes](#-api-routes)
+- [Database Schemas](#-database-schemas)
   - [User](#-user)
   - [UserProfile](#-userprofile)
   - [Listing](#-listing)
@@ -28,11 +28,11 @@ Admins manage users, listings, and summaries from a dedicated dashboard.
   - [AISummary](#-aisummary)
   - [SavedListing](#-savedlisting)
   - [ListingView](#-listingview)
-- [Useful scripts](#-useful-scripts)
-- [Environment variables](#-environment-variables)
-- [Cache duration](#-cache-duration)
-- [Getting started](#-getting-started)
-- [Next steps](#-next-steps)
+- [Useful Scripts](#-useful-scripts)
+- [Environment Variables](#-environment-variables)
+- [Cache Duration](#-cache-duration)
+- [Getting Started](#-getting-started)
+- [Next Steps](#-next-steps)
 
 ## 🛠️ Tech Stack
 
@@ -48,7 +48,7 @@ Admins manage users, listings, and summaries from a dedicated dashboard.
 | **AI**            | Google Gemini (via `ai` SDK) — summaries, resume parsing, skill suggestions |
 | **External data** | Adzuna API — job listings for 20+ countries                                 |
 
-## 📁 Monorepo layout
+## 📁 Monorepo Layout
 
 ```
 Job-Finder-App/
@@ -64,7 +64,9 @@ Job-Finder-App/
 └── package.json          # Root workspace config (pnpm Workspaces)
 ```
 
-## 🌳 High-level React component tree
+## 🌳 React Component Tree
+
+![React component tree](image/react-component-tree.png)
 
 ```
 RootLayout                          # app/layout.tsx — fonts, metadata
@@ -135,7 +137,7 @@ RootLayout                          # app/layout.tsx — fonts, metadata
 
 **Shared components** used across multiple pages: `AppHeader`, `ListingCard`, `ListingCarousel`, `ListingSection`, `SkillsEditor`, `AccountSettingsForm`, `PageShell`, `PageLoading`/`PageError`, `CompareBar`, `AISummaryCard`, `AuthFormFields`, `FormField`, `TablePagination`, `AdminTable`, `ProtectedRoute`, `UserOnlyRoute`.
 
-## 🔌 API routes
+## 🔌 API Routes
 
 All routes are under `/api/v1/`. Protected routes require a Bearer token; admin routes also require `role: "admin"`.
 
@@ -176,7 +178,7 @@ All routes are under `/api/v1/`. Protected routes require a Bearer token; admin 
 | `/admin/summaries/:id`            | DELETE             | Admin     | Delete summary by ID                                                                |
 | `/admin/listings`                 | GET                | Admin     | List listings (create/update/delete use POST /listings, PATCH/DELETE /listings/:id) |
 
-## 🗄️ Database schemas
+## 🗄️ Database Schemas
 
 MongoDB collections (Mongoose models in `next-app/lib/models/`). Zod schemas in `packages/schemas` define the contract; Mongoose schemas align with them.
 
@@ -290,7 +292,7 @@ Indexes: `listingId` + `viewedAt`; `viewedAt`.
 | `pnpm lint`  | Lint all workspace packages  |
 | `pnpm test`  | Run unit tests (vitest)      |
 
-## 🔐 Environment variables
+## 🔐 Environment Variables
 
 All keys are configured in `next-app/.env.local` (copy from `next-app/.env.example`). Server-side variables are validated at startup in `next-app/lib/env.ts`.
 
@@ -310,7 +312,7 @@ All keys are configured in `next-app/.env.local` (copy from `next-app/.env.examp
 | **NEXT_PUBLIC_API_URL**          | No       | —        | Backend API base URL (e.g. `http://localhost:3000/api/v1`). Used by the client; same-origin if omitted.                                                                                                               |
 | **NODE_ENV**                     | No       | —        | Node environment (`development` / `production`); used by Next.js and cookie `secure` flag. Not validated in `env.ts`.                                                                                                 |
 
-## ⏱️ Cache duration
+## ⏱️ Cache Duration
 
 Every cache in the app, where it lives, and when entries expire:
 
@@ -322,7 +324,7 @@ Every cache in the app, where it lives, and when entries expire:
 
 JWT access and refresh tokens have their own expiry (see env vars above); they are not caches. Manual listings (admin-created) get `expiresAt` set to 1 year in `next-app/lib/services/listings.service.ts`.
 
-## 🚀 Getting started
+## 🚀 Getting Started
 
 1. Install dependencies:
    ```bash
@@ -342,7 +344,7 @@ JWT access and refresh tokens have their own expiry (see env vars above); they a
    ```
    Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to `/browse`.
 
-## 📌 Next steps
+## 📌 Next Steps
 
 - Consider deploying app on Vercel in accordance to API guidelines
 - Add EventBrite API to discover networking events or career fairs
