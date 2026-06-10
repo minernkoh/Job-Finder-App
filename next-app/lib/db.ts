@@ -6,12 +6,15 @@
 import mongoose from "mongoose";
 import { User } from "@/lib/models/User";
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error(
-    "Please define MONGODB_URI in .env (e.g. mongodb://localhost:27017/jobfinder)"
-  );
+/* Validated lazily in connectDB() (not at module load) so `next build` succeeds without env vars. */
+function getMongoUri(): string {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error(
+      "Please define MONGODB_URI in .env (e.g. mongodb://localhost:27017/jobfinder)"
+    );
+  }
+  return uri;
 }
 
 interface MongooseCache {
@@ -35,7 +38,7 @@ if (process.env.NODE_ENV !== "production") {
 /** Connects to MongoDB (or returns existing connection). Call this in API routes before using any Mongoose model. */
 export async function connectDB(): Promise<typeof mongoose> {
   if (cached.conn) return cached.conn;
-  if (!cached.promise) cached.promise = mongoose.connect(MONGODB_URI!);
+  if (!cached.promise) cached.promise = mongoose.connect(getMongoUri());
   cached.conn = await cached.promise;
   await User.syncIndexes();
   return cached.conn;
