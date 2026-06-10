@@ -53,7 +53,6 @@ import {
   CARD_PADDING_HERO,
   CONTENT_MAX_W,
   EMPTY_STATE_PADDING,
-  GAP_MD,
   PAGE_PX,
   SECTION_GAP,
 } from "@/lib/layout";
@@ -335,7 +334,8 @@ function BrowseContent() {
     [suggestionsOpen, filteredSuggestions, highlightedIndex, selectSuggestion],
   );
 
-  const listings = data?.listings ?? [];
+  /* Memoized so the auto-select effect below does not re-run on every render. */
+  const listings = useMemo(() => data?.listings ?? [], [data?.listings]);
   const totalCount = data?.totalCount ?? 0;
 
   /** Build /browse?job=id&... from current search and filters for split-panel selection. */

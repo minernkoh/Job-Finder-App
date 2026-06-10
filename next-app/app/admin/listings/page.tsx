@@ -90,7 +90,6 @@ export default function AdminListingsPage() {
     data,
     isLoading: loading,
     error: fetchError,
-    refetch: refetchListings,
   } = useQuery({
     queryKey: adminListingsKeys(page, limit),
     queryFn: async () => {

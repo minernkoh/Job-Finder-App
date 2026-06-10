@@ -8,6 +8,15 @@ const eslintConfig = defineConfig([
   {
     rules: {
       "no-console": "warn",
+      // Allow intentionally-unused names (e.g. ignored route params) when prefixed with "_".
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
     },
   },
   // Override default ignores of eslint-config-next.
