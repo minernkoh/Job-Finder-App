@@ -262,9 +262,12 @@ export function AuthModal() {
     redirectParam ?? stripAuthParams(pathname ?? "/", searchParams) ?? "/";
   const [dismissedAfterSuccess, setDismissedAfterSuccess] = useState(false);
 
-  useEffect(() => {
+  /* Re-arm the modal when the auth param changes (adjust-state-during-render pattern; avoids an extra effect pass). */
+  const [prevAuth, setPrevAuth] = useState(auth);
+  if (prevAuth !== auth) {
+    setPrevAuth(auth);
     if (auth === "login" || auth === "signup") setDismissedAfterSuccess(false);
-  }, [auth]);
+  }
 
   const closeModal = useCallback(() => {
     const next = stripAuthParams(pathname ?? "/", searchParams);

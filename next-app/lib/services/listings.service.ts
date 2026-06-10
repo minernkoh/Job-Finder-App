@@ -3,7 +3,6 @@
  */
 
 import { createHash, randomUUID } from "crypto";
-import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { parseObjectId } from "@/lib/objectid";

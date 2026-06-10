@@ -109,39 +109,52 @@ export function JobDetailPanel({
 
   const queryClient = useQueryClient();
   const { isSaved, saveMutation, unsaveMutation } = useSavedListings();
-  const [summary, setSummary] = useState<Partial<SummaryWithId> | null>(null);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [isSummarizing, setIsSummarizing] = useState(false);
 
-  /* Reset summary when listing changes so the new listing's cache can be shown. */
-  useEffect(() => {
-    setSummary(null);
-    setSummaryError(null);
-  }, [listingId]);
-
-  /* Seed summary from cached GET result so refresh shows the cached AI summary. */
-  useEffect(() => {
-    if (cachedSummary != null && summary === null) setSummary(cachedSummary);
-  }, [cachedSummary, summary]);
+  /** Streaming summary state, keyed by listing so navigating to another listing discards it without reset effects. */
+  type StreamState = {
+    forListingId: string;
+    summary: Partial<SummaryWithId> | null;
+    error: string | null;
+    inProgress: boolean;
+  };
+  const [streamState, setStreamState] = useState<StreamState | null>(null);
+  const streamForCurrent =
+    streamState?.forListingId === listingId ? streamState : null;
+  /* Show the in-flight/streamed summary if any, else the cached one from the server. */
+  const summary: Partial<SummaryWithId> | null =
+    streamForCurrent?.summary ?? cachedSummary ?? null;
+  const summaryError = streamForCurrent?.error ?? null;
+  const isSummarizing = streamForCurrent?.inProgress ?? false;
 
   /** Triggers streaming AI summary generation for the current listing. */
   const handleSummarize = useCallback(async () => {
-    setSummaryError(null);
-    setSummary(null);
-    setIsSummarizing(true);
+    /* Applies a patch only while this listing's stream is still the active one. */
+    const update = (patch: Partial<StreamState>) =>
+      setStreamState((prev) =>
+        prev?.forListingId === listingId ? { ...prev, ...patch } : prev,
+      );
+    setStreamState({
+      forListingId: listingId,
+      summary: null,
+      error: null,
+      inProgress: true,
+    });
     try {
       const result = await createSummaryStream({ listingId });
       if (!result.stream) {
-        setSummary(result.data);
         queryClient.setQueryData(summaryKeys(listingId), result.data);
-        setIsSummarizing(false);
+        update({ summary: result.data, inProgress: false });
         return;
       }
       const final = await consumeSummaryStream(result.reader, (partial) => {
-        setSummary((prev) => ({ ...prev, ...partial }));
+        setStreamState((prev) =>
+          prev?.forListingId === listingId
+            ? { ...prev, summary: { ...prev.summary, ...partial } }
+            : prev,
+        );
       });
       queryClient.setQueryData(summaryKeys(listingId), final);
-      setIsSummarizing(false);
+      update({ summary: final, inProgress: false });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to summarize";
@@ -149,12 +162,13 @@ export function JobDetailPanel({
         err && typeof err === "object" && "status" in err
           ? (err as { status: number }).status
           : undefined;
-      setSummaryError(
-        status === 503 || isSummaryNotConfiguredMessage(message)
-          ? SUMMARY_NOT_AVAILABLE_UI_MESSAGE
-          : message,
-      );
-      setIsSummarizing(false);
+      update({
+        error:
+          status === 503 || isSummaryNotConfiguredMessage(message)
+            ? SUMMARY_NOT_AVAILABLE_UI_MESSAGE
+            : message,
+        inProgress: false,
+      });
       if (isRateLimitMessage(message)) {
         toast.error(
           "AI summary is temporarily unavailable due to rate limits. Please try again in a few minutes.",

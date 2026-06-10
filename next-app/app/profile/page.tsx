@@ -5,7 +5,7 @@
 "use client";
 
 import { toast } from "sonner";
-import { Suspense, useState, useCallback, useMemo, useEffect } from "react";
+import { Suspense, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompare } from "@/contexts/CompareContext";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -27,7 +27,6 @@ import {
   CARD_PADDING_COMPACT,
   CONTENT_MAX_W,
   EMPTY_STATE_PADDING,
-  GAP_MD,
   PAGE_PX,
   SECTION_GAP,
 } from "@/lib/layout";
@@ -47,7 +46,8 @@ function ProfileContent() {
   const { savedListings, isLoadingSaved, unsaveMutation } = useSavedListings();
   const { compareSet, addToCompare, isInCompareSet } = useCompare();
   const queryClient = useQueryClient();
-  const [currentRole, setCurrentRole] = useState("");
+  /** Local draft for current role; null means use the first saved job title. */
+  const [draftRole, setDraftRole] = useState<string | null>(null);
   const [suggestedSkills, setSuggestedSkills] = useState<string[]>([]);
   const [draftSkills, setDraftSkills] = useState<string[] | null>(null);
   const [customSkill, setCustomSkill] = useState("");
@@ -81,12 +81,8 @@ function ProfileContent() {
     queryFn: fetchProfile,
   });
 
-  /** Sync role field from saved profile so it does not disappear after refresh. */
-  useEffect(() => {
-    if (profile?.jobTitles?.length) {
-      setCurrentRole(profile.jobTitles[0] ?? "");
-    }
-  }, [profile?.jobTitles]);
+  /** Role field: local draft, falling back to the saved profile so it survives refresh. */
+  const currentRole = draftRole ?? profile?.jobTitles?.[0] ?? "";
 
   const profileSkills = useMemo(() => profile?.skills ?? [], [profile?.skills]);
   const skills = draftSkills ?? profileSkills;
@@ -130,6 +126,7 @@ function ProfileContent() {
     }) => updateProfile(payload),
     onSuccess: () => {
       setDraftYears(null);
+      setDraftRole(null);
       queryClient.invalidateQueries({ queryKey: profileKeys.all });
       toast.success("Profile saved");
     },
@@ -412,7 +409,7 @@ function ProfileContent() {
                   yearsLabel="Years of experience"
                   showRoleBlock
                   roleValue={currentRole}
-                  onRoleChange={setCurrentRole}
+                  onRoleChange={setDraftRole}
                   onSuggest={() =>
                     currentRole.trim() &&
                     suggestMutation.mutate(currentRole.trim())
@@ -590,7 +587,7 @@ function ProfileContent() {
                     yearsLabel="Years of experience"
                     showRoleBlock
                     roleValue={currentRole}
-                    onRoleChange={setCurrentRole}
+                    onRoleChange={setDraftRole}
                     onSuggest={() =>
                       currentRole.trim() &&
                       suggestMutation.mutate(currentRole.trim())

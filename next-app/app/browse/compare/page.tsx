@@ -34,7 +34,6 @@ import {
   CARD_PADDING_DEFAULT,
   CARD_PADDING_DEFAULT_RESPONSIVE,
   CONTENT_MAX_W,
-  GAP_MD,
   PAGE_PX,
   SECTION_GAP,
 } from "@/lib/layout";
@@ -127,66 +126,96 @@ function ComparePageInner() {
     }
   }, [listingIds, router]);
 
-  const [comparison, setComparison] = useState<Partial<ComparisonSummary> | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamError, setStreamError] = useState<string | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [regenerateTrigger, setRegenerateTrigger] = useState(0);
   const streamStartedRef = useRef<string | null>(null);
 
   const forceRegenerate = regenerateTrigger > 0;
 
+  /** Identity of the current stream request; changing it (retry/regenerate/new ids) discards previous results. */
+  const streamKey =
+    listingIds && user
+      ? [
+          listingIds.join(","),
+          user.id ?? "",
+          String(forceRegenerate),
+          retryTrigger,
+          regenerateTrigger,
+        ].join("|")
+      : null;
+
+  /** Stream result keyed by request so stale streams are ignored without reset-state-in-effect calls. */
+  type StreamResult = {
+    key: string;
+    comparison: Partial<ComparisonSummary> | null;
+    error: string | null;
+    done: boolean;
+  };
+  const [streamResult, setStreamResult] = useState<StreamResult | null>(null);
+  const currentResult = streamResult?.key === streamKey ? streamResult : null;
+  const comparison = currentResult?.comparison ?? null;
+  const streamError = currentResult?.error ?? null;
+  const isStreaming =
+    !!streamKey && !authLoading && !(currentResult?.done ?? false);
+
   const handleRetry = useCallback(() => {
-    streamStartedRef.current = null;
-    setStreamError(null);
     setRetryTrigger((t) => t + 1);
   }, []);
 
   const handleRegenerate = useCallback(() => {
-    streamStartedRef.current = null;
-    setStreamError(null);
     setRegenerateTrigger((t) => t + 1);
   }, []);
 
   useEffect(() => {
-    if (!listingIds || listingIds.length < 2 || !user || authLoading) return;
-    const key =
-      listingIds.join(",") + (user.id ?? "") + String(forceRegenerate);
-    if (streamStartedRef.current === key) return;
-    streamStartedRef.current = key;
+    if (!streamKey || !listingIds || !user || authLoading) return;
+    if (streamStartedRef.current === streamKey) return;
+    streamStartedRef.current = streamKey;
 
     let cancelled = false;
     let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-    setIsStreaming(true);
-    setStreamError(null);
-    setComparison(null);
+
+    const baseResult = {
+      key: streamKey,
+      comparison: null,
+      error: null,
+      done: false,
+    };
+    const update = (patch: Partial<Omit<StreamResult, "key">>) => {
+      if (cancelled) return;
+      setStreamResult((prev) =>
+        prev?.key === streamKey
+          ? { ...prev, ...patch }
+          : { ...baseResult, ...patch },
+      );
+    };
 
     const tryStream = () =>
       createComparisonSummaryStream(listingIds, {
         forceRegenerate,
       }).then((result) => {
         if (result.stream === false) {
-          if (!cancelled) setComparison(result.data);
+          update({ comparison: result.data });
           return result.data;
         }
         activeReader = result.reader;
         return consumeComparisonStream(result.reader, (partial) => {
-          if (!cancelled) {
-            setComparison((prev) => ({ ...prev, ...partial }));
-          }
+          if (cancelled) return;
+          setStreamResult((prev) => {
+            const base = prev?.key === streamKey ? prev : baseResult;
+            return { ...base, comparison: { ...base.comparison, ...partial } };
+          });
         });
       });
 
     const tryFallback = () =>
       createComparisonSummary(listingIds, { forceRegenerate }).then((data) => {
-        if (!cancelled) setComparison(data);
+        update({ comparison: data });
       });
 
     tryStream()
-      .catch((err: unknown) => {
+      .catch(() => {
         if (cancelled) return;
         return tryFallback().catch((fallbackErr: unknown) => {
-          streamStartedRef.current = null;
           let message =
             fallbackErr instanceof Error
               ? fallbackErr.message
@@ -194,7 +223,7 @@ function ComparePageInner() {
           if (isSummaryNotConfiguredMessage(message)) {
             message = SUMMARY_NOT_AVAILABLE_UI_MESSAGE;
           }
-          setStreamError(message);
+          update({ error: message });
           if (isRateLimitMessage(message)) {
             toast.error(
               "AI summary is temporarily unavailable due to rate limits. Please try again in a few minutes.",
@@ -203,7 +232,7 @@ function ComparePageInner() {
         });
       })
       .finally(() => {
-        if (!cancelled) setIsStreaming(false);
+        update({ done: true });
       });
 
     return () => {
@@ -211,7 +240,7 @@ function ComparePageInner() {
       streamStartedRef.current = null;
       activeReader?.cancel();
     };
-  }, [listingIds, user, authLoading, retryTrigger, regenerateTrigger, forceRegenerate]);
+  }, [streamKey, listingIds, user, authLoading, forceRegenerate]);
 
   const { data: profile } = useQuery({
     queryKey: profileKeys.all,
