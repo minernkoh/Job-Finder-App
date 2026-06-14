@@ -32,6 +32,7 @@ Admins manage users, listings, and summaries from a dedicated dashboard.
 - [Environment Variables](#-environment-variables)
 - [Cache Duration](#-cache-duration)
 - [Getting Started](#-getting-started)
+- [Deployment](#-deployment)
 - [Next Steps](#-next-steps)
 
 ## 🛠️ Tech Stack
@@ -275,8 +276,50 @@ JWT access and refresh tokens have their own expiry (see env vars above); they a
    ```
    Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to `/browse`.
 
+## ☁️ Deployment
+
+The app is a standard Next.js project, so **Vercel** is the recommended host. The only
+external dependency you must provision separately is MongoDB — **MongoDB Atlas** (free M0
+tier) pairs well with Vercel's serverless runtime.
+
+### 1. Provision MongoDB
+
+- Create a free cluster at [MongoDB Atlas](https://www.mongodb.com/atlas), add a database user,
+  and allow network access from `0.0.0.0/0` (Vercel does not use fixed egress IPs on the free plan).
+- Copy the connection string, e.g. `mongodb+srv://user:pass@cluster.mongodb.net/jobfinder`.
+
+### 2. Import the repo into Vercel
+
+- In Vercel, **Add New → Project** and import this repository from GitHub.
+- This is a pnpm monorepo, so set the **Root Directory** to `next-app`. Vercel auto-detects the
+  Next.js framework and pnpm workspaces; the default Build & Output settings work as-is.
+
+### 3. Configure environment variables
+
+Add the variables from [Environment Variables](#-environment-variables) in the Vercel project's
+**Settings → Environment Variables** (the app reads them at runtime; missing required values cause
+API routes to return 500). At minimum:
+
+| Variable                              | Notes                                                            |
+| ------------------------------------- | --------------------------------------------------------------- |
+| `MONGODB_URI`                         | Atlas connection string — **required**                          |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET`   | Two different values, 32+ chars each (`openssl rand -base64 32`) |
+| `ADZUNA_APP_ID` / `ADZUNA_APP_KEY`    | Required for job search and listing data                        |
+| `GEMINI_API_KEY`                      | Required for AI features; without it, summary endpoints return 503 |
+| `ADMIN_REGISTER_SECRET`              | Optional — enables `POST /api/v1/auth/admin/register`           |
+
+Leave `NEXT_PUBLIC_API_URL` unset so the client uses the same origin as the deployment.
+
+### 4. Deploy
+
+Vercel builds and deploys on the first import, then redeploys automatically on every push to `main`.
+The TTL-based caches live in MongoDB, so they work across serverless instances; the only in-memory
+cache is the 10-minute admin dashboard summary, which simply recomputes on a cold instance.
+
+> **Self-hosting alternative:** run `pnpm install && pnpm build`, then `pnpm --filter next-app start`
+> behind a reverse proxy, with the same environment variables supplied to the process.
+
 ## 📌 Next Steps
 
-- Consider deploying app on Vercel in accordance to API guidelines
 - Add EventBrite API to discover networking events or career fairs
 - Job alerts via email
