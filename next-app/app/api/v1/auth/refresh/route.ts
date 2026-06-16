@@ -4,8 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/db";
-import { User } from "@/lib/models/User";
+import { getSql } from "@/lib/db";
+import { isValidObjectId } from "@/lib/objectid";
 import {
   signAccessToken,
   signRefreshToken,
@@ -36,8 +36,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
-    const user = await User.findById(payload.sub).lean();
+    const sql = getSql();
+    const [user] = isValidObjectId(payload.sub)
+      ? ((await sql`
+          select id, email, role from users where id = ${payload.sub} limit 1
+        `) as unknown as Array<{ id: string; email: string; role: "user" | "admin" }>)
+      : [];
     if (!user) {
       return NextResponse.json(
         { success: false, message: "User not found" },
@@ -45,7 +49,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sub = user._id.toString();
+    const sub = user.id;
     const newAccessToken = await signAccessToken({
       sub,
       email: user.email,

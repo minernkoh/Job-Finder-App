@@ -39,7 +39,7 @@ Admins manage users, listings, and summaries from a dedicated dashboard.
 | Layer             | Technology                                                                  |
 | ----------------- | --------------------------------------------------------------------------- |
 | **Framework**     | Next.js 16 (App Router), React 19, TypeScript                               |
-| **Database**      | MongoDB + Mongoose                                                          |
+| **Database**      | Supabase (PostgreSQL) via [postgres.js](https://github.com/porsager/postgres) |
 | **Data fetching** | TanStack Query (React Query)                                                |
 | **Validation**    | Zod (shared schemas in `packages/schemas`)                                  |
 | **UI**            | Tailwind CSS 4.0 (dark mode default), shadcn/ui (`packages/ui`)             |
@@ -111,7 +111,7 @@ All routes are under `/api/v1/`. Protected routes require a Bearer token; admin 
 
 ## 🗄️ Database Schemas
 
-MongoDB collections (Mongoose models in `next-app/lib/models/`). Zod schemas in `packages/schemas` define the contract; Mongoose schemas align with them.
+PostgreSQL tables on Supabase. The data layer (`next-app/lib/services/*`) talks to Postgres with [postgres.js](https://github.com/porsager/postgres) (`next-app/lib/db.ts`); Zod schemas in `packages/schemas` define the API contract. The schema is managed via Supabase migrations. Primary keys are UUIDs; cache tables (`listings`, `search_cache`) carry an `expires_at` column that the services filter on. Authentication is the app's own JWT (bcrypt + jose) — Supabase Auth is not used — and the server connects with the privileged Postgres role, so RLS is enabled with no policies.
 
 ### 👤 User
 
@@ -229,7 +229,7 @@ All keys are configured in `next-app/.env.local` (copy from `next-app/.env.examp
 
 | Variable                         | Required | Default  | Description                                                                                                                                                        |
 | -------------------------------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **MONGODB_URI**                  | Yes      | —        | MongoDB connection string (e.g. `mongodb://localhost:27017/jobfinder` or Atlas). Used for auth, listings, search cache, AI summaries.                              |
+| **DATABASE_URL**                 | Yes      | —        | Supabase Postgres connection string. Use the **Connection Pooler** (Supavisor, transaction mode, port 6543) for serverless/Vercel. Used for auth, listings, search cache, AI summaries. |
 | **JWT_SECRET**                   | Yes      | —        | Secret for signing access tokens; min 32 characters (e.g. `openssl rand -base64 32`).                                                                              |
 | **JWT_REFRESH_SECRET**           | Yes      | —        | Secret for signing refresh tokens; min 32 characters (use a different value than `JWT_SECRET`).                                                                    |
 | **ADZUNA_APP_ID**                | No       | —        | Adzuna API app ID; required for job search and listing data. [Get credentials](https://developer.adzuna.com/signup).                                               |
@@ -249,8 +249,8 @@ Every cache in the app, where it lives, and when entries expire:
 
 | Cache                       | Where                                                                                 | Duration / expiry                           | Config / notes                                                                                                                                 |
 | --------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Job search (Adzuna)**     | MongoDB: `SearchCache` (query → listing IDs) and `Listing` documents with `expiresAt` | TTL in seconds; default **7 days** (604800) | Env: `JOB_SEARCH_CACHE_TTL` (`next-app/lib/services/listings.service.ts`). Entries expire at `expiresAt`; TTL index can remove expired docs.   |
-| **AI summaries**            | MongoDB: `AISummary`; lookup by `inputTextHash` and `createdAt` within TTL window     | TTL in seconds; default **7 days** (604800) | Env: `AI_SUMMARY_CACHE_TTL` (`next-app/lib/services/summaries.service.ts`). Summaries older than TTL are not reused; new generation is stored. |
+| **Job search (Adzuna)**     | Postgres: `search_cache` (query → listing IDs) and `listings` rows with `expires_at`  | TTL in seconds; default **7 days** (604800) | Env: `JOB_SEARCH_CACHE_TTL` (`next-app/lib/services/listings.service.ts`). Entries are treated as expired once past `expires_at`.              |
+| **AI summaries**            | Postgres: `ai_summaries`; lookup by `input_text_hash` and `updated_at` within TTL window | TTL in seconds; default **7 days** (604800) | Env: `AI_SUMMARY_CACHE_TTL` (`next-app/lib/services/summaries.service.ts`). Summaries older than TTL are not reused; new generation is stored. |
 | **Admin dashboard summary** | In-memory only (process lifetime)                                                     | **10 minutes**                              | Hardcoded in `next-app/lib/services/admin-dashboard.service.ts`. Bypass with `?refresh=1` on dashboard summary endpoints.                      |
 
 JWT access and refresh tokens have their own expiry (see env vars above); they are not caches. Manual listings (admin-created) get `expiresAt` set to 1 year in `next-app/lib/services/listings.service.ts`.
@@ -261,22 +261,42 @@ JWT access and refresh tokens have their own expiry (see env vars above); they a
    ```bash
    pnpm install
    ```
-2. Configure environment variables:
+2. Set up the Supabase database:
+
+   - Create a project at [supabase.com](https://supabase.com) (or reuse one).
+   - Apply the schema. The migrations live in `supabase/migrations/`; apply them with the [Supabase CLI](https://supabase.com/docs/guides/local-development) (`supabase db push`) or by pasting each file into the SQL Editor in order.
+   - Grab your connection string from **Dashboard → Connect**. Use the **Connection pooling** string (port `6543`) for `DATABASE_URL`.
+
+3. Configure environment variables:
 
    ```bash
    cp next-app/.env.example next-app/.env.local
    ```
 
-   Edit `next-app/.env.local` with real values. See [Environment variables](#-environment-variables) above for all keys, defaults, and descriptions.
+   Edit `next-app/.env.local` with real values (at minimum `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`). See [Environment variables](#-environment-variables) above for all keys, defaults, and descriptions.
 
-3. Run the app:
+4. Run the app:
    ```bash
    pnpm dev
    ```
    Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to `/browse`.
 
+## ☁️ Deploying to Vercel
+
+This is a pnpm-workspace monorepo; the deployable app is `next-app`, which transpiles the `@schemas` and `@ui/components` workspace packages at build time (see `next.config.ts`).
+
+1. Import the repo into Vercel and set **Root Directory** to `next-app` (Settings → General). Vercel detects the pnpm workspace at the repo root and installs all workspace packages automatically.
+2. Framework preset is **Next.js**; the default Install (`pnpm install`) and Build (`next build`) commands work as-is.
+3. Add the environment variables from the table above in **Settings → Environment Variables**:
+   - `DATABASE_URL` — the Supabase **pooler** string (port `6543`), required for serverless.
+   - `JWT_SECRET`, `JWT_REFRESH_SECRET` — 32+ char secrets.
+   - `NEXT_PUBLIC_API_URL` — `https://<your-domain>/api/v1`.
+   - Optional: `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `GEMINI_API_KEY`, `ADMIN_REGISTER_SECRET`.
+4. Deploy. The same `DATABASE_URL` must point at the project whose schema you applied in step 2 of Getting Started.
+
+> Connection pooling matters: Vercel runs serverless functions, so always use the Supabase transaction-mode pooler (port 6543). The Postgres client (`next-app/lib/db.ts`) disables prepared statements for this reason.
+
 ## 📌 Next Steps
 
-- Consider deploying app on Vercel in accordance to API guidelines
 - Add EventBrite API to discover networking events or career fairs
 - Job alerts via email

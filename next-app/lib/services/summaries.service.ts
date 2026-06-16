@@ -3,7 +3,6 @@
  */
 
 import { createHash } from "crypto";
-import mongoose from "mongoose";
 import { generateObject, streamObject } from "ai";
 import {
   AISummarySchema,
@@ -11,22 +10,46 @@ import {
   ComparisonSummarySchema,
   type ComparisonSummary,
 } from "@schemas";
-import { connectDB } from "@/lib/db";
+import { getSql } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { executeWithGemini, retryWithBackoff } from "@/lib/ai/gemini";
 import { isValidObjectId } from "@/lib/objectid";
-import {
-  AISummary as AISummaryModel,
-  type IAISummaryDocument,
-} from "@/lib/models/AISummary";
-import {
-  ComparisonSummary as ComparisonSummaryModel,
-  type IComparisonSummaryDocument,
-} from "@/lib/models/ComparisonSummary";
 import { getListingById } from "./listings.service";
 import { getProfileByUserId } from "./resume.service";
 
 const ADZUNA_FETCH_TIMEOUT_MS = 10_000;
+
+/** An ai_summaries row (camelCase via the db client's transform). */
+interface AISummaryRow {
+  id: string;
+  userId: string;
+  inputTextHash: string;
+  tldr: string;
+  keyResponsibilities?: string[];
+  requirements?: string[];
+  niceToHaves?: string[];
+  salarySgd?: string;
+  jdMatch?: AISummary["jdMatch"];
+  caveats?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** A comparison_summaries row (camelCase via the db client's transform). */
+interface ComparisonSummaryRow {
+  id: string;
+  userId: string;
+  listingIdsKey: string;
+  summary: string;
+  similarities?: string[];
+  differences?: string[];
+  comparisonPoints?: string[];
+  recommendedListingId?: string;
+  recommendationReason?: string;
+  listingMatchScores?: ComparisonSummary["listingMatchScores"];
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 /** Strips HTML tags and normalizes whitespace; caps at 30k chars for prompt limit. */
 function extractTextFromHtml(html: string): string {
@@ -198,7 +221,7 @@ export async function prepareSummaryStream(
         company?: string;
       };
       inputTextHash: string;
-      uid: mongoose.Types.ObjectId;
+      uid: string;
       userSkills?: string[];
       yearsOfExperience?: number;
     }
@@ -210,23 +233,12 @@ export async function prepareSummaryStream(
   const ttlSeconds = env.AI_SUMMARY_CACHE_TTL ?? 604800;
   const since = new Date(Date.now() - ttlSeconds * 1000);
 
-  await connectDB();
-  const uid = toObjectIdOrThrow(userId);
+  const uid = toUserIdOrThrow(userId);
 
   if (input.forceRegenerate !== true) {
-    const existing = await AISummaryModel.findOne({
-      inputTextHash,
-      userId: uid,
-      updatedAt: { $gte: since },
-    })
-      .sort({ updatedAt: -1 })
-      .lean();
-
+    const existing = await findCachedSummary(inputTextHash, uid, since);
     if (existing) {
-      return {
-        cached: true,
-        data: docToSummary(existing as IAISummaryDocument),
-      };
+      return { cached: true, data: docToSummary(existing) };
     }
   }
 
@@ -248,26 +260,42 @@ export async function prepareSummaryStream(
  * Saves a generated summary to MongoDB after streaming completes. Returns the saved summary with id.
  */
 export async function saveSummaryToDb(
-  uid: mongoose.Types.ObjectId,
+  uid: string,
   inputTextHash: string,
   generated: AISummary,
 ): Promise<AISummary & { id: string }> {
   const parsed = AISummarySchema.safeParse(generated);
-  const safe = parsed.success
+  const safe: AISummary = parsed.success
     ? parsed.data
     : { tldr: String(generated?.tldr ?? "Summary unavailable.") };
-  const doc = await AISummaryModel.create({
-    userId: uid,
-    inputTextHash,
-    tldr: safe.tldr,
-    keyResponsibilities: safe.keyResponsibilities,
-    requirements: safe.requirements,
-    niceToHaves: safe.niceToHaves,
-    salarySgd: safe.salarySgd,
-    jdMatch: safe.jdMatch,
-    caveats: safe.caveats,
-  });
-  return docToSummary(doc);
+  const sql = getSql();
+  const [row] = (await sql`
+    insert into ai_summaries
+      (user_id, input_text_hash, tldr, key_responsibilities, requirements, nice_to_haves, salary_sgd, jd_match, caveats)
+    values (
+      ${uid}, ${inputTextHash}, ${safe.tldr},
+      ${safe.keyResponsibilities ?? null}, ${safe.requirements ?? null}, ${safe.niceToHaves ?? null},
+      ${safe.salarySgd ?? null}, ${safe.jdMatch ? sql.json(safe.jdMatch) : null}, ${safe.caveats ?? null}
+    )
+    returning *
+  `) as unknown as AISummaryRow[];
+  return docToSummary(row);
+}
+
+/** Finds the most recent cached summary for a user/hash within TTL, or null. */
+async function findCachedSummary(
+  inputTextHash: string,
+  uid: string,
+  since: Date,
+): Promise<AISummaryRow | null> {
+  const sql = getSql();
+  const [row] = (await sql`
+    select * from ai_summaries
+    where input_text_hash = ${inputTextHash} and user_id = ${uid} and updated_at >= ${since}
+    order by updated_at desc
+    limit 1
+  `) as unknown as AISummaryRow[];
+  return row ?? null;
 }
 
 /** Resolves create-summary input to text, optional Adzuna flag, and when input is listingId also returns jobTitle and company for prompt context. */
@@ -343,10 +371,10 @@ async function resolveInputText(input: {
   throw new Error("At least one of listingId, text, or url is required");
 }
 
-/** Maps DB document to API AISummary shape with id. */
-function docToSummary(doc: IAISummaryDocument): AISummary & { id: string } {
+/** Maps DB row to API AISummary shape with id. */
+function docToSummary(doc: AISummaryRow): AISummary & { id: string } {
   return {
-    id: String(doc._id),
+    id: doc.id,
     tldr: doc.tldr,
     keyResponsibilities: doc.keyResponsibilities,
     requirements: doc.requirements,
@@ -360,12 +388,12 @@ function docToSummary(doc: IAISummaryDocument): AISummary & { id: string } {
   };
 }
 
-/** Throws if userId is not a valid MongoDB ObjectId (so route can return 401). */
-function toObjectIdOrThrow(userId: string): mongoose.Types.ObjectId {
+/** Throws if userId is not a valid UUID (so route can return 401). */
+function toUserIdOrThrow(userId: string): string {
   if (!isValidObjectId(userId)) {
     throw new Error("Invalid user");
   }
-  return new mongoose.Types.ObjectId(userId);
+  return userId;
 }
 
 /** Returns existing summary for a listing by inputTextHash + userId, or null if not found. Does not create or generate. */
@@ -379,18 +407,10 @@ export async function getSummaryForListing(
   const ttlSeconds = env.AI_SUMMARY_CACHE_TTL ?? 604800;
   const since = new Date(Date.now() - ttlSeconds * 1000);
 
-  await connectDB();
-  const uid = toObjectIdOrThrow(userId);
-  const doc = await AISummaryModel.findOne({
-    inputTextHash,
-    userId: uid,
-    updatedAt: { $gte: since },
-  })
-    .sort({ updatedAt: -1 })
-    .lean();
-
+  const uid = toUserIdOrThrow(userId);
+  const doc = await findCachedSummary(inputTextHash, uid, since);
   if (!doc) return null;
-  return docToSummary(doc as IAISummaryDocument);
+  return docToSummary(doc);
 }
 
 /** Returns existing summary by inputTextHash within TTL, or generates and saves a new one. */
@@ -410,20 +430,12 @@ export async function getOrCreateSummary(
   const ttlSeconds = env.AI_SUMMARY_CACHE_TTL ?? 604800;
   const since = new Date(Date.now() - ttlSeconds * 1000);
 
-  await connectDB();
-  const uid = toObjectIdOrThrow(userId);
+  const uid = toUserIdOrThrow(userId);
 
   if (input.forceRegenerate !== true) {
-    const existing = await AISummaryModel.findOne({
-      inputTextHash,
-      userId: uid,
-      updatedAt: { $gte: since },
-    })
-      .sort({ updatedAt: -1 })
-      .lean();
-
+    const existing = await findCachedSummary(inputTextHash, uid, since);
     if (existing) {
-      return docToSummary(existing as IAISummaryDocument);
+      return docToSummary(existing);
     }
   }
 
@@ -437,33 +449,18 @@ export async function getOrCreateSummary(
     company,
     yearsOfExperience: profile?.yearsOfExperience,
   });
-  const parsed = AISummarySchema.safeParse(generated);
-  const safe = parsed.success
-    ? parsed.data
-    : { tldr: String(generated?.tldr ?? "Summary unavailable.") };
-  const doc = await AISummaryModel.create({
-    userId: uid,
-    inputTextHash,
-    tldr: safe.tldr,
-    keyResponsibilities: safe.keyResponsibilities,
-    requirements: safe.requirements,
-    niceToHaves: safe.niceToHaves,
-    salarySgd: safe.salarySgd,
-    jdMatch: safe.jdMatch,
-    caveats: safe.caveats,
-  });
-  return docToSummary(doc);
+  return saveSummaryToDb(uid, inputTextHash, generated);
 }
 
 /** Returns a summary by id or null if not found. */
 export async function getSummaryById(
   id: string,
 ): Promise<(AISummary & { id: string }) | null> {
-  await connectDB();
   if (!isValidObjectId(id)) return null;
-  const doc = await AISummaryModel.findById(id).lean();
+  const sql = getSql();
+  const [doc] = (await sql`select * from ai_summaries where id = ${id}`) as unknown as AISummaryRow[];
   if (!doc) return null;
-  return docToSummary(doc as IAISummaryDocument);
+  return docToSummary(doc);
 }
 
 /** Returns a summary by id only if owned by userId; otherwise null. */
@@ -471,12 +468,14 @@ export async function getSummaryByIdForUser(
   userId: string,
   id: string,
 ): Promise<(AISummary & { id: string }) | null> {
-  await connectDB();
-  const uid = toObjectIdOrThrow(userId);
+  const uid = toUserIdOrThrow(userId);
   if (!isValidObjectId(id)) return null;
-  const doc = await AISummaryModel.findOne({ _id: id, userId: uid }).lean();
+  const sql = getSql();
+  const [doc] = (await sql`
+    select * from ai_summaries where id = ${id} and user_id = ${uid}
+  `) as unknown as AISummaryRow[];
   if (!doc) return null;
-  return docToSummary(doc as IAISummaryDocument);
+  return docToSummary(doc);
 }
 
 /** Deletes a summary if the user owns it. Returns true if deleted, false if not found or not owner. */
@@ -484,11 +483,13 @@ export async function deleteSummary(
   userId: string,
   id: string,
 ): Promise<boolean> {
-  await connectDB();
-  const uid = toObjectIdOrThrow(userId);
+  const uid = toUserIdOrThrow(userId);
   if (!isValidObjectId(id)) return false;
-  const result = await AISummaryModel.deleteOne({ _id: id, userId: uid });
-  return result.deletedCount === 1;
+  const sql = getSql();
+  const rows = (await sql`
+    delete from ai_summaries where id = ${id} and user_id = ${uid} returning id
+  `) as unknown as Array<{ id: string }>;
+  return rows.length === 1;
 }
 
 /** Builds canonical cache key from listing IDs (sorted so [a,b] and [b,a] match). */
@@ -496,9 +497,9 @@ function toListingIdsKey(listingIds: string[]): string {
   return [...listingIds].sort().join(",");
 }
 
-/** Maps ComparisonSummary document to plain ComparisonSummary for API response. */
+/** Maps comparison_summaries row to plain ComparisonSummary for API response. */
 function docToComparisonSummary(
-  doc: IComparisonSummaryDocument
+  doc: ComparisonSummaryRow
 ): ComparisonSummary {
   return {
     summary: doc.summary,
@@ -533,23 +534,19 @@ export async function prepareComparisonStream(
   const ttlSeconds = env.AI_SUMMARY_CACHE_TTL ?? 604800;
   const since = new Date(Date.now() - ttlSeconds * 1000);
 
-  await connectDB();
-  const uid = toObjectIdOrThrow(userId);
+  const uid = toUserIdOrThrow(userId);
 
   if (input.forceRegenerate !== true) {
-    const existing = await ComparisonSummaryModel.findOne({
-      userId: uid,
-      listingIdsKey,
-      updatedAt: { $gte: since },
-    })
-      .sort({ updatedAt: -1 })
-      .lean();
+    const sql = getSql();
+    const [existing] = (await sql`
+      select * from comparison_summaries
+      where user_id = ${uid} and listing_ids_key = ${listingIdsKey} and updated_at >= ${since}
+      order by updated_at desc
+      limit 1
+    `) as unknown as ComparisonSummaryRow[];
 
     if (existing) {
-      return {
-        cached: true,
-        data: docToComparisonSummary(existing as IComparisonSummaryDocument),
-      };
+      return { cached: true, data: docToComparisonSummary(existing) };
     }
   }
 
@@ -557,7 +554,7 @@ export async function prepareComparisonStream(
 }
 
 /**
- * Saves a generated comparison summary to MongoDB after streaming completes.
+ * Saves a generated comparison summary after streaming completes (upsert by user + listing key).
  */
 export async function saveComparisonSummaryToDb(
   userId: string,
@@ -565,31 +562,36 @@ export async function saveComparisonSummaryToDb(
   comparison: ComparisonSummary
 ): Promise<ComparisonSummary> {
   const parsed = ComparisonSummarySchema.safeParse(comparison);
-  const safe = parsed.success
+  const safe: ComparisonSummary = parsed.success
     ? parsed.data
     : { summary: String(comparison?.summary ?? "Comparison unavailable.") };
   const listingIdsKey = toListingIdsKey(listingIds);
 
-  await connectDB();
-  const uid = toObjectIdOrThrow(userId);
+  const uid = toUserIdOrThrow(userId);
+  const sql = getSql();
 
-  const doc = await ComparisonSummaryModel.findOneAndUpdate(
-    { userId: uid, listingIdsKey },
-    {
-      userId: uid,
-      listingIdsKey,
-      summary: safe.summary,
-      similarities: safe.similarities,
-      differences: safe.differences,
-      comparisonPoints: safe.comparisonPoints,
-      recommendedListingId: safe.recommendedListingId,
-      recommendationReason: safe.recommendationReason,
-      listingMatchScores: safe.listingMatchScores,
-    },
-    { upsert: true, new: true }
-  ).lean();
+  const [row] = (await sql`
+    insert into comparison_summaries
+      (user_id, listing_ids_key, summary, similarities, differences, comparison_points, recommended_listing_id, recommendation_reason, listing_match_scores)
+    values (
+      ${uid}, ${listingIdsKey}, ${safe.summary},
+      ${safe.similarities ?? null}, ${safe.differences ?? null}, ${safe.comparisonPoints ?? null},
+      ${safe.recommendedListingId ?? null}, ${safe.recommendationReason ?? null},
+      ${safe.listingMatchScores ? sql.json(safe.listingMatchScores) : null}
+    )
+    on conflict (user_id, listing_ids_key) do update set
+      summary = excluded.summary,
+      similarities = excluded.similarities,
+      differences = excluded.differences,
+      comparison_points = excluded.comparison_points,
+      recommended_listing_id = excluded.recommended_listing_id,
+      recommendation_reason = excluded.recommendation_reason,
+      listing_match_scores = excluded.listing_match_scores,
+      updated_at = now()
+    returning *
+  `) as unknown as ComparisonSummaryRow[];
 
-  return docToComparisonSummary(doc as IComparisonSummaryDocument);
+  return docToComparisonSummary(row);
 }
 
 /** Builds a short text block for one job for the comparison prompt (title, company, description snippet). */

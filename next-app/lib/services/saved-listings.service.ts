@@ -3,25 +3,26 @@
  */
 
 import type { SavedListingResult, SaveListingBody } from "@schemas";
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/db";
-import { parseObjectId } from "@/lib/objectid";
-import { SavedListing } from "@/lib/models/SavedListing";
+import { getSql, compact } from "@/lib/db";
+import { isValidObjectId } from "@/lib/objectid";
 
-/** Maps a SavedListing document to API SavedListingResult shape. */
-function docToSavedListingResult(doc: {
-  _id: unknown;
-  listingId: unknown;
+/** A saved_listing row (camelCase via the db client's transform). */
+interface SavedListingRow {
+  id: string;
+  listingId: string;
   title: string;
   company: string;
   location?: string;
   sourceUrl?: string;
   country?: string;
   createdAt: Date;
-}): SavedListingResult {
+}
+
+/** Maps a saved_listing row to API SavedListingResult shape. */
+function docToSavedListingResult(doc: SavedListingRow): SavedListingResult {
   return {
-    id: String(doc._id),
-    listingId: String(doc.listingId),
+    id: doc.id,
+    listingId: doc.listingId,
     title: doc.title,
     company: doc.company,
     location: doc.location,
@@ -36,25 +37,29 @@ export async function saveListing(
   userId: string,
   input: SaveListingBody
 ): Promise<SavedListingResult> {
-  await connectDB();
-  const uid = new mongoose.Types.ObjectId(userId);
-  const lid = new mongoose.Types.ObjectId(input.listingId);
-  const doc = await SavedListing.findOneAndUpdate(
-    { userId: uid, listingId: lid },
-    {
-      $set: {
-        userId: uid,
-        listingId: lid,
-        title: input.title,
-        company: input.company,
-        location: input.location,
-        sourceUrl: input.sourceUrl,
-        country: input.country,
-      },
-    },
-    { upsert: true, new: true }
-  );
-  return docToSavedListingResult(doc);
+  const sql = getSql();
+  const doc = compact({
+    userId,
+    listingId: input.listingId,
+    title: input.title,
+    company: input.company,
+    location: input.location,
+    sourceUrl: input.sourceUrl,
+    country: input.country,
+  });
+  const update = compact({
+    title: input.title,
+    company: input.company,
+    location: input.location,
+    sourceUrl: input.sourceUrl,
+    country: input.country,
+  });
+  const [row] = (await sql`
+    insert into saved_listings ${sql(doc)}
+    on conflict (user_id, listing_id) do update set ${sql(update)}
+    returning *
+  `) as unknown as SavedListingRow[];
+  return docToSavedListingResult(row);
 }
 
 /** Unsaves a listing for a user. */
@@ -62,14 +67,14 @@ export async function unsaveListing(
   userId: string,
   listingId: string
 ): Promise<boolean> {
-  await connectDB();
-  const lid = parseObjectId(listingId);
-  if (!lid) return false;
-  const result = await SavedListing.deleteOne({
-    userId: new mongoose.Types.ObjectId(userId),
-    listingId: lid,
-  });
-  return (result.deletedCount ?? 0) > 0;
+  if (!isValidObjectId(listingId)) return false;
+  const sql = getSql();
+  const rows = (await sql`
+    delete from saved_listings
+    where user_id = ${userId} and listing_id = ${listingId}
+    returning id
+  `) as unknown as Array<{ id: string }>;
+  return rows.length > 0;
 }
 
 /** Returns whether the user has saved the listing. */
@@ -77,25 +82,25 @@ export async function isListingSaved(
   userId: string,
   listingId: string
 ): Promise<boolean> {
-  await connectDB();
-  const lid = parseObjectId(listingId);
-  if (!lid) return false;
-  const doc = await SavedListing.findOne({
-    userId: new mongoose.Types.ObjectId(userId),
-    listingId: lid,
-  }).lean();
-  return !!doc;
+  if (!isValidObjectId(listingId)) return false;
+  const sql = getSql();
+  const rows = (await sql`
+    select 1 from saved_listings
+    where user_id = ${userId} and listing_id = ${listingId}
+    limit 1
+  `) as unknown as unknown[];
+  return rows.length > 0;
 }
 
 /** Returns all saved listings for a user. */
 export async function getSavedListings(
   userId: string
 ): Promise<SavedListingResult[]> {
-  await connectDB();
-  const docs = await SavedListing.find({
-    userId: new mongoose.Types.ObjectId(userId),
-  })
-    .sort({ createdAt: -1 })
-    .lean();
+  const sql = getSql();
+  const docs = (await sql`
+    select * from saved_listings
+    where user_id = ${userId}
+    order by created_at desc
+  `) as unknown as SavedListingRow[];
   return docs.map(docToSavedListingResult);
 }

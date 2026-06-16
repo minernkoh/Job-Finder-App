@@ -1,23 +1,23 @@
 /**
- * Shared MongoDB ObjectId helpers. Centralizes validity checks and parsing used by API routes and services.
+ * Shared id helpers. Centralizes validity checks and parsing used by API routes and services.
+ * Postgres primary keys are UUIDs, so these validate the UUID string form.
+ * (File name kept as objectid.ts to avoid churn across import sites.)
  */
 
-import mongoose from "mongoose";
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Returns true if the string is a valid 24-char hex ObjectId; false otherwise.
+ * Returns true if the string is a valid UUID; false otherwise.
  */
 export function isValidObjectId(id: string | undefined | null): boolean {
   if (id == null || typeof id !== "string") return false;
-  return mongoose.Types.ObjectId.isValid(id);
+  return UUID_RE.test(id);
 }
 
 /**
- * Parses a string to a MongoDB ObjectId. Returns the ObjectId or null if invalid.
+ * Returns the id string if it is a valid UUID, or null otherwise.
  */
-export function parseObjectId(
-  id: string | undefined | null
-): mongoose.Types.ObjectId | null {
-  if (!isValidObjectId(id)) return null;
-  return new mongoose.Types.ObjectId(id!);
+export function parseObjectId(id: string | undefined | null): string | null {
+  return isValidObjectId(id) ? (id as string) : null;
 }

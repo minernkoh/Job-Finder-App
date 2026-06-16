@@ -3,7 +3,6 @@
  */
 
 import { generateObject, streamObject } from "ai";
-import mongoose from "mongoose";
 import {
   type DashboardMetrics,
   DashboardSummarySchema,
@@ -13,17 +12,12 @@ import {
   type PopularListingItem,
   type RecentUser,
 } from "@schemas";
-import { connectDB } from "@/lib/db";
+import { getSql } from "@/lib/db";
 import {
   executeWithGemini,
   retryWithBackoff,
 } from "@/lib/ai/gemini";
 import { getEnv } from "@/lib/env";
-import { User } from "@/lib/models/User";
-import { AISummary } from "@/lib/models/AISummary";
-import { SavedListing } from "@/lib/models/SavedListing";
-import { Listing } from "@/lib/models/Listing";
-import { ListingView } from "@/lib/models/ListingView";
 
 const SUMMARY_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -33,111 +27,89 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Aggregates dashboard metrics from DB (counts; no PII). */
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
-  await connectDB();
+  const sql = getSql();
   const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS);
 
-  const [
-    totalUsers,
-    totalSummaries,
-    totalViews,
-    totalSaves,
-    summariesLast7Days,
-    usersLast7Days,
-    viewsLast7Days,
-    savesLast7Days,
-    summaryUserIds,
-    saveUserIds,
-  ] = await Promise.all([
-    User.countDocuments(),
-    AISummary.countDocuments(),
-    ListingView.countDocuments(),
-    SavedListing.countDocuments(),
-    AISummary.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
-    User.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
-    ListingView.countDocuments({ viewedAt: { $gte: sevenDaysAgo } }),
-    SavedListing.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
-    AISummary.distinct("userId", { createdAt: { $gte: sevenDaysAgo } }),
-    SavedListing.distinct("userId", { createdAt: { $gte: sevenDaysAgo } }),
-  ]);
+  const [row] = (await sql`
+    select
+      (select count(*)::int from users) as total_users,
+      (select count(*)::int from ai_summaries) as total_summaries,
+      (select count(*)::int from listing_views) as total_views,
+      (select count(*)::int from saved_listings) as total_saves,
+      (select count(*)::int from ai_summaries where created_at >= ${sevenDaysAgo}) as summaries_last7_days,
+      (select count(*)::int from users where created_at >= ${sevenDaysAgo}) as users_last7_days,
+      (select count(*)::int from listing_views where viewed_at >= ${sevenDaysAgo}) as views_last7_days,
+      (select count(*)::int from saved_listings where created_at >= ${sevenDaysAgo}) as saves_last7_days,
+      (
+        select count(*)::int from (
+          select user_id from ai_summaries where created_at >= ${sevenDaysAgo}
+          union
+          select user_id from saved_listings where created_at >= ${sevenDaysAgo}
+        ) active
+      ) as active_users_last7_days
+  `) as unknown as Array<{
+    totalUsers: number;
+    totalSummaries: number;
+    totalViews: number;
+    totalSaves: number;
+    summariesLast7Days: number;
+    usersLast7Days: number;
+    viewsLast7Days: number;
+    savesLast7Days: number;
+    activeUsersLast7Days: number;
+  }>;
 
-  const activeUserIds = new Set([
-    ...summaryUserIds.map((id) => id.toString()),
-    ...saveUserIds.map((id) => id.toString()),
-  ]);
-
-  return {
-    totalUsers,
-    totalSummaries,
-    totalViews,
-    totalSaves,
-    summariesLast7Days,
-    usersLast7Days,
-    viewsLast7Days,
-    savesLast7Days,
-    activeUsersLast7Days: activeUserIds.size,
-  };
+  return row;
 }
 
 /** Returns new users per day for the last 7 days (for dashboard analytics). */
 export async function getDashboardUserGrowth(): Promise<UserGrowthBucket[]> {
-  await connectDB();
+  const sql = getSql();
   const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS);
-  const docs = await User.aggregate<{ _id: string; count: number }>([
-    { $match: { createdAt: { $gte: sevenDaysAgo } } },
-    {
-      $group: {
-        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-        count: { $sum: 1 },
-      },
-    },
-    { $sort: { _id: 1 } },
-  ]);
-  return docs.map((d) => ({ date: d._id, count: d.count }));
+  const rows = (await sql`
+    select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, count(*)::int as count
+    from users
+    where created_at >= ${sevenDaysAgo}
+    group by 1
+    order by 1
+  `) as unknown as Array<{ date: string; count: number }>;
+  return rows.map((d) => ({ date: d.date, count: d.count }));
 }
 
 /** Returns popular listings by view count (last 7 days) with save counts. */
 export async function getDashboardPopularListings(): Promise<PopularListingItem[]> {
-  await connectDB();
+  const sql = getSql();
   const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS);
-  const viewCounts = await ListingView.aggregate<{
-    _id: mongoose.Types.ObjectId;
-    count: number;
-  }>([
-    { $match: { viewedAt: { $gte: sevenDaysAgo } } },
-    { $group: { _id: "$listingId", count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 20 },
-  ]);
-  const saveCounts = await SavedListing.aggregate<{
-    _id: mongoose.Types.ObjectId;
-    count: number;
-  }>([
-    { $group: { _id: "$listingId", count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 20 },
-  ]);
-  const saveMap = new Map(saveCounts.map((s) => [s._id.toString(), s.count]));
-  const listingIds = viewCounts.map((v) => v._id);
-  const listings = await Listing.find({ _id: { $in: listingIds } })
-    .select("title")
-    .lean();
-  const titleMap = new Map(
-    listings.map((l) => {
-      const doc = l as { _id: mongoose.Types.ObjectId; title?: string };
-      const title = doc.title?.trim();
-      return [doc._id.toString(), title ? title : undefined];
-    })
-  );
-  return viewCounts
-    .map((v) => {
-      const idStr = v._id.toString();
-      return {
-        listingId: idStr,
-        title: titleMap.get(idStr),
-        viewCount: v.count,
-        saveCount: saveMap.get(idStr) ?? 0,
-      };
-    })
+  const rows = (await sql`
+    select v.listing_id, l.title, v.view_count, coalesce(s.save_count, 0)::int as save_count
+    from (
+      select listing_id, count(*)::int as view_count
+      from listing_views
+      where viewed_at >= ${sevenDaysAgo}
+      group by listing_id
+      order by view_count desc
+      limit 20
+    ) v
+    left join listings l on l.id = v.listing_id
+    left join (
+      select listing_id, count(*)::int as save_count
+      from saved_listings
+      group by listing_id
+    ) s on s.listing_id = v.listing_id
+    order by v.view_count desc
+  `) as unknown as Array<{
+    listingId: string;
+    title?: string;
+    viewCount: number;
+    saveCount: number;
+  }>;
+  return rows
+    .map((r) => ({
+      listingId: r.listingId,
+      title: r.title?.trim() ? r.title.trim() : undefined,
+      viewCount: r.viewCount,
+      saveCount: r.saveCount,
+    }))
     .filter((item) => item.title != null && item.title.length > 0);
 }
 
@@ -145,16 +117,17 @@ const RECENT_USERS_LIMIT = 15;
 
 /** Returns the most recently created users (id, username, createdAt) for the dashboard. */
 export async function getDashboardRecentUsers(): Promise<RecentUser[]> {
-  await connectDB();
-  const docs = await User.find()
-    .select("username createdAt")
-    .sort({ createdAt: -1 })
-    .limit(RECENT_USERS_LIMIT)
-    .lean();
-  return docs.map((u) => ({
-    id: (u as { _id: mongoose.Types.ObjectId })._id.toString(),
-    username: (u as { username: string }).username,
-    createdAt: (u as { createdAt: Date }).createdAt,
+  const sql = getSql();
+  const rows = (await sql`
+    select id, username, created_at
+    from users
+    order by created_at desc
+    limit ${RECENT_USERS_LIMIT}
+  `) as unknown as Array<{ id: string; username: string; createdAt: Date }>;
+  return rows.map((u) => ({
+    id: u.id,
+    username: u.username,
+    createdAt: u.createdAt,
   }));
 }
 
