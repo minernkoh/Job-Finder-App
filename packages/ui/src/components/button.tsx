@@ -37,8 +37,7 @@ const buttonVariants = cva(
         icon: "size-10 min-w-0",
         "icon-xs":
           "min-h-[44px] min-w-[44px] rounded-lg [&_svg:not([class*='size-'])]:size-3 sm:min-h-8 sm:min-w-8",
-        "icon-sm":
-          "min-h-[44px] min-w-[44px] sm:min-h-9 sm:min-w-9",
+        "icon-sm": "min-h-[44px] min-w-[44px] sm:min-h-9 sm:min-w-9",
         "icon-lg": "size-12 min-w-0",
       },
     },
@@ -46,7 +45,7 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
+  },
 );
 
 /** Inline spinner for loading state; no external icon dependency. */
@@ -110,7 +109,7 @@ function Button({
       type={asChild ? undefined : (type ?? "button")}
       className={cn(
         hasIconRight && "group",
-        buttonVariants({ variant, size, className })
+        buttonVariants({ variant, size, className }),
       )}
       disabled={isDisabled}
       aria-busy={loading ? true : undefined}
@@ -123,13 +122,19 @@ function Button({
             {
               children: (
                 <>
-                  {(children as React.ReactElement<{ children?: React.ReactNode }>).props.children}
+                  {
+                    (
+                      children as React.ReactElement<{
+                        children?: React.ReactNode;
+                      }>
+                    ).props.children
+                  }
                   <span className="inline-flex shrink-0 transition-transform duration-200 group-hover:translate-x-0.5">
                     {iconRight}
                   </span>
                 </>
               ),
-            }
+            },
           )
         ) : (
           children
