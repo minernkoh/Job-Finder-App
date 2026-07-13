@@ -3,6 +3,7 @@
  */
 
 import mongoose, { Schema, Model } from "mongoose";
+import type { ListingSource } from "@schemas";
 
 export interface IListingDocument {
   _id: mongoose.Types.ObjectId;
@@ -10,7 +11,7 @@ export interface IListingDocument {
   company: string;
   location?: string;
   description?: string;
-  source: "adzuna";
+  source: ListingSource;
   sourceUrl?: string;
   sourceId: string;
   country: string;

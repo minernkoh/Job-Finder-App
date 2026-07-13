@@ -7,7 +7,7 @@ import { apiClient } from "./client";
 import { assertApiSuccess } from "./errors";
 import type { ApiResponse } from "./types";
 
-/** Converts a saved listing to ListingResult shape for use with ListingCard (id = listingId, source = adzuna). */
+/** Converts a saved listing to ListingResult shape for use with ListingCard (id = listingId). Defaults source to adzuna for docs saved before multi-source. */
 export function savedListingToListingResult(
   s: SavedListingResult
 ): ListingResult {
@@ -18,7 +18,7 @@ export function savedListingToListingResult(
     location: s.location,
     sourceUrl: s.sourceUrl,
     country: s.country ?? "sg",
-    source: "adzuna",
+    source: s.source ?? "adzuna",
   };
 }
 
@@ -35,6 +35,7 @@ export async function saveListing(
       location: listing.location,
       sourceUrl: listing.sourceUrl,
       country: listing.country,
+      source: listing.source,
     }
   );
   assertApiSuccess(res.data, "Failed to save");

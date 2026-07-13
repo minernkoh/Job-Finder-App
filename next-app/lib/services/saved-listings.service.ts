@@ -2,7 +2,7 @@
  * Saved listings service: save/unsave listings for a user, and fetch user's saved listings.
  */
 
-import type { SavedListingResult, SaveListingBody } from "@schemas";
+import type { SavedListingResult, SaveListingBody, ListingSource } from "@schemas";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { parseObjectId } from "@/lib/objectid";
@@ -17,6 +17,7 @@ function docToSavedListingResult(doc: {
   location?: string;
   sourceUrl?: string;
   country?: string;
+  source?: ListingSource;
   createdAt: Date;
 }): SavedListingResult {
   return {
@@ -27,6 +28,7 @@ function docToSavedListingResult(doc: {
     location: doc.location,
     sourceUrl: doc.sourceUrl,
     country: doc.country,
+    source: doc.source,
     savedAt: doc.createdAt.toISOString(),
   };
 }
@@ -50,6 +52,7 @@ export async function saveListing(
         location: input.location,
         sourceUrl: input.sourceUrl,
         country: input.country,
+        source: input.source,
       },
     },
     { upsert: true, new: true }

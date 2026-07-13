@@ -24,6 +24,12 @@ const envSchema = z.object({
   NODE_ENV: z.string().optional(),
   /** If set, allows creating an admin via POST /api/v1/auth/admin/register; if unset, that endpoint returns 403. */
   ADMIN_REGISTER_SECRET: z.string().optional(),
+  /** Enables best-effort scraper sources (LinkedIn, JobStreet). Default on; set "false"/"0" to disable in prod where server IPs get blocked. Not z.coerce.boolean (that turns "false" into true). */
+  ENABLE_SCRAPER_SOURCES: z
+    .string()
+    .optional()
+    .default("true")
+    .transform((s) => s !== "false" && s !== "0"),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -42,6 +48,7 @@ function validateEnv(): Env {
     AI_SUMMARY_CACHE_TTL: process.env.AI_SUMMARY_CACHE_TTL,
     NODE_ENV: process.env.NODE_ENV,
     ADMIN_REGISTER_SECRET: process.env.ADMIN_REGISTER_SECRET,
+    ENABLE_SCRAPER_SOURCES: process.env.ENABLE_SCRAPER_SOURCES,
   });
   if (!parsed.success) {
     throw new Error(

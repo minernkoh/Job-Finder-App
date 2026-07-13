@@ -3,6 +3,7 @@
  */
 
 import mongoose, { Schema, Model } from "mongoose";
+import type { ListingSource } from "@schemas";
 
 export interface ISavedListingDocument {
   _id: mongoose.Types.ObjectId;
@@ -13,6 +14,8 @@ export interface ISavedListingDocument {
   location?: string;
   sourceUrl?: string;
   country?: string;
+  /** Job source at save time; optional for docs predating multi-source. */
+  source?: ListingSource;
   createdAt: Date;
 }
 
@@ -25,6 +28,7 @@ const SavedListingSchema = new Schema<ISavedListingDocument>(
     location: { type: String },
     sourceUrl: { type: String },
     country: { type: String },
+    source: { type: String },
   },
   { timestamps: true }
 );

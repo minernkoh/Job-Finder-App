@@ -3,6 +3,7 @@
  */
 
 import { z } from "zod";
+import { LISTING_SOURCES } from "./listing";
 
 /** API response shape for a saved listing (id, listingId, snapshot fields, savedAt). */
 export const SavedListingResultSchema = z.object({
@@ -13,6 +14,8 @@ export const SavedListingResultSchema = z.object({
   location: z.string().optional(),
   sourceUrl: z.string().url().optional(),
   country: z.string().optional(),
+  /** Job source; optional for back-compat with saved docs predating multi-source. */
+  source: z.enum(LISTING_SOURCES).optional(),
   savedAt: z.string(),
 });
 
@@ -26,6 +29,7 @@ export const SaveListingBodySchema = z.object({
   location: z.string().optional(),
   sourceUrl: z.string().url().optional(),
   country: z.string().optional(),
+  source: z.enum(LISTING_SOURCES).optional(),
 });
 
 export type SaveListingBody = z.infer<typeof SaveListingBodySchema>;

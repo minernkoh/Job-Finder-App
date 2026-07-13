@@ -8,55 +8,24 @@ import { getEnv } from "@/lib/env";
 import { parseObjectId } from "@/lib/objectid";
 import { Listing, type IListingDocument } from "@/lib/models/Listing";
 import { SearchCache } from "@/lib/models/SearchCache";
-import type { ListingCreate, ListingResult, ListingUpdate } from "@schemas";
+import type {
+  ListingCreate,
+  ListingResult,
+  ListingSource,
+  ListingUpdate,
+} from "@schemas";
 import type { ListingsFilters } from "@/lib/query-keys";
+import { validateCountry, type AdzunaCountry } from "./adzuna.service";
+import { buildAdzunaJobUrl } from "./providers/adzuna.provider";
 import {
-  fetchAdzunaSearch,
-  validateCountry,
-  type AdzunaCountry,
-  type AdzunaJob,
-} from "./adzuna.service";
+  ALL_PROVIDERS,
+  type NormalizedJob,
+  type SearchContext,
+} from "./providers";
 
 /** Escapes special regex characters in a string so it can be safely used in RegExp. */
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Parses Adzuna created ISO string to Date; returns undefined if missing or invalid. */
-function parsePostedAt(created: string | undefined): Date | undefined {
-  if (!created?.trim()) return undefined;
-  const d = new Date(created);
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
-
-/** Adzuna country code to job page base domain. Used to build fallback URL when redirect_url is missing. */
-const ADZUNA_DOMAINS: Record<string, string> = {
-  gb: "adzuna.co.uk",
-  at: "adzuna.at",
-  au: "adzuna.com.au",
-  be: "adzuna.be",
-  br: "adzuna.com.br",
-  ca: "adzuna.ca",
-  ch: "adzuna.ch",
-  de: "adzuna.de",
-  es: "adzuna.es",
-  fr: "adzuna.fr",
-  in: "adzuna.in",
-  it: "adzuna.it",
-  mx: "adzuna.com.mx",
-  nl: "adzuna.nl",
-  nz: "adzuna.co.nz",
-  pl: "adzuna.pl",
-  ru: "adzuna.ru",
-  sg: "adzuna.sg",
-  us: "adzuna.com",
-  za: "adzuna.co.za",
-};
-
-/** Builds Adzuna job page URL when redirect_url is missing. Uses sourceId and country. */
-function buildAdzunaJobUrl(sourceId: string, country: string): string {
-  const domain = ADZUNA_DOMAINS[country?.toLowerCase() ?? "sg"] ?? "adzuna.com";
-  return `https://www.${domain}/jobs/land/ad/${encodeURIComponent(sourceId)}`;
 }
 
 /** Builds cache key from search params for deduplication. */
@@ -88,6 +57,7 @@ function docToListingResult(doc: {
   company: string;
   location?: string;
   description?: string;
+  source: ListingSource;
   sourceUrl?: string;
   sourceId?: string;
   country: string;
@@ -95,9 +65,12 @@ function docToListingResult(doc: {
   salaryMin?: number;
   salaryMax?: number;
 }): ListingResult {
+  // Only Adzuna docs get a fabricated fallback URL; other sources always carry their own sourceUrl.
   const sourceUrl =
     doc.sourceUrl ??
-    (doc.sourceId && !doc.sourceId.startsWith("manual-")
+    (doc.source === "adzuna" &&
+    doc.sourceId &&
+    !doc.sourceId.startsWith("manual-")
       ? buildAdzunaJobUrl(doc.sourceId, doc.country)
       : undefined);
   return {
@@ -106,7 +79,7 @@ function docToListingResult(doc: {
     company: doc.company,
     location: doc.location,
     description: doc.description,
-    source: "adzuna",
+    source: doc.source,
     sourceUrl,
     country: doc.country,
     postedAt: doc.postedAt,
@@ -115,30 +88,6 @@ function docToListingResult(doc: {
   };
 }
 
-/** Maps an Adzuna job plus id and country to API ListingResult shape. */
-function jobToListingResult(
-  job: AdzunaJob,
-  id: string,
-  country: string
-): ListingResult {
-  const sourceUrl =
-    job.redirect_url ?? buildAdzunaJobUrl(String(job.id), country);
-  return {
-    id,
-    title: job.title,
-    company: job.company?.display_name ?? "Unknown",
-    location: job.location?.display_name,
-    description: job.description,
-    source: "adzuna",
-    sourceUrl,
-    country,
-    postedAt: parsePostedAt(job.created),
-    salaryMin: job.salary_min,
-    salaryMax: job.salary_max,
-  };
-}
-
-/** Maps Adzuna job to our Listing document shape. */
 /** Sorts listings by the given sort option. Returns original order if sortBy is empty or unknown. */
 function sortListings(listings: ListingResult[], sortBy?: string): ListingResult[] {
   if (!sortBy || listings.length <= 1) return listings;
@@ -208,32 +157,45 @@ async function fetchManualListings(
   return docs.map((d) => docToListingResult(d));
 }
 
-/** Maps an Adzuna job to our Listing document shape. */
-function normalizeAdzunaJob(
-  job: AdzunaJob,
-  country: string,
-  expiresAt: Date
-): Omit<IListingDocument, "_id" | "createdAt" | "updatedAt"> {
-  const postedAt = parsePostedAt(job.created);
-  const sourceUrl =
-    job.redirect_url ?? buildAdzunaJobUrl(String(job.id), country);
+/** Normalizes a company/title string for dedup: lowercase, collapse whitespace, trim. */
+export function normalizeKey(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/** Dedupes jobs across sources by company|title, keeping the one with the longest description. */
+export function dedupeJobs(jobs: NormalizedJob[]): NormalizedJob[] {
+  const byKey = new Map<string, NormalizedJob>();
+  for (const job of jobs) {
+    const key = `${normalizeKey(job.company)}|${normalizeKey(job.title)}`;
+    const existing = byKey.get(key);
+    if (
+      !existing ||
+      (job.description ?? "").length > (existing.description ?? "").length
+    ) {
+      byKey.set(key, job);
+    }
+  }
+  return [...byKey.values()];
+}
+
+/** Maps a NormalizedJob plus its persisted id to API ListingResult shape, carrying source through. */
+function jobToResult(job: NormalizedJob, id: string, country: string): ListingResult {
   return {
+    id,
     title: job.title,
-    company: job.company?.display_name ?? "Unknown",
-    location: job.location?.display_name ?? undefined,
-    description: job.description ?? undefined,
-    source: "adzuna",
-    sourceUrl,
-    sourceId: String(job.id),
+    company: job.company,
+    location: job.location,
+    description: job.description,
+    source: job.source,
+    sourceUrl: job.sourceUrl,
     country,
-    expiresAt,
-    ...(postedAt && { postedAt }),
-    salaryMin: job.salary_min,
-    salaryMax: job.salary_max,
+    postedAt: job.postedAt,
+    salaryMin: job.salaryMin,
+    salaryMax: job.salaryMax,
   };
 }
 
-/** Returns listings for a search. Uses cache first, then Adzuna. Merges manual listings on page 1. */
+/** Returns listings for a search. Uses cache first, then fans out across providers. Merges manual listings on page 1. */
 export async function searchListings(
   country: string,
   page: number,
@@ -258,34 +220,70 @@ export async function searchListings(
         ? (cached as { totalCount: number }).totalCount
         : listings.length;
   } else {
-    // Cache miss: fetch from Adzuna
-    if (!env.ADZUNA_APP_ID || !env.ADZUNA_APP_KEY) {
+    // Cache miss: fan out across every provider that covers this country and is enabled.
+    const ctx: SearchContext = { keyword, page, country: cc, filters, env };
+    let selected = ALL_PROVIDERS.filter(
+      (p) => p.supportsCountry(cc) && p.enabled(env)
+    );
+    // Pages >= 2 are Adzuna-only: the SG scrapers/MCF only serve page 1, so
+    // restricting to Adzuna keeps cursor/pagination semantics honest.
+    if (page >= 2) {
+      selected = selected.filter((p) => p.source === "adzuna");
+    }
+    // Only a hard error when no provider can serve this country at all. SG works
+    // keyless via MCF; other countries still need Adzuna keys.
+    if (selected.length === 0) {
       throw new Error(
         "ADZUNA_APP_ID and ADZUNA_APP_KEY must be set for job search"
       );
     }
+
     const ttlMs = (env.JOB_SEARCH_CACHE_TTL ?? 3600) * 1000;
     const expiresAt = new Date(Date.now() + ttlMs);
-    const resp = await fetchAdzunaSearch(
-      env.ADZUNA_APP_ID,
-      env.ADZUNA_APP_KEY,
-      cc,
-      page,
-      {
-        what: keyword,
-        resultsPerPage: 20,
-        where: filters?.where,
-        category: filters?.category,
-        fullTime: filters?.fullTime,
-        permanent: filters?.permanent,
-        salaryMin: filters?.salaryMin,
-        sortBy: filters?.sortBy,
+
+    // Fan out; a rejected provider (e.g. Adzuna throwing) is simply ignored.
+    const settled = await Promise.allSettled(selected.map((p) => p.search(ctx)));
+    const allJobs: NormalizedJob[] = [];
+    let totalFromProviders = 0;
+    let anyFulfilled = false;
+    for (const result of settled) {
+      if (result.status === "fulfilled") {
+        anyFulfilled = true;
+        allJobs.push(...result.value.jobs);
+        totalFromProviders += result.value.totalCount;
       }
-    );
+    }
+    // If every provider rejected (e.g. an Adzuna-only search with a transient API
+    // error), surface the failure instead of caching an empty result for the whole
+    // TTL. A genuinely empty-but-successful search still caches normally.
+    if (!anyFulfilled) {
+      const firstError = settled.find(
+        (r): r is PromiseRejectedResult => r.status === "rejected"
+      );
+      throw firstError?.reason instanceof Error
+        ? firstError.reason
+        : new Error("All job providers failed");
+    }
+
+    // Dedupe across sources, keeping the entry with the richest description.
+    const survivors = dedupeJobs(allJobs);
 
     const listingIds: import("mongoose").Types.ObjectId[] = [];
-    for (const job of resp.results) {
-      const doc = normalizeAdzunaJob(job, cc, expiresAt);
+    for (const job of survivors) {
+      const doc: Omit<IListingDocument, "_id" | "createdAt" | "updatedAt"> = {
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        description: job.description,
+        source: job.source,
+        sourceUrl: job.sourceUrl,
+        sourceId: job.sourceId,
+        country: cc,
+        expiresAt,
+        ...(job.postedAt && { postedAt: job.postedAt }),
+        salaryMin: job.salaryMin,
+        salaryMax: job.salaryMax,
+      };
       const upserted = await Listing.findOneAndUpdate(
         { sourceId: doc.sourceId, country: doc.country },
         { $set: doc },
@@ -296,17 +294,15 @@ export async function searchListings(
 
     await SearchCache.findOneAndUpdate(
       { cacheKey },
-      { $set: { cacheKey, listingIds, totalCount: resp.count, expiresAt } },
+      { $set: { cacheKey, listingIds, totalCount: totalFromProviders, expiresAt } },
       { upsert: true }
     );
 
     listings = sortListings(
-      resp.results.map((job, i) =>
-        jobToListingResult(job, String(listingIds[i]), cc)
-      ),
+      survivors.map((job, i) => jobToResult(job, String(listingIds[i]), cc)),
       filters?.sortBy
     );
-    totalCount = resp.count;
+    totalCount = totalFromProviders;
   }
 
   // Merge manual listings on page 1

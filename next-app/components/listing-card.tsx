@@ -16,7 +16,15 @@ import { Button, Card, CardContent, CardHeader } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
 import { BADGE_PRIMARY, BADGE_MUTED_TIGHT } from "@/lib/badges";
-import type { ListingResult } from "@schemas";
+import type { ListingResult, ListingSource } from "@schemas";
+
+/** Human-readable label for each job source, shown as a small badge on the card. */
+const SOURCE_LABELS: Record<ListingSource, string> = {
+  adzuna: "Adzuna",
+  mcf: "MyCareersFuture",
+  linkedin: "LinkedIn",
+  jobstreet: "JobStreet",
+};
 
 interface ListingCardProps {
   listing: ListingResult;
@@ -202,11 +210,18 @@ export function ListingCard({
               <p className="text-sm font-medium text-foreground">{salary}</p>
             ) : null;
           })()}
-          {listing.country && listing.country !== "sg" && (
-            <span className={cn("mt-1 inline-block", BADGE_MUTED_TIGHT)}>
-              {listing.country.toUpperCase()}
-            </span>
-          )}
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {listing.source && SOURCE_LABELS[listing.source] && (
+              <span className={cn("inline-block", BADGE_MUTED_TIGHT)}>
+                {SOURCE_LABELS[listing.source]}
+              </span>
+            )}
+            {listing.country && listing.country !== "sg" && (
+              <span className={cn("inline-block", BADGE_MUTED_TIGHT)}>
+                {listing.country.toUpperCase()}
+              </span>
+            )}
+          </div>
           {(() => {
             const posted = formatPostedDate(listing.postedAt);
             return posted ? (
