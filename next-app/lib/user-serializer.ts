@@ -1,5 +1,5 @@
 /**
- * Serializes a User document (or lean object) to the API response shape. Single source of truth for user JSON.
+ * Serializes a user row to the API response shape. Single source of truth for user JSON.
  */
 
 export interface SerializedUserBase {
@@ -14,8 +14,8 @@ export interface SerializedUserWithTimestamps extends SerializedUserBase {
   updatedAt: Date;
 }
 
-type LeanUser = {
-  _id: { toString(): string };
+type UserRow = {
+  id: string;
   email: string;
   username: string;
   role: string;
@@ -24,15 +24,15 @@ type LeanUser = {
 };
 
 /**
- * Converts a user document (or lean result) to the API response shape.
+ * Converts a user row to the API response shape.
  * Set timestamps: false for /me and other responses that omit createdAt/updatedAt.
  */
 export function serializeUser(
-  user: LeanUser,
+  user: UserRow,
   options?: { timestamps?: boolean }
 ): SerializedUserBase | SerializedUserWithTimestamps {
   const base: SerializedUserBase = {
-    id: user._id.toString(),
+    id: user.id,
     email: user.email,
     username: user.username,
     role: user.role,

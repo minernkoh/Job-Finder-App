@@ -3,7 +3,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { User } from "@/lib/models/User";
+import { getSql } from "@/lib/db";
+import { isValidObjectId } from "@/lib/objectid";
 import { withAuth } from "@/lib/api/with-auth";
 import { serializeUser } from "@/lib/user-serializer";
 
@@ -11,7 +12,17 @@ async function getMeHandler(
   _request: NextRequest,
   payload: { sub: string }
 ): Promise<NextResponse> {
-  const user = await User.findById(payload.sub).lean();
+  const sql = getSql();
+  const [user] = isValidObjectId(payload.sub)
+    ? ((await sql`
+        select id, email, username, role from users where id = ${payload.sub} limit 1
+      `) as unknown as Array<{
+        id: string;
+        email: string;
+        username: string;
+        role: string;
+      }>)
+    : [];
   if (!user) {
     return NextResponse.json(
       { success: false, message: "User not found" },

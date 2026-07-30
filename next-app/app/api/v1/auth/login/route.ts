@@ -6,11 +6,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LoginSchema } from "@schemas";
 import { validationErrorResponse } from "@/lib/api/errors";
-import { connectDB } from "@/lib/db";
-import { User, comparePassword } from "@/lib/models/User";
+import { getSql } from "@/lib/db";
+import { comparePassword } from "@/lib/auth/password";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 import { buildSetCookieHeader } from "@/lib/auth/cookies";
 import { serializeUser } from "@/lib/user-serializer";
+
+interface LoginUserRow {
+  id: string;
+  email: string;
+  username: string;
+  role: "user" | "admin";
+  status?: string;
+  password: string;
+}
 
 /** Validates credentials and returns access token plus user; sets refresh token cookie. Resolves user by email (if login contains @) or username. */
 export async function POST(request: NextRequest) {
@@ -21,11 +30,17 @@ export async function POST(request: NextRequest) {
     const { login, password, role } = parsed.data;
     const loginRole = role ?? "user";
 
-    await connectDB();
+    const sql = getSql();
     const isEmail = login.includes("@");
-    const user = isEmail
-      ? await User.findOne({ email: login, role: loginRole }).select("+password").lean()
-      : await User.findOne({ username: login, role: loginRole }).select("+password").lean();
+    const [user] = (isEmail
+      ? ((await sql`
+          select id, email, username, role, status, password
+          from users where email = ${login} and role = ${loginRole} limit 1
+        `) as unknown as LoginUserRow[])
+      : ((await sql`
+          select id, email, username, role, status, password
+          from users where username = ${login} and role = ${loginRole} limit 1
+        `) as unknown as LoginUserRow[]));
     if (!user) {
       return NextResponse.json(
         { success: false, message: "Invalid email, username, or password" },
@@ -40,14 +55,14 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-    if ((user as { status?: string }).status === "suspended") {
+    if (user.status === "suspended") {
       return NextResponse.json(
         { success: false, message: "Account suspended" },
         { status: 403 }
       );
     }
 
-    const sub = user._id.toString();
+    const sub = user.id;
     const accessToken = await signAccessToken({
       sub,
       email: user.email,

@@ -1,13 +1,11 @@
 /**
- * Listings service: get-or-fetch pattern with MongoDB caching. Checks SearchCache by query hash, then Adzuna API if cache miss.
+ * Listings service: get-or-fetch pattern with Postgres caching. Checks search_cache by query hash, then Adzuna API if cache miss.
  */
 
 import { createHash, randomUUID } from "crypto";
-import { connectDB } from "@/lib/db";
+import { getSql, compact } from "@/lib/db";
 import { getEnv } from "@/lib/env";
-import { parseObjectId } from "@/lib/objectid";
-import { Listing, type IListingDocument } from "@/lib/models/Listing";
-import { SearchCache } from "@/lib/models/SearchCache";
+import { isValidObjectId } from "@/lib/objectid";
 import type { ListingCreate, ListingResult, ListingUpdate } from "@schemas";
 import type { ListingsFilters } from "@/lib/query-keys";
 import {
@@ -17,9 +15,28 @@ import {
   type AdzunaJob,
 } from "./adzuna.service";
 
-/** Escapes special regex characters in a string so it can be safely used in RegExp. */
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** A listing row as stored in Postgres (camelCase via the db client's transform). */
+interface ListingRow {
+  id: string;
+  title: string;
+  company: string;
+  location?: string;
+  description?: string;
+  source: string;
+  sourceUrl?: string;
+  sourceId: string;
+  country: string;
+  expiresAt: Date;
+  postedAt?: Date;
+  salaryMin?: number;
+  salaryMax?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** Escapes ILIKE wildcards so user input is matched literally (backslash is the default escape char). */
+function likeContains(term: string): string {
+  return `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
 /** Parses Adzuna created ISO string to Date; returns undefined if missing or invalid. */
@@ -81,9 +98,9 @@ function buildCacheKey(
   return createHash("sha256").update(raw).digest("hex").slice(0, 32);
 }
 
-/** Maps a Listing document (lean) to API ListingResult shape. */
+/** Maps a listing row to API ListingResult shape. */
 function docToListingResult(doc: {
-  _id: unknown;
+  id: string;
   title: string;
   company: string;
   location?: string;
@@ -101,7 +118,7 @@ function docToListingResult(doc: {
       ? buildAdzunaJobUrl(doc.sourceId, doc.country)
       : undefined);
   return {
-    id: String(doc._id),
+    id: doc.id,
     title: doc.title,
     company: doc.company,
     location: doc.location,
@@ -138,7 +155,6 @@ function jobToListingResult(
   };
 }
 
-/** Maps Adzuna job to our Listing document shape. */
 /** Sorts listings by the given sort option. Returns original order if sortBy is empty or unknown. */
 function sortListings(listings: ListingResult[], sortBy?: string): ListingResult[] {
   if (!sortBy || listings.length <= 1) return listings;
@@ -157,7 +173,7 @@ function sortListings(listings: ListingResult[], sortBy?: string): ListingResult
   }
 }
 
-/** Fetches manual listings from MongoDB that match search criteria. Only runs for page 1. */
+/** Fetches manual listings from Postgres that match search criteria. Only runs for page 1. */
 async function fetchManualListings(
   country: string,
   page: number,
@@ -165,59 +181,43 @@ async function fetchManualListings(
   filters?: ListingsFilters
 ): Promise<ListingResult[]> {
   if (page !== 1) return [];
+  const sql = getSql();
 
-  const query: Record<string, unknown> = {
-    sourceId: { $regex: /^manual-/ },
-    country,
-    expiresAt: { $gt: new Date() },
-  };
-
-  const andConditions: Record<string, unknown>[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const conds: any[] = [
+    sql`source_id like 'manual-%'`,
+    sql`country = ${country}`,
+    sql`expires_at > now()`,
+  ];
 
   if (keyword?.trim()) {
-    const regex = new RegExp(escapeRegex(keyword.trim()), "i");
-    andConditions.push({
-      $or: [
-        { title: regex },
-        { company: regex },
-        { description: regex },
-      ],
-    });
+    const p = likeContains(keyword.trim());
+    conds.push(sql`(title ilike ${p} or company ilike ${p} or description ilike ${p})`);
   }
-
   if (filters?.where?.trim()) {
-    andConditions.push({
-      location: { $regex: escapeRegex(filters.where.trim()), $options: "i" },
-    });
+    conds.push(sql`location ilike ${likeContains(filters.where.trim())}`);
   }
-
   if (filters?.salaryMin != null && filters.salaryMin > 0) {
-    andConditions.push({
-      $or: [
-        { salaryMin: { $gte: filters.salaryMin } },
-        { salaryMax: { $gte: filters.salaryMin } },
-      ],
-    });
+    conds.push(sql`(salary_min >= ${filters.salaryMin} or salary_max >= ${filters.salaryMin})`);
   }
 
-  if (andConditions.length > 0) {
-    query.$and = andConditions;
-  }
+  let where = conds[0];
+  for (let i = 1; i < conds.length; i++) where = sql`${where} and ${conds[i]}`;
 
-  const docs = await Listing.find(query).lean();
+  const docs = (await sql`select * from listings where ${where}`) as unknown as ListingRow[];
   return docs.map((d) => docToListingResult(d));
 }
 
-/** Maps an Adzuna job to our Listing document shape. */
+/** Maps an Adzuna job to our listing column shape (camelCase keys -> snake_case columns). */
 function normalizeAdzunaJob(
   job: AdzunaJob,
   country: string,
   expiresAt: Date
-): Omit<IListingDocument, "_id" | "createdAt" | "updatedAt"> {
+): Record<string, unknown> {
   const postedAt = parsePostedAt(job.created);
   const sourceUrl =
     job.redirect_url ?? buildAdzunaJobUrl(String(job.id), country);
-  return {
+  return compact({
     title: job.title,
     company: job.company?.display_name ?? "Unknown",
     location: job.location?.display_name ?? undefined,
@@ -227,10 +227,10 @@ function normalizeAdzunaJob(
     sourceId: String(job.id),
     country,
     expiresAt,
-    ...(postedAt && { postedAt }),
+    postedAt,
     salaryMin: job.salary_min,
     salaryMax: job.salary_max,
-  };
+  });
 }
 
 /** Returns listings for a search. Uses cache first, then Adzuna. Merges manual listings on page 1. */
@@ -240,7 +240,7 @@ export async function searchListings(
   keyword?: string,
   filters?: ListingsFilters
 ): Promise<{ listings: ListingResult[]; totalCount: number }> {
-  await connectDB();
+  const sql = getSql();
   const env = getEnv();
   const cc = validateCountry(country) as AdzunaCountry;
   const cacheKey = buildCacheKey(cc, page, keyword, filters);
@@ -248,15 +248,26 @@ export async function searchListings(
   let listings: ListingResult[];
   let totalCount: number;
 
-  // Check SearchCache
-  const cached = await SearchCache.findOne({ cacheKey }).lean();
+  // Check search_cache
+  const [cached] = (await sql`
+    select listing_ids, total_count, expires_at
+    from search_cache
+    where cache_key = ${cacheKey}
+  `) as unknown as Array<{ listingIds: string[]; totalCount: number; expiresAt: Date }>;
+
   if (cached && cached.expiresAt > new Date()) {
-    const docs = await Listing.find({ _id: { $in: cached.listingIds } }).lean();
+    const ids = cached.listingIds;
+    const docs =
+      ids.length > 0
+        ? ((await sql`
+            select * from listings
+            where id = any(${ids}::uuid[])
+            order by array_position(${ids}::uuid[], id)
+          `) as unknown as ListingRow[])
+        : [];
     listings = sortListings(docs.map(docToListingResult), filters?.sortBy);
     totalCount =
-      typeof (cached as { totalCount?: number }).totalCount === "number"
-        ? (cached as { totalCount: number }).totalCount
-        : listings.length;
+      typeof cached.totalCount === "number" ? cached.totalCount : listings.length;
   } else {
     // Cache miss: fetch from Adzuna
     if (!env.ADZUNA_APP_ID || !env.ADZUNA_APP_KEY) {
@@ -283,26 +294,30 @@ export async function searchListings(
       }
     );
 
-    const listingIds: import("mongoose").Types.ObjectId[] = [];
+    const listingIds: string[] = [];
     for (const job of resp.results) {
       const doc = normalizeAdzunaJob(job, cc, expiresAt);
-      const upserted = await Listing.findOneAndUpdate(
-        { sourceId: doc.sourceId, country: doc.country },
-        { $set: doc },
-        { upsert: true, new: true }
-      );
-      listingIds.push(upserted._id);
+      const [row] = (await sql`
+        insert into listings ${sql(doc)}
+        on conflict (source_id, country) do update set ${sql(doc)}
+        returning id
+      `) as unknown as Array<{ id: string }>;
+      listingIds.push(row.id);
     }
 
-    await SearchCache.findOneAndUpdate(
-      { cacheKey },
-      { $set: { cacheKey, listingIds, totalCount: resp.count, expiresAt } },
-      { upsert: true }
-    );
+    await sql`
+      insert into search_cache (cache_key, listing_ids, total_count, expires_at)
+      values (${cacheKey}, ${listingIds}::uuid[], ${resp.count}, ${expiresAt})
+      on conflict (cache_key) do update set
+        listing_ids = excluded.listing_ids,
+        total_count = excluded.total_count,
+        expires_at = excluded.expires_at,
+        updated_at = now()
+    `;
 
     listings = sortListings(
       resp.results.map((job, i) =>
-        jobToListingResult(job, String(listingIds[i]), cc)
+        jobToListingResult(job, listingIds[i], cc)
       ),
       filters?.sortBy
     );
@@ -324,20 +339,17 @@ export async function searchListings(
   return { listings, totalCount };
 }
 
-/** Returns a single listing by id. Fetches from cache or Adzuna if needed. */
+/** Returns a single listing by id. */
 export async function getListingById(
   id: string
 ): Promise<ListingResult | null> {
-  await connectDB();
-  const objId = parseObjectId(id);
-  if (objId) {
-    const doc = await Listing.findById(objId).lean();
-    if (doc) return docToListingResult(doc);
-  }
-  return null;
+  if (!isValidObjectId(id)) return null;
+  const sql = getSql();
+  const [doc] = (await sql`select * from listings where id = ${id}`) as unknown as ListingRow[];
+  return doc ? docToListingResult(doc) : null;
 }
 
-/** Returns listings for the given ids, in order; skips missing ids. */
+/** Returns the listings for the given ids, in order; skips missing ids. */
 export async function getListingsByIds(
   ids: string[]
 ): Promise<ListingResult[]> {
@@ -349,11 +361,10 @@ export async function getListingsByIds(
 export async function getRecentListings(
   limit: number
 ): Promise<ListingResult[]> {
-  await connectDB();
-  const docs = await Listing.find({})
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .lean();
+  const sql = getSql();
+  const docs = (await sql`
+    select * from listings order by created_at desc limit ${limit}
+  `) as unknown as ListingRow[];
   return docs.map((d) => docToListingResult(d));
 }
 
@@ -372,10 +383,10 @@ export async function getListingsToFill(
 export async function createListing(
   body: ListingCreate
 ): Promise<ListingResult> {
-  await connectDB();
+  const sql = getSql();
   const sourceId = `manual-${randomUUID()}`;
   const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
-  const doc = await Listing.create({
+  const doc = compact({
     title: body.title,
     company: body.company,
     location: body.location,
@@ -386,8 +397,10 @@ export async function createListing(
     sourceId,
     expiresAt,
   });
-  const lean = doc.toObject();
-  return docToListingResult(lean);
+  const [row] = (await sql`
+    insert into listings ${sql(doc)} returning *
+  `) as unknown as ListingRow[];
+  return docToListingResult(row);
 }
 
 /** Updates a listing by id (admin). Returns updated listing or null if not found. */
@@ -395,26 +408,33 @@ export async function updateListingById(
   id: string,
   body: ListingUpdate
 ): Promise<ListingResult | null> {
-  await connectDB();
-  const objId = parseObjectId(id);
-  if (!objId) return null;
-  const doc = await Listing.findById(objId);
-  if (!doc) return null;
-  if (body.title !== undefined) doc.title = body.title;
-  if (body.company !== undefined) doc.company = body.company;
-  if (body.location !== undefined) doc.location = body.location;
-  if (body.description !== undefined) doc.description = body.description;
-  if (body.country !== undefined) doc.country = body.country;
-  if (body.sourceUrl !== undefined) doc.sourceUrl = body.sourceUrl ?? undefined;
-  await doc.save();
-  return docToListingResult(doc.toObject());
+  if (!isValidObjectId(id)) return null;
+  const sql = getSql();
+
+  const update: Record<string, unknown> = {};
+  if (body.title !== undefined) update.title = body.title;
+  if (body.company !== undefined) update.company = body.company;
+  if (body.location !== undefined) update.location = body.location;
+  if (body.description !== undefined) update.description = body.description;
+  if (body.country !== undefined) update.country = body.country;
+  if (body.sourceUrl !== undefined) update.sourceUrl = body.sourceUrl ?? null;
+
+  if (Object.keys(update).length === 0) {
+    return getListingById(id);
+  }
+
+  const [row] = (await sql`
+    update listings set ${sql(update)} where id = ${id} returning *
+  `) as unknown as ListingRow[];
+  return row ? docToListingResult(row) : null;
 }
 
 /** Deletes a listing by id (admin). Returns true if deleted, false if not found. */
 export async function deleteListingById(id: string): Promise<boolean> {
-  await connectDB();
-  const objId = parseObjectId(id);
-  if (!objId) return false;
-  const result = await Listing.findByIdAndDelete(objId);
-  return result != null;
+  if (!isValidObjectId(id)) return false;
+  const sql = getSql();
+  const rows = (await sql`
+    delete from listings where id = ${id} returning id
+  `) as unknown as Array<{ id: string }>;
+  return rows.length > 0;
 }

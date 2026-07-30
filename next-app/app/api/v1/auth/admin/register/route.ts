@@ -5,8 +5,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AdminRegisterSchema } from "@schemas";
 import { validationErrorResponse } from "@/lib/api/errors";
-import { connectDB } from "@/lib/db";
-import { User } from "@/lib/models/User";
+import { getSql } from "@/lib/db";
+import { hashPassword } from "@/lib/auth/password";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 import { buildSetCookieHeader } from "@/lib/auth/cookies";
 import { serializeUser } from "@/lib/user-serializer";
@@ -41,8 +41,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
-    const existing = await User.findOne({ email: createData.email, role: "admin" }).lean();
+    const sql = getSql();
+    const [existing] = (await sql`
+      select 1 from users where email = ${createData.email} and role = 'admin' limit 1
+    `) as unknown as unknown[];
     if (existing) {
       return NextResponse.json(
         {
@@ -54,7 +56,9 @@ export async function POST(request: NextRequest) {
       );
     }
     const usernameTrimmed = createData.username.trim();
-    const existingUsername = await User.findOne({ username: usernameTrimmed }).lean();
+    const [existingUsername] = (await sql`
+      select 1 from users where username = ${usernameTrimmed} limit 1
+    `) as unknown as unknown[];
     if (existingUsername) {
       return NextResponse.json(
         { success: false, message: "Username already taken", error: "Username already taken" },
@@ -62,8 +66,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await User.create({ ...createData, role: "admin" });
-    const sub = user._id.toString();
+    const password = await hashPassword(createData.password);
+    const [user] = (await sql`
+      insert into users (email, username, password, role)
+      values (${createData.email}, ${usernameTrimmed}, ${password}, 'admin')
+      returning id, email, username, role
+    `) as unknown as Array<{ id: string; email: string; username: string; role: "user" | "admin" }>;
+    const sub = user.id;
 
     const accessToken = await signAccessToken({
       sub,

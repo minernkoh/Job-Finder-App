@@ -2,7 +2,7 @@
  * Admin system service: health check (DB ping).
  */
 
-import { connectDB } from "@/lib/db";
+import { getSql } from "@/lib/db";
 
 export interface HealthCheckResult {
   status: "ok" | "degraded";
@@ -11,13 +11,11 @@ export interface HealthCheckResult {
   };
 }
 
-/** Pings MongoDB and returns health status. */
+/** Pings Postgres and returns health status. */
 export async function getSystemHealth(): Promise<HealthCheckResult> {
   try {
-    const conn = await connectDB();
-    const db = conn.connection.db;
-    if (!db) throw new Error("No database connection");
-    await db.admin().ping();
+    const sql = getSql();
+    await sql`select 1`;
     return { status: "ok", checks: { database: "ok" } };
   } catch {
     return { status: "degraded", checks: { database: "error" } };

@@ -2,17 +2,19 @@
  * Admin users service: list users with filters/pagination, get user detail with activity counts, create user, update email/username, update role/status, delete user with safeguards.
  */
 
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/db";
+import { getSql } from "@/lib/db";
 import { calculatePagination } from "@/lib/pagination";
 import { isValidObjectId } from "@/lib/objectid";
-import { User } from "@/lib/models/User";
-import { AISummary } from "@/lib/models/AISummary";
-import { SavedListing } from "@/lib/models/SavedListing";
+import { hashPassword } from "@/lib/auth/password";
 import type { UserRole } from "@schemas";
 import type { UserStatus } from "@schemas";
 import type { AdminCreateUserBody } from "@schemas";
 import type { AdminUpdateUserBody } from "@schemas";
+
+/** Escapes ILIKE wildcards so user input is matched literally. */
+function likeContains(term: string): string {
+  return `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
 
 export interface ListUsersParams {
   search?: string;
@@ -41,46 +43,58 @@ export interface ListUsersResult {
 export async function listUsers(
   params: ListUsersParams,
 ): Promise<ListUsersResult> {
-  await connectDB();
+  const sql = getSql();
   const { page, limit, skip } = calculatePagination(params);
 
-  const filter: mongoose.FilterQuery<{
-    email: string;
-    username: string;
-    role: string;
-    status?: string;
-  }> = {};
-  if (params.role) filter.role = params.role;
-  if (params.status) filter.status = params.status;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const conds: any[] = [];
+  if (params.role) conds.push(sql`role = ${params.role}`);
+  if (params.status) conds.push(sql`status = ${params.status}`);
   if (params.search?.trim()) {
-    const term = params.search.trim();
-    filter.$or = [
-      { username: { $regex: term, $options: "i" } },
-      { email: { $regex: term, $options: "i" } },
-    ];
+    const p = likeContains(params.search.trim());
+    conds.push(sql`(username ilike ${p} or email ilike ${p})`);
+  }
+  let where = sql``;
+  if (conds.length > 0) {
+    let combined = conds[0];
+    for (let i = 1; i < conds.length; i++) combined = sql`${combined} and ${conds[i]}`;
+    where = sql`where ${combined}`;
   }
 
-  const [users, total] = await Promise.all([
-    User.find(filter)
-      .select("-password")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    User.countDocuments(filter),
+  const [users, countRows] = await Promise.all([
+    sql`
+      select id, email, username, role, status, created_at, updated_at
+      from users
+      ${where}
+      order by created_at desc
+      limit ${limit} offset ${skip}
+    ` as unknown as Promise<
+      Array<{
+        id: string;
+        email: string;
+        username: string;
+        role: string;
+        status?: string;
+        createdAt: Date;
+        updatedAt: Date;
+      }>
+    >,
+    sql`select count(*)::int as count from users ${where}` as unknown as Promise<
+      Array<{ count: number }>
+    >,
   ]);
 
   return {
     users: users.map((u) => ({
-      id: u._id.toString(),
+      id: u.id,
       email: u.email,
       username: u.username,
       role: u.role,
-      status: (u as { status?: string }).status ?? "active",
+      status: u.status ?? "active",
       createdAt: u.createdAt,
       updatedAt: u.updatedAt,
     })),
-    total,
+    total: countRows[0].count,
     page,
     limit,
   };
@@ -104,48 +118,61 @@ export interface UserDetailResult {
 export async function getUserDetail(
   userId: string,
 ): Promise<UserDetailResult | null> {
-  await connectDB();
   if (!isValidObjectId(userId)) return null;
+  const sql = getSql();
 
-  const user = await User.findById(userId).select("-password").lean();
+  const [user] = (await sql`
+    select id, email, username, role, status, created_at, updated_at
+    from users where id = ${userId}
+  `) as unknown as Array<{
+    id: string;
+    email: string;
+    username: string;
+    role: string;
+    status?: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
   if (!user) return null;
 
-  const id = new mongoose.Types.ObjectId(userId);
-  const [summaryCount, savedCount, lastSummary, lastSaved] = await Promise.all([
-    AISummary.countDocuments({ userId: id }),
-    SavedListing.countDocuments({ userId: id }),
-    AISummary.findOne({ userId: id })
-      .sort({ createdAt: -1 })
-      .select("createdAt")
-      .lean(),
-    SavedListing.findOne({ userId: id })
-      .sort({ createdAt: -1 })
-      .select("createdAt")
-      .lean(),
-  ]);
+  const [counts] = (await sql`
+    select
+      (select count(*)::int from ai_summaries where user_id = ${userId}) as summary_count,
+      (select count(*)::int from saved_listings where user_id = ${userId}) as saved_count,
+      (select max(created_at) from ai_summaries where user_id = ${userId}) as last_summary_at,
+      (select max(created_at) from saved_listings where user_id = ${userId}) as last_saved_at
+  `) as unknown as Array<{
+    summaryCount: number;
+    savedCount: number;
+    lastSummaryAt?: Date;
+    lastSavedAt?: Date;
+  }>;
 
   return {
-    id: user._id.toString(),
+    id: user.id,
     email: user.email,
     username: user.username,
     role: user.role,
-    status: (user as { status?: string }).status ?? "active",
+    status: user.status ?? "active",
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
-    summaryCount,
-    savedCount,
-    lastSummaryAt: lastSummary?.createdAt,
-    lastSavedAt: lastSaved?.createdAt,
+    summaryCount: counts.summaryCount,
+    savedCount: counts.savedCount,
+    lastSummaryAt: counts.lastSummaryAt ?? undefined,
+    lastSavedAt: counts.lastSavedAt ?? undefined,
   };
 }
 
 /** Count admins (for last-admin safeguard). */
 export async function countAdmins(): Promise<number> {
-  await connectDB();
-  return User.countDocuments({ role: "admin" });
+  const sql = getSql();
+  const [row] = (await sql`
+    select count(*)::int as count from users where role = 'admin'
+  `) as unknown as Array<{ count: number }>;
+  return row.count;
 }
 
-/** Create a new user (admin-only). Password is hashed by User model pre-save. Returns new user or duplicate email/username reason. */
+/** Create a new user (admin-only). Password is hashed here. Returns new user or duplicate email/username reason. */
 export async function createUser(
   body: AdminCreateUserBody,
 ): Promise<
@@ -155,31 +182,37 @@ export async function createUser(
     }
   | { success: false; reason: string }
 > {
-  await connectDB();
+  const sql = getSql();
   const targetRole = body.role ?? "user";
-  const existing = await User.findOne({
-    email: body.email,
-    role: targetRole,
-  }).lean();
+
+  const [existing] = (await sql`
+    select 1 from users where email = ${body.email} and role = ${targetRole} limit 1
+  `) as unknown as unknown[];
   if (existing) {
     return { success: false, reason: "Email already registered for this role" };
   }
   const usernameTrimmed = body.username.trim();
-  const existingUsername = await User.findOne({
-    username: usernameTrimmed,
-  }).lean();
+  const [existingUsername] = (await sql`
+    select 1 from users where username = ${usernameTrimmed} limit 1
+  `) as unknown as unknown[];
   if (existingUsername) {
     return { success: false, reason: "Username already taken" };
   }
-  const user = await User.create(body);
+
+  const password = await hashPassword(body.password);
+  const [user] = (await sql`
+    insert into users (email, username, password, role)
+    values (${body.email}, ${usernameTrimmed}, ${password}, ${targetRole})
+    returning id, email, username, role
+  `) as unknown as Array<{
+    id: string;
+    email: string;
+    username: string;
+    role: string;
+  }>;
   return {
     success: true,
-    user: {
-      id: user._id.toString(),
-      email: user.email,
-      username: user.username,
-      role: user.role,
-    },
+    user: { id: user.id, email: user.email, username: user.username, role: user.role },
   };
 }
 
@@ -188,21 +221,23 @@ export async function updateUserProfile(
   userId: string,
   body: AdminUpdateUserBody,
 ): Promise<{ success: false; reason: string } | { success: true }> {
-  await connectDB();
   if (!isValidObjectId(userId)) {
     return { success: false, reason: "Invalid user id" };
   }
-  const user = await User.findById(userId);
+  const sql = getSql();
+  const [user] = (await sql`
+    select id, role from users where id = ${userId}
+  `) as unknown as Array<{ id: string; role: string }>;
   if (!user) return { success: false, reason: "User not found" };
+
+  const update: Record<string, unknown> = {};
   if (body.email != null) {
-    const existing = await User.findOne({
-      email: body.email,
-      role: user.role,
-      _id: { $ne: userId },
-    }).lean();
+    const [existing] = (await sql`
+      select 1 from users where email = ${body.email} and role = ${user.role} and id <> ${userId} limit 1
+    `) as unknown as unknown[];
     if (existing)
       return { success: false, reason: "Email already in use for this role" };
-    user.email = body.email;
+    update.email = body.email;
   }
   if (body.username !== undefined) {
     const trimmed = body.username.trim();
@@ -212,15 +247,17 @@ export async function updateUserProfile(
         reason: "Username is required and cannot be cleared",
       };
     }
-    const existingUsername = await User.findOne({
-      username: trimmed,
-      _id: { $ne: userId },
-    }).lean();
+    const [existingUsername] = (await sql`
+      select 1 from users where username = ${trimmed} and id <> ${userId} limit 1
+    `) as unknown as unknown[];
     if (existingUsername)
       return { success: false, reason: "Username already taken" };
-    user.username = trimmed;
+    update.username = trimmed;
   }
-  await user.save();
+
+  if (Object.keys(update).length > 0) {
+    await sql`update users set ${sql(update)} where id = ${userId}`;
+  }
   return { success: true };
 }
 
@@ -229,23 +266,23 @@ export async function updateUserRole(
   userId: string,
   role: UserRole,
 ): Promise<{ success: false; reason: string } | { success: true }> {
-  await connectDB();
   if (!isValidObjectId(userId)) {
     return { success: false, reason: "Invalid user id" };
   }
+  const sql = getSql();
 
-  const user = await User.findById(userId);
+  const [user] = (await sql`
+    select id, role from users where id = ${userId}
+  `) as unknown as Array<{ id: string; role: string }>;
   if (!user) return { success: false, reason: "User not found" };
 
   if (user.role === "admin" && role === "user") {
-    const adminCount = await User.countDocuments({ role: "admin" });
-    if (adminCount <= 1) {
+    if ((await countAdmins()) <= 1) {
       return { success: false, reason: "Cannot demote the last admin" };
     }
   }
 
-  user.role = role;
-  await user.save();
+  await sql`update users set role = ${role} where id = ${userId}`;
   return { success: true };
 }
 
@@ -254,45 +291,39 @@ export async function updateUserStatus(
   userId: string,
   status: UserStatus,
 ): Promise<{ success: false; reason: string } | { success: true }> {
-  await connectDB();
   if (!isValidObjectId(userId)) {
     return { success: false, reason: "Invalid user id" };
   }
+  const sql = getSql();
 
-  const user = await User.findById(userId);
-  if (!user) return { success: false, reason: "User not found" };
-
-  const doc = user as mongoose.Document & { status?: string };
-  doc.status = status;
-  await user.save();
+  const rows = (await sql`
+    update users set status = ${status} where id = ${userId} returning id
+  `) as unknown as Array<{ id: string }>;
+  if (rows.length === 0) return { success: false, reason: "User not found" };
   return { success: true };
 }
 
-/** Delete user; allows self-delete. Rejects if last admin. Cascades: delete AISummary, SavedListing, UserProfile, User. */
+/** Delete user; allows self-delete. Rejects if last admin. Related rows cascade via FK. */
 export async function deleteUser(
   userId: string,
 ): Promise<{ success: false; reason: string } | { success: true }> {
-  await connectDB();
   if (!isValidObjectId(userId)) {
     return { success: false, reason: "Invalid user id" };
   }
+  const sql = getSql();
 
-  const user = await User.findById(userId);
+  const [user] = (await sql`
+    select id, role from users where id = ${userId}
+  `) as unknown as Array<{ id: string; role: string }>;
   if (!user) return { success: false, reason: "User not found" };
   if (user.role === "admin") {
-    const adminCount = await User.countDocuments({ role: "admin" });
-    if (adminCount <= 1) {
+    if ((await countAdmins()) <= 1) {
       return { success: false, reason: "Cannot delete the last admin" };
     }
   }
 
-  const id = new mongoose.Types.ObjectId(userId);
-  const { UserProfile } = await import("@/lib/models/UserProfile");
-  await Promise.all([
-    AISummary.deleteMany({ userId: id }),
-    SavedListing.deleteMany({ userId: id }),
-    UserProfile.deleteMany({ userId: id }),
-    User.findByIdAndDelete(userId),
-  ]);
+  // ai_summaries, saved_listings, user_profiles, comparison_summaries all have
+  // ON DELETE CASCADE foreign keys to users, so deleting the user removes them too.
+  await sql`delete from users where id = ${userId}`;
   return { success: true };
 }

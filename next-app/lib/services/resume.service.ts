@@ -6,14 +6,12 @@ import { generateObject } from "ai";
 import mammoth from "mammoth";
 import pdf from "pdf-parse";
 import { ResumeParseResultSchema, type ResumeParseResult } from "@schemas";
-import { connectDB } from "@/lib/db";
+import { getSql, compact } from "@/lib/db";
 import {
   executeWithGemini,
   retryWithBackoff,
 } from "@/lib/ai/gemini";
 import { isValidObjectId } from "@/lib/objectid";
-import { UserProfile } from "@/lib/models/UserProfile";
-import mongoose from "mongoose";
 
 /** Maximum file size (5 MB) for PDF and DOCX resume uploads. */
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -105,26 +103,38 @@ export async function upsertProfileForUser(
   resumeSummary?: string;
   yearsOfExperience?: number;
 }> {
-  await connectDB();
   if (!isValidObjectId(userId)) {
     throw new Error("Invalid user");
   }
-  const uid = new mongoose.Types.ObjectId(userId);
-  const set: Record<string, unknown> = { updatedAt: new Date() };
-  if (data.skills !== undefined) set.skills = data.skills;
-  if (data.jobTitles !== undefined) set.jobTitles = data.jobTitles;
-  if (data.resumeSummary !== undefined) set.resumeSummary = data.resumeSummary;
-  if (data.yearsOfExperience !== undefined) set.yearsOfExperience = data.yearsOfExperience ?? undefined;
-  const doc = await UserProfile.findOneAndUpdate(
-    { userId: uid },
-    { $set: set },
-    { new: true, upsert: true }
-  ).lean();
+  const sql = getSql();
+  const update: Record<string, unknown> = {};
+  if (data.skills !== undefined) update.skills = data.skills;
+  if (data.jobTitles !== undefined) update.jobTitles = data.jobTitles;
+  if (data.resumeSummary !== undefined) update.resumeSummary = data.resumeSummary;
+  // Matches prior behavior: only a concrete number updates this column (null/undefined leaves it unchanged).
+  if (data.yearsOfExperience != null) update.yearsOfExperience = data.yearsOfExperience;
+
+  const insert = compact({ userId, ...update });
+  const setFrag =
+    Object.keys(update).length > 0
+      ? sql`${sql(update)}, updated_at = now()`
+      : sql`updated_at = now()`;
+
+  const [doc] = (await sql`
+    insert into user_profiles ${sql(insert)}
+    on conflict (user_id) do update set ${setFrag}
+    returning skills, job_titles, resume_summary, years_of_experience::int as years_of_experience
+  `) as unknown as Array<{
+    skills?: string[];
+    jobTitles?: string[];
+    resumeSummary?: string;
+    yearsOfExperience?: number;
+  }>;
   return {
     skills: doc.skills ?? [],
     jobTitles: doc.jobTitles?.length ? doc.jobTitles : undefined,
     resumeSummary: doc.resumeSummary,
-    yearsOfExperience: doc.yearsOfExperience,
+    yearsOfExperience: doc.yearsOfExperience ?? undefined,
   };
 }
 
@@ -137,14 +147,23 @@ export async function getProfileByUserId(
   resumeSummary?: string;
   yearsOfExperience?: number;
 } | null> {
-  await connectDB();
   if (!isValidObjectId(userId)) return null;
-  const doc = await UserProfile.findOne({ userId: new mongoose.Types.ObjectId(userId) }).lean();
+  const sql = getSql();
+  const [doc] = (await sql`
+    select skills, job_titles, resume_summary, years_of_experience::int as years_of_experience
+    from user_profiles
+    where user_id = ${userId}
+  `) as unknown as Array<{
+    skills?: string[];
+    jobTitles?: string[];
+    resumeSummary?: string;
+    yearsOfExperience?: number;
+  }>;
   if (!doc) return null;
   return {
     skills: doc.skills ?? [],
     jobTitles: doc.jobTitles?.length ? doc.jobTitles : undefined,
     resumeSummary: doc.resumeSummary,
-    yearsOfExperience: doc.yearsOfExperience,
+    yearsOfExperience: doc.yearsOfExperience ?? undefined,
   };
 }

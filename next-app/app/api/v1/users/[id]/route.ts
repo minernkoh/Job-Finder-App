@@ -3,14 +3,24 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { User } from "@/lib/models/User";
+import { getSql } from "@/lib/db";
 import { UserUpdateSchema } from "@schemas";
 import { parseJsonBody, validationErrorResponse } from "@/lib/api/errors";
 import { withAuth } from "@/lib/api/with-auth";
 import { requireOwnOrAdmin } from "@/lib/auth/guard";
 import { isValidObjectId } from "@/lib/objectid";
+import { hashPassword } from "@/lib/auth/password";
 import { deleteUser } from "@/lib/services/admin-users.service";
 import { serializeUser } from "@/lib/user-serializer";
+
+interface UserRow {
+  id: string;
+  email: string;
+  username: string;
+  role: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 async function getUserIdHandler(
   _request: NextRequest,
@@ -28,7 +38,10 @@ async function getUserIdHandler(
     );
   }
 
-  const user = await User.findById(id).select("-password").lean();
+  const sql = getSql();
+  const [user] = (await sql`
+    select id, email, username, role, created_at, updated_at from users where id = ${id}
+  `) as unknown as UserRow[];
   if (!user) {
     return NextResponse.json(
       { success: false, message: "User not found" },
@@ -64,7 +77,10 @@ async function patchUserIdHandler(
   if (!parsed.success)
     return validationErrorResponse(parsed.error, "Invalid input");
 
-  const user = await User.findById(id);
+  const sql = getSql();
+  const [user] = (await sql`
+    select id, role from users where id = ${id}
+  `) as unknown as Array<{ id: string; role: string }>;
   if (!user) {
     return NextResponse.json(
       { success: false, message: "User not found" },
@@ -72,18 +88,19 @@ async function patchUserIdHandler(
     );
   }
 
+  const update: Record<string, unknown> = {};
+
   if (parsed.data.email !== undefined) {
-    const existing = await User.findOne({
-      email: parsed.data.email,
-      role: user.role,
-    }).lean();
-    if (existing && existing._id.toString() !== id) {
+    const [existing] = (await sql`
+      select id from users where email = ${parsed.data.email} and role = ${user.role} and id <> ${id} limit 1
+    `) as unknown as Array<{ id: string }>;
+    if (existing) {
       return NextResponse.json(
         { success: false, message: "Email already in use" },
         { status: 409 },
       );
     }
-    user.email = parsed.data.email;
+    update.email = parsed.data.email;
   }
   if (parsed.data.username !== undefined) {
     const trimmed = parsed.data.username.trim();
@@ -96,27 +113,30 @@ async function patchUserIdHandler(
         { status: 400 },
       );
     }
-    const existingByUsername = await User.findOne({
-      username: trimmed,
-      _id: { $ne: id },
-    }).lean();
+    const [existingByUsername] = (await sql`
+      select id from users where username = ${trimmed} and id <> ${id} limit 1
+    `) as unknown as Array<{ id: string }>;
     if (existingByUsername) {
       return NextResponse.json(
         { success: false, message: "Username already taken" },
         { status: 409 },
       );
     }
-    user.username = trimmed;
+    update.username = trimmed;
   }
   if (parsed.data.password !== undefined)
-    user.password = parsed.data.password;
+    update.password = await hashPassword(parsed.data.password);
 
-  await user.save();
+  if (Object.keys(update).length > 0) {
+    await sql`update users set ${sql(update)} where id = ${id}`;
+  }
 
-  const updated = await User.findById(id).select("-password").lean();
+  const [updated] = (await sql`
+    select id, email, username, role, created_at, updated_at from users where id = ${id}
+  `) as unknown as UserRow[];
   return NextResponse.json({
     success: true,
-    data: serializeUser(updated!),
+    data: serializeUser(updated),
   });
 }
 
