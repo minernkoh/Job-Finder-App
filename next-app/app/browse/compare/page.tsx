@@ -40,6 +40,8 @@ import {
 import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
 import { UserOnlyRoute } from "@/components/user-only-route";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react";
+import { userHasAiAccess } from "@/lib/ai-access";
+import { AiLockedNotice } from "@/components/ai-locked-notice";
 
 /** One column: listing meta, description, and link to the full listing page. */
 function CompareColumn({ listingId }: { listingId: string }) {
@@ -134,7 +136,7 @@ function ComparePageInner() {
 
   /** Identity of the current stream request; changing it (retry/regenerate/new ids) discards previous results. */
   const streamKey =
-    listingIds && user
+    listingIds && user && userHasAiAccess(user)
       ? [
           listingIds.join(","),
           user.id ?? "",
@@ -277,7 +279,7 @@ function ComparePageInner() {
         <section aria-label="Unified comparison">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className={cn(EYEBROW_CLASS, "mb-0")}>Comparison summary</h2>
-            {user && comparison && !isStreaming && (
+            {user && comparison && !isStreaming && userHasAiAccess(user) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -298,6 +300,11 @@ function ComparePageInner() {
                   Add skills in Profile
                 </Link>
               </p>
+            </div>
+          )}
+          {user && !userHasAiAccess(user) && (
+            <div className="mb-4">
+              <AiLockedNotice feature="AI comparisons" />
             </div>
           )}
           {!user && (

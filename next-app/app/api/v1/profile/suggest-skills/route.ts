@@ -5,13 +5,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SuggestSkillsBodySchema } from "@schemas";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
-import { withAuth } from "@/lib/api/with-auth";
+import { withAiAccess } from "@/lib/api/with-auth";
+import { consumeAiQuota } from "@/lib/services/ai-quota.service";
 import { suggestSkillsWithRetry } from "@/lib/services/suggest-skills.service";
 import { getEnv } from "@/lib/env";
 
 async function postSuggestSkillsHandler(
   request: NextRequest,
-  _payload: { sub: string }
+  payload: { sub: string }
 ): Promise<NextResponse> {
   const env = getEnv();
   if (!env.GEMINI_API_KEY?.trim()) {
@@ -26,6 +27,7 @@ async function postSuggestSkillsHandler(
   if (!parsed.success) return validationErrorResponse(parsed.error, "Invalid body");
 
   try {
+    await consumeAiQuota(payload.sub, "general");
     const result = await suggestSkillsWithRetry(parsed.data.currentRole);
     return NextResponse.json({ success: true, data: result });
   } catch (err) {
@@ -38,4 +40,4 @@ async function postSuggestSkillsHandler(
   }
 }
 
-export const POST = withAuth(postSuggestSkillsHandler, "Failed to suggest skills");
+export const POST = withAiAccess(postSuggestSkillsHandler, "Failed to suggest skills");

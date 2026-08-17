@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { withAdmin } from "@/lib/api/with-auth";
+import { consumeAiQuota } from "@/lib/services/ai-quota.service";
 import {
   getDashboardMetrics,
   generateDashboardSummaryStream,
@@ -25,6 +26,7 @@ async function postSummaryStreamHandler(
 
   try {
     const metrics = await getDashboardMetrics();
+    await consumeAiQuota(_payload.sub, "general");
     const { partialObjectStream, object } =
       await generateDashboardSummaryStream(metrics);
 

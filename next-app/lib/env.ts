@@ -24,6 +24,12 @@ const envSchema = z.object({
   NODE_ENV: z.string().optional(),
   /** If set, allows creating an admin via POST /api/v1/auth/admin/register; if unset, that endpoint returns 403. */
   ADMIN_REGISTER_SECRET: z.string().optional(),
+  /** Master password users enter to unlock Gemini features. If unset, only admins have AI access. */
+  AI_ACCESS_SECRET: z.string().optional(),
+  /** Max Gemini calls per user per UTC day. Default 30. */
+  AI_DAILY_LIMIT: z.coerce.number().int().min(1).default(30),
+  /** Max resume-tailor Gemini calls per user per UTC day. Default 10. */
+  AI_TAILOR_DAILY_LIMIT: z.coerce.number().int().min(1).default(10),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -42,6 +48,9 @@ function validateEnv(): Env {
     AI_SUMMARY_CACHE_TTL: process.env.AI_SUMMARY_CACHE_TTL,
     NODE_ENV: process.env.NODE_ENV,
     ADMIN_REGISTER_SECRET: process.env.ADMIN_REGISTER_SECRET,
+    AI_ACCESS_SECRET: process.env.AI_ACCESS_SECRET?.trim() || undefined,
+    AI_DAILY_LIMIT: process.env.AI_DAILY_LIMIT,
+    AI_TAILOR_DAILY_LIMIT: process.env.AI_TAILOR_DAILY_LIMIT,
   });
   if (!parsed.success) {
     throw new Error(

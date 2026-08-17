@@ -25,6 +25,7 @@ import {
 } from "@/lib/models/ComparisonSummary";
 import { getListingById } from "./listings.service";
 import { getProfileByUserId } from "./resume.service";
+import { consumeAiQuota } from "./ai-quota.service";
 
 const ADZUNA_FETCH_TIMEOUT_MS = 10_000;
 
@@ -426,6 +427,8 @@ export async function getOrCreateSummary(
       return docToSummary(existing as IAISummaryDocument);
     }
   }
+
+  await consumeAiQuota(userId, "general");
 
   const profile = await getProfileByUserId(userId);
   const userSkills =

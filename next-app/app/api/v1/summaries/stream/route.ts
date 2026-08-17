@@ -6,7 +6,8 @@
 import { CreateSummaryBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { validationErrorResponse } from "@/lib/api/errors";
-import { withAuth } from "@/lib/api/with-auth";
+import { withAiAccess } from "@/lib/api/with-auth";
+import { consumeAiQuota } from "@/lib/services/ai-quota.service";
 import {
   prepareSummaryStream,
   generateSummaryStream,
@@ -46,6 +47,8 @@ async function postStreamHandler(
   if (result.cached) {
     return NextResponse.json({ success: true, data: result.data });
   }
+
+  await consumeAiQuota(payload.sub, "general");
 
   /* Cache miss: stream partial objects as NDJSON. */
   const { resolvedInput, inputTextHash, uid, userSkills, yearsOfExperience } =
@@ -118,4 +121,4 @@ async function postStreamHandler(
   }
 }
 
-export const POST = withAuth(postStreamHandler, "Failed to create summary");
+export const POST = withAiAccess(postStreamHandler, "Failed to create summary");

@@ -27,6 +27,8 @@ export const UserSchema = z.object({
     .optional(), // optional when reading (hashed)
   role: UserRole.default("user"),
   status: UserStatus.default("active"),
+  /** When true, the user may call Gemini routes. Admins are treated as unlocked even if this is false. */
+  aiEnabled: z.boolean().default(false),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 });
@@ -104,3 +106,9 @@ export const AdminUpdateUserBodySchema = z.object({
   username: UsernameSchema.optional(),
 });
 export type AdminUpdateUserBody = z.infer<typeof AdminUpdateUserBodySchema>;
+
+/** POST /api/v1/auth/unlock-ai body: master password that unlocks Gemini features. */
+export const UnlockAiBodySchema = z.object({
+  password: z.string().min(1, "Access code is required"),
+});
+export type UnlockAiBody = z.infer<typeof UnlockAiBodySchema>;

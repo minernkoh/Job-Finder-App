@@ -9,7 +9,9 @@ import type { AccessPayload } from "@/lib/auth/jwt";
 import { requireAuth } from "@/lib/auth/request";
 import { requireAdmin } from "@/lib/auth/guard";
 import { connectDB } from "@/lib/db";
-import { toErrorResponse } from "@/lib/api/errors";
+import { toErrorResponse, aiLockedResponse } from "@/lib/api/errors";
+import { User } from "@/lib/models/User";
+import { userHasAiAccess } from "@/lib/ai-access";
 
 export type AuthHandler = (
   request: NextRequest,
@@ -89,6 +91,48 @@ export function withAdmin<P>(
         return await (handler as AdminHandlerWithParams<P>)(request, result.payload, context);
       }
       return await (handler as AuthHandler)(request, result.payload);
+    } catch (e) {
+      return toErrorResponse(e, defaultErrorMessage);
+    }
+  }) as (request: NextRequest, context?: RouteContext<P>) => Promise<NextResponse>;
+}
+
+/**
+ * Auth wrapper that also requires AI unlock (User.aiEnabled or admin). Returns 403 AI_LOCKED for preview users.
+ */
+export function withAiAccess(
+  handler: AuthHandler,
+  defaultErrorMessage: string,
+): (request: NextRequest) => Promise<NextResponse>;
+export function withAiAccess<P>(
+  handler: AuthHandlerWithParams<P>,
+  defaultErrorMessage: string,
+): (request: NextRequest, context: RouteContext<P>) => Promise<NextResponse>;
+export function withAiAccess<P>(
+  handler: AuthHandler | AuthHandlerWithParams<P>,
+  defaultErrorMessage: string,
+):
+  | ((request: NextRequest) => Promise<NextResponse>)
+  | ((request: NextRequest, context: RouteContext<P>) => Promise<NextResponse>) {
+  return (async (request: NextRequest, context?: RouteContext<P>) => {
+    try {
+      await connectDB();
+      const auth = await requireAuth(request);
+      if (auth instanceof NextResponse) return auth;
+      const user = await User.findById(auth.sub).lean();
+      if (!user) {
+        return NextResponse.json(
+          { success: false, message: "User not found" },
+          { status: 404 },
+        );
+      }
+      if (!userHasAiAccess({ role: user.role, aiEnabled: user.aiEnabled })) {
+        return aiLockedResponse();
+      }
+      if (context !== undefined) {
+        return await (handler as AuthHandlerWithParams<P>)(request, auth, context);
+      }
+      return await (handler as AuthHandler)(request, auth);
     } catch (e) {
       return toErrorResponse(e, defaultErrorMessage);
     }

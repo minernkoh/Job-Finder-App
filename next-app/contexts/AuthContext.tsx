@@ -25,6 +25,7 @@ export interface AuthUser {
   email: string;
   role: "admin" | "user";
   username: string;
+  aiEnabled?: boolean;
 }
 
 interface AuthContextValue {

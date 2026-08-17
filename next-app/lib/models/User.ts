@@ -29,6 +29,7 @@ const UserSchema = new Schema<IUserDocument>(
       enum: ["active", "suspended"],
       default: "active",
     },
+    aiEnabled: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

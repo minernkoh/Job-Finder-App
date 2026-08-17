@@ -7,6 +7,7 @@ export interface SerializedUserBase {
   email: string;
   username: string;
   role: string;
+  aiEnabled: boolean;
 }
 
 export interface SerializedUserWithTimestamps extends SerializedUserBase {
@@ -19,6 +20,7 @@ type LeanUser = {
   email: string;
   username: string;
   role: string;
+  aiEnabled?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -26,6 +28,7 @@ type LeanUser = {
 /**
  * Converts a user document (or lean result) to the API response shape.
  * Set timestamps: false for /me and other responses that omit createdAt/updatedAt.
+ * Admins are always reported as aiEnabled.
  */
 export function serializeUser(
   user: LeanUser,
@@ -36,6 +39,7 @@ export function serializeUser(
     email: user.email,
     username: user.username,
     role: user.role,
+    aiEnabled: user.role === "admin" || Boolean(user.aiEnabled),
   };
   if (options?.timestamps === false) return base;
   return {

@@ -17,6 +17,7 @@ import { EYEBROW_CLASS } from "@/lib/styles";
 import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { deleteOwnAccount } from "@/lib/api/users";
+import { UnlockAiForm } from "@/components/unlock-ai-form";
 
 /** Settings page content: header, compare bar, Account section, and Delete account section. */
 function SettingsContent() {
@@ -66,6 +67,11 @@ function SettingsContent() {
               onSuccess={(data) => user && setUser({ ...user, email: data.email, username: data.username })}
               idPrefix="settings"
             />
+          </section>
+
+          <section aria-label="AI features" className="mt-8 space-y-3">
+            <h2 className={EYEBROW_CLASS}>AI features</h2>
+            <UnlockAiForm />
           </section>
 
           <section aria-label="Delete account" className="mt-8 space-y-3">

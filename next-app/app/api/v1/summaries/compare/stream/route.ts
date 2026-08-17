@@ -6,7 +6,8 @@
 import { CompareSummaryBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
-import { withAuth } from "@/lib/api/with-auth";
+import { withAiAccess } from "@/lib/api/with-auth";
+import { consumeAiQuota } from "@/lib/services/ai-quota.service";
 import { getProfileByUserId } from "@/lib/services/resume.service";
 import {
   prepareComparisonStream,
@@ -50,6 +51,8 @@ async function postCompareStreamHandler(
     if (cacheResult.cached) {
       return NextResponse.json({ success: true, data: cacheResult.data });
     }
+
+    await consumeAiQuota(payload.sub, "general");
 
     const profile = await getProfileByUserId(payload.sub);
     const userSkills = profile?.skills ?? [];
@@ -114,7 +117,7 @@ async function postCompareStreamHandler(
   }
 }
 
-export const POST = withAuth(
+export const POST = withAiAccess(
   postCompareStreamHandler,
   "Failed to compare listings",
 );

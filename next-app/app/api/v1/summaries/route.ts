@@ -6,7 +6,7 @@
 import { CreateSummaryBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
-import { withAuth } from "@/lib/api/with-auth";
+import { withAuth, withAiAccess } from "@/lib/api/with-auth";
 import {
   getOrCreateSummary,
   getSummaryForListing,
@@ -83,4 +83,4 @@ async function postSummariesHandler(
 }
 
 export const GET = withAuth(getSummariesHandler, "Failed to fetch summary");
-export const POST = withAuth(postSummariesHandler, "Failed to create summary");
+export const POST = withAiAccess(postSummariesHandler, "Failed to create summary");

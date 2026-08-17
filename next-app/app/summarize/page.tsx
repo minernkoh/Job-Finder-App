@@ -33,9 +33,14 @@ import {
 import { EYEBROW_CLASS } from "@/lib/styles";
 import { InlineError } from "@/components/page-state";
 import { AISummaryCard } from "@/components/ai-summary-card";
+import { AiLockedNotice } from "@/components/ai-locked-notice";
+import { useAuth } from "@/contexts/AuthContext";
+import { userHasAiAccess } from "@/lib/ai-access";
 
 /** Inner content: paste URL or text, summarize button, streaming summary or error. */
 function SummarizeContent() {
+  const { user } = useAuth();
+  const aiEnabled = userHasAiAccess(user);
   const [input, setInput] = useState("");
   const [summary, setSummary] = useState<Partial<SummaryWithId> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +127,9 @@ function SummarizeContent() {
           Paste a job posting URL or raw job description text below.
         </p>
 
-        {summary && summary.tldr ? (
+        {!aiEnabled && <AiLockedNotice feature="AI summaries" />}
+
+        {aiEnabled && summary && summary.tldr ? (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-[3fr_1fr] md:gap-8">
             <div className="space-y-3">
               <h2 className={EYEBROW_CLASS}>AI Summary</h2>
@@ -168,7 +175,7 @@ function SummarizeContent() {
               </Card>
             </div>
           </div>
-        ) : (
+        ) : aiEnabled ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="summarize-input" className={EYEBROW_CLASS}>
@@ -198,7 +205,7 @@ function SummarizeContent() {
             </Button>
             {error && <InlineError message={error} />}
           </form>
-        )}
+        ) : null}
       </main>
     </div>
   );

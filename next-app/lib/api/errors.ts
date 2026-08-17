@@ -6,6 +6,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type { z } from "zod";
 import { isValidObjectId } from "@/lib/objectid";
+import { AI_LOCKED_CODE, AI_LOCKED_MESSAGE, AI_QUOTA_MESSAGE } from "@/lib/ai-access";
 
 /**
  * Extracts a user-facing error message from an unknown error. Checks response?.data?.message or
@@ -16,7 +17,7 @@ export function getErrorMessage(err: unknown, fallback: string): string {
     const data = (
       err as { response?: { data?: { error?: string; message?: string } } }
     ).response?.data;
-    return data?.error ?? data?.message ?? fallback;
+    return data?.message ?? data?.error ?? fallback;
   }
   return err instanceof Error ? err.message : fallback;
 }
@@ -28,8 +29,43 @@ export function getErrorMessage(err: unknown, fallback: string): string {
 export function isRateLimitMessage(message: string): boolean {
   const m = message.toUpperCase();
   return (
-    m.includes("429") || m.includes("RESOURCE_EXHAUSTED") || m.includes("QUOTA")
+    m.includes("429") ||
+    m.includes("RESOURCE_EXHAUSTED") ||
+    m.includes("QUOTA") ||
+    message === AI_QUOTA_MESSAGE
   );
+}
+
+/** 403 payload when a preview user hits a Gemini route. */
+export function aiLockedResponse(): NextResponse {
+  return NextResponse.json(
+    { success: false, message: AI_LOCKED_MESSAGE, error: AI_LOCKED_CODE },
+    { status: 403 },
+  );
+}
+
+/** 429 payload when the user exceeded their daily Gemini quota. */
+export function aiQuotaResponse(err?: unknown): NextResponse {
+  const message =
+    err instanceof Error && err.message ? err.message : AI_QUOTA_MESSAGE;
+  return NextResponse.json({ success: false, message }, { status: 429 });
+}
+
+export { AI_LOCKED_CODE, AI_LOCKED_MESSAGE, AI_QUOTA_MESSAGE };
+
+/**
+ * Returns true if the error (Axios or message string) is an AI_LOCKED 403.
+ */
+export function isAiLockedMessage(err: unknown): boolean {
+  if (err && typeof err === "object" && "response" in err) {
+    const data = (
+      err as { response?: { data?: { error?: string; message?: string } } }
+    ).response?.data;
+    if (data?.error === AI_LOCKED_CODE) return true;
+    if (data?.message === AI_LOCKED_MESSAGE) return true;
+  }
+  if (err instanceof Error && err.message === AI_LOCKED_MESSAGE) return true;
+  return typeof err === "string" && err === AI_LOCKED_MESSAGE;
 }
 
 /** Message returned by the API when GEMINI_API_KEY is not configured (503). */
@@ -68,6 +104,9 @@ export function toErrorResponse(
   defaultMessage: string,
   status = 500,
 ): NextResponse {
+  if (err instanceof Error && err.name === "AiQuotaExceededError") {
+    return aiQuotaResponse(err);
+  }
   const message = err instanceof Error ? err.message : defaultMessage;
   return NextResponse.json({ success: false, message }, { status });
 }
