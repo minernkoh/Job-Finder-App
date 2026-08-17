@@ -32,11 +32,13 @@ import {
 } from "@/lib/layout";
 import { EYEBROW_CLASS } from "@/lib/styles";
 import { SkillsEditor } from "@/components/skills-editor";
+import { MasterProfileEditor } from "@/components/master-profile-editor";
 import { InlineError } from "@/components/page-state";
 import { Button, Card, CardContent } from "@ui/components";
 import { TrashIcon, XIcon } from "@phosphor-icons/react";
 import { cn } from "@ui/components/lib/utils";
 import { dedupeSkills } from "@/lib/skills";
+import { userHasAiAccess } from "@/lib/ai-access";
 
 const YEARS_OF_EXPERIENCE_MAX = 70;
 
@@ -403,6 +405,7 @@ function ProfileContent() {
                   hideYourSkillsBlock
                   hideSuggestedSkillsPills
                   idPrefix="profile"
+                  aiLocked={!userHasAiAccess(user)}
                   introText="Generate skill suggestions from current role"
                   yearsValue={yearsDisplayValue}
                   onYearsChange={setDraftYears}
@@ -581,6 +584,7 @@ function ProfileContent() {
                     hideYourSkillsBlock
                     hideSuggestedSkillsPills
                     idPrefix="profile"
+                    aiLocked={!userHasAiAccess(user)}
                     introText="Generate skill suggestions from current role"
                     yearsValue={yearsDisplayValue}
                     onYearsChange={setDraftYears}
@@ -832,6 +836,14 @@ function ProfileContent() {
             </div>
           </div>
         )}
+        <section aria-label="Master profile" className="mt-8">
+          <MasterProfileEditor
+            profile={profile}
+            onSaved={() =>
+              queryClient.invalidateQueries({ queryKey: profileKeys.all })
+            }
+          />
+        </section>
       </main>
     </div>
   );

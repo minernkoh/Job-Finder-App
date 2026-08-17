@@ -14,6 +14,7 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@ui/components/lib/utils";
 import { InlineError } from "@/components/page-state";
+import { AiLockedNotice } from "@/components/ai-locked-notice";
 import { CARD_PADDING_COMPACT, GAP_LG, GAP_MD, TEXTAREA_BASE_CLASS } from "@/lib/layout";
 import { EYEBROW_CLASS } from "@/lib/styles";
 
@@ -91,6 +92,8 @@ export interface SkillsEditorProps {
   hideYourSkillsBlock?: boolean;
   /** When true, do not render suggested skills pills (role or resume); use when they are shown in a separate unified card. */
   hideSuggestedSkillsPills?: boolean;
+  /** When true, AI parse/suggest controls are hidden (preview account). */
+  aiLocked?: boolean;
 }
 
 /** Renders role input, suggest pills, custom skill, optional resume block, and skills list with optional save. */
@@ -129,6 +132,7 @@ export function SkillsEditor({
   yearsInputId,
   hideYourSkillsBlock = false,
   hideSuggestedSkillsPills = false,
+  aiLocked = false,
 }: SkillsEditorProps) {
   const fileInputId = `${idPrefix}-resume-file`;
   const yearsId = yearsInputId ?? `${idPrefix}-years`;
@@ -195,6 +199,9 @@ export function SkillsEditor({
               </div>
             )}
             <div className="flex justify-center">
+              {aiLocked ? (
+                <AiLockedNotice feature="AI skill suggestions" />
+              ) : (
               <Button
                 type="button"
                 variant="secondary"
@@ -207,6 +214,7 @@ export function SkillsEditor({
                 <SparkleIcon className="mr-1.5 size-4" aria-hidden />
                 {suggestPending ? "Suggesting…" : "Suggest skills"}
               </Button>
+              )}
             </div>
             {!hideSuggestedSkillsPills && suggestedSkills.length > 0 && (
               <div className="space-y-2">
@@ -343,7 +351,13 @@ export function SkillsEditor({
             </div>
           </section>
         )}
-        {showResumeBlock && resumeProps && (
+        {showResumeBlock && resumeProps && aiLocked && (
+          <section className={cn(GAP_MD, "border-t border-border pt-4")}>
+            <p className={EYEBROW_CLASS}>Scan resume</p>
+            <AiLockedNotice feature="Resume parsing" />
+          </section>
+        )}
+        {showResumeBlock && resumeProps && !aiLocked && (
           <section className={cn(GAP_MD, "border-t border-border pt-4")}>
             <p className={EYEBROW_CLASS}>Scan resume</p>
             <div className="space-y-3">

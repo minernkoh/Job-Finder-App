@@ -5,7 +5,8 @@
 import { ParseResumeBodySchema } from "@schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse, validationErrorResponse } from "@/lib/api/errors";
-import { withAuth } from "@/lib/api/with-auth";
+import { withAiAccess } from "@/lib/api/with-auth";
+import { consumeAiQuota } from "@/lib/services/ai-quota.service";
 import { getEnv } from "@/lib/env";
 import {
   DOCX_EXTRACT_ERROR_MESSAGE,
@@ -106,11 +107,23 @@ async function postParseHandler(
   }
 
   try {
+    await consumeAiQuota(payload.sub, "general");
     const result = await parseResumeWithRetry(text);
+    const flatSkills =
+      result.skillGroups?.flatMap((g) => g.skills) ?? result.skills ?? [];
     await upsertProfileForUser(payload.sub, {
       jobTitles: result.jobTitles,
       resumeSummary: result.resumeSummary,
       ...(result.yearsOfExperience != null ? { yearsOfExperience: result.yearsOfExperience } : {}),
+      name: result.name,
+      headline: result.headline,
+      contacts: result.contacts,
+      experience: result.experience,
+      projects: result.projects,
+      education: result.education,
+      honours: result.honours,
+      skillGroups: result.skillGroups,
+      ...(flatSkills.length > 0 ? { skills: flatSkills } : {}),
     });
     return NextResponse.json({ success: true, data: result });
   } catch (err) {
@@ -133,4 +146,4 @@ async function postParseHandler(
   }
 }
 
-export const POST = withAuth(postParseHandler, "Failed to parse resume");
+export const POST = withAiAccess(postParseHandler, "Failed to parse resume");

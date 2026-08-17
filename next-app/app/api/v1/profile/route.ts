@@ -41,6 +41,14 @@ async function putProfileHandler(
         : existing?.resumeSummary,
     yearsOfExperience:
       data.yearsOfExperience !== undefined ? data.yearsOfExperience : existing?.yearsOfExperience,
+    name: data.name ?? existing?.name,
+    headline: data.headline ?? existing?.headline,
+    contacts: data.contacts ?? existing?.contacts,
+    experience: data.experience ?? existing?.experience,
+    projects: data.projects ?? existing?.projects,
+    education: data.education ?? existing?.education,
+    honours: data.honours ?? existing?.honours,
+    skillGroups: data.skillGroups ?? existing?.skillGroups,
   };
   try {
     const profile = await upsertProfileForUser(payload.sub, merged);
