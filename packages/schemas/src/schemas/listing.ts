@@ -4,12 +4,16 @@
 
 import { z } from "zod";
 
+/** Where a listing came from. Manual admin-created jobs use "manual". */
+export const ListingSourceSchema = z.enum(["adzuna", "mcf", "manual"]);
+export type ListingSource = z.infer<typeof ListingSourceSchema>;
+
 export const ListingSchema = z.object({
   title: z.string().min(1, "Title is required"),
   company: z.string().min(1, "Company is required"),
   location: z.string().optional(),
   description: z.string().optional(),
-  source: z.literal("adzuna").default("adzuna"),
+  source: ListingSourceSchema.default("adzuna"),
   sourceUrl: z.string().url().optional(),
   sourceId: z.string().min(1, "sourceId is required"),
   expiresAt: z.coerce.date(),
@@ -30,7 +34,7 @@ export const ListingResultSchema = z.object({
   company: z.string().min(1),
   location: z.string().optional(),
   description: z.string().optional(),
-  source: z.literal("adzuna"),
+  source: ListingSourceSchema,
   sourceUrl: z.string().url().optional(),
   country: z.string(),
   /** Minimum salary when available from Adzuna (numeric, local currency). */

@@ -15,6 +15,7 @@ import {
 import { Button, Card, CardContent, CardHeader } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
+import { listingSourceLabel } from "@/lib/listing-source";
 import { BADGE_PRIMARY, BADGE_MUTED_TIGHT } from "@/lib/badges";
 import type { ListingResult } from "@schemas";
 
@@ -205,6 +206,11 @@ export function ListingCard({
           {listing.country && listing.country !== "sg" && (
             <span className={cn("mt-1 inline-block", BADGE_MUTED_TIGHT)}>
               {listing.country.toUpperCase()}
+            </span>
+          )}
+          {listing.source && listing.source !== "adzuna" && listingSourceLabel(listing.source) && (
+            <span className={cn("mt-1 ml-1 inline-block", BADGE_MUTED_TIGHT)}>
+              {listingSourceLabel(listing.source)}
             </span>
           )}
           {(() => {

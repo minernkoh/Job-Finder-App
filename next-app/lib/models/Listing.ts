@@ -10,7 +10,7 @@ export interface IListingDocument {
   company: string;
   location?: string;
   description?: string;
-  source: "adzuna";
+  source: "adzuna" | "mcf" | "manual";
   sourceUrl?: string;
   sourceId: string;
   country: string;

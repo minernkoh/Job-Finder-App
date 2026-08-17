@@ -8,7 +8,7 @@ import { getEnv } from "@/lib/env";
 import { parseObjectId } from "@/lib/objectid";
 import { Listing, type IListingDocument } from "@/lib/models/Listing";
 import { SearchCache } from "@/lib/models/SearchCache";
-import type { ListingCreate, ListingResult, ListingUpdate } from "@schemas";
+import type { ListingCreate, ListingResult, ListingSource, ListingUpdate } from "@schemas";
 import type { ListingsFilters } from "@/lib/query-keys";
 import {
   fetchAdzunaSearch,
@@ -16,6 +16,10 @@ import {
   type AdzunaCountry,
   type AdzunaJob,
 } from "./adzuna.service";
+import {
+  fetchMcfJobByUuid,
+  searchMcfJobs,
+} from "./mycareersfuture.service";
 
 /** Escapes special regex characters in a string so it can be safely used in RegExp. */
 function escapeRegex(str: string): string {
@@ -77,8 +81,20 @@ function buildCacheKey(
     `permanent=${f.permanent ?? false}`,
     `salaryMin=${f.salaryMin ?? ""}`,
     `sortBy=${f.sortBy ?? ""}`,
+    country.toLowerCase() === "sg" ? "sources=adzuna,mcf" : "sources=adzuna",
   ].join("&");
   return createHash("sha256").update(raw).digest("hex").slice(0, 32);
+}
+
+function listingSourceOf(doc: {
+  source?: string;
+  sourceId?: string;
+}): ListingSource {
+  if (doc.sourceId?.startsWith("manual-")) return "manual";
+  if (doc.source === "mcf" || doc.source === "manual" || doc.source === "adzuna") {
+    return doc.source;
+  }
+  return "adzuna";
 }
 
 /** Maps a Listing document (lean) to API ListingResult shape. */
@@ -88,6 +104,7 @@ function docToListingResult(doc: {
   company: string;
   location?: string;
   description?: string;
+  source?: string;
   sourceUrl?: string;
   sourceId?: string;
   country: string;
@@ -95,9 +112,10 @@ function docToListingResult(doc: {
   salaryMin?: number;
   salaryMax?: number;
 }): ListingResult {
+  const source = listingSourceOf(doc);
   const sourceUrl =
     doc.sourceUrl ??
-    (doc.sourceId && !doc.sourceId.startsWith("manual-")
+    (doc.sourceId && source === "adzuna"
       ? buildAdzunaJobUrl(doc.sourceId, doc.country)
       : undefined);
   return {
@@ -106,7 +124,7 @@ function docToListingResult(doc: {
     company: doc.company,
     location: doc.location,
     description: doc.description,
-    source: "adzuna",
+    source,
     sourceUrl,
     country: doc.country,
     postedAt: doc.postedAt,
@@ -138,7 +156,59 @@ function jobToListingResult(
   };
 }
 
-/** Maps Adzuna job to our Listing document shape. */
+function listingDedupeKey(l: { title: string; company: string }): string {
+  return `${l.title.trim().toLowerCase()}|${l.company.trim().toLowerCase()}`;
+}
+
+/** Prefer MCF when the same title+company appears from two sources. */
+function preferMcfOnDuplicate(listings: ListingResult[]): ListingResult[] {
+  const seen = new Map<string, ListingResult>();
+  const order: string[] = [];
+  for (const l of listings) {
+    const key = listingDedupeKey(l);
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, l);
+      order.push(key);
+      continue;
+    }
+    if (l.source === "mcf" && existing.source !== "mcf") {
+      seen.set(key, l);
+    }
+  }
+  return order.map((k) => seen.get(k)!);
+}
+
+/** Maps an MCF search card to a Listing document shape. */
+function normalizeMcfJob(
+  job: {
+    sourceId: string;
+    title: string;
+    company: string;
+    location: string;
+    sourceUrl?: string;
+    postedAt?: Date;
+    salaryMin?: number;
+    salaryMax?: number;
+    description?: string;
+  },
+  expiresAt: Date
+): Omit<IListingDocument, "_id" | "createdAt" | "updatedAt"> {
+  return {
+    title: job.title,
+    company: job.company,
+    location: job.location,
+    description: job.description,
+    source: "mcf",
+    sourceUrl: job.sourceUrl,
+    sourceId: job.sourceId,
+    country: "sg",
+    expiresAt,
+    ...(job.postedAt && { postedAt: job.postedAt }),
+    salaryMin: job.salaryMin,
+    salaryMax: job.salaryMax,
+  };
+}
 /** Sorts listings by the given sort option. Returns original order if sortBy is empty or unknown. */
 function sortListings(listings: ListingResult[], sortBy?: string): ListingResult[] {
   if (!sortBy || listings.length <= 1) return listings;
@@ -252,61 +322,87 @@ export async function searchListings(
   const cached = await SearchCache.findOne({ cacheKey }).lean();
   if (cached && cached.expiresAt > new Date()) {
     const docs = await Listing.find({ _id: { $in: cached.listingIds } }).lean();
-    listings = sortListings(docs.map(docToListingResult), filters?.sortBy);
+    listings = sortListings(
+      preferMcfOnDuplicate(docs.map(docToListingResult)),
+      filters?.sortBy,
+    );
     totalCount =
       typeof (cached as { totalCount?: number }).totalCount === "number"
         ? (cached as { totalCount: number }).totalCount
         : listings.length;
   } else {
-    // Cache miss: fetch from Adzuna
-    if (!env.ADZUNA_APP_ID || !env.ADZUNA_APP_KEY) {
-      throw new Error(
-        "ADZUNA_APP_ID and ADZUNA_APP_KEY must be set for job search"
-      );
-    }
     const ttlMs = (env.JOB_SEARCH_CACHE_TTL ?? 3600) * 1000;
     const expiresAt = new Date(Date.now() + ttlMs);
-    const resp = await fetchAdzunaSearch(
-      env.ADZUNA_APP_ID,
-      env.ADZUNA_APP_KEY,
-      cc,
-      page,
-      {
-        what: keyword,
-        resultsPerPage: 20,
-        where: filters?.where,
-        category: filters?.category,
-        fullTime: filters?.fullTime,
-        permanent: filters?.permanent,
-        salaryMin: filters?.salaryMin,
-        sortBy: filters?.sortBy,
-      }
-    );
-
     const listingIds: import("mongoose").Types.ObjectId[] = [];
-    for (const job of resp.results) {
-      const doc = normalizeAdzunaJob(job, cc, expiresAt);
-      const upserted = await Listing.findOneAndUpdate(
-        { sourceId: doc.sourceId, country: doc.country },
-        { $set: doc },
-        { upsert: true, new: true }
+    const mapped: ListingResult[] = [];
+    let adzunaCount = 0;
+
+    const hasAdzuna = Boolean(env.ADZUNA_APP_ID && env.ADZUNA_APP_KEY);
+    if (!hasAdzuna && cc !== "sg") {
+      throw new Error(
+        "ADZUNA_APP_ID and ADZUNA_APP_KEY must be set for job search",
       );
-      listingIds.push(upserted._id);
+    }
+
+    if (hasAdzuna) {
+      const resp = await fetchAdzunaSearch(
+        env.ADZUNA_APP_ID!,
+        env.ADZUNA_APP_KEY!,
+        cc,
+        page,
+        {
+          what: keyword,
+          resultsPerPage: 20,
+          where: filters?.where,
+          category: filters?.category,
+          fullTime: filters?.fullTime,
+          permanent: filters?.permanent,
+          salaryMin: filters?.salaryMin,
+          sortBy: filters?.sortBy,
+        },
+      );
+      adzunaCount = resp.count;
+      for (const job of resp.results) {
+        const doc = normalizeAdzunaJob(job, cc, expiresAt);
+        const upserted = await Listing.findOneAndUpdate(
+          { sourceId: doc.sourceId, country: doc.country },
+          { $set: doc },
+          { upsert: true, new: true },
+        );
+        listingIds.push(upserted._id);
+        mapped.push(jobToListingResult(job, String(upserted._id), cc));
+      }
+    }
+
+    if (cc === "sg") {
+      const mcfJobs = await searchMcfJobs(keyword ?? "", page, 20);
+      for (const job of mcfJobs) {
+        const doc = normalizeMcfJob(job, expiresAt);
+        const upserted = await Listing.findOneAndUpdate(
+          { sourceId: doc.sourceId, country: doc.country },
+          { $set: doc },
+          { upsert: true, new: true },
+        );
+        listingIds.push(upserted._id);
+        mapped.push(docToListingResult(upserted.toObject()));
+      }
     }
 
     await SearchCache.findOneAndUpdate(
       { cacheKey },
-      { $set: { cacheKey, listingIds, totalCount: resp.count, expiresAt } },
-      { upsert: true }
+      {
+        $set: {
+          cacheKey,
+          listingIds,
+          totalCount: Math.max(adzunaCount, mapped.length),
+          expiresAt,
+        },
+      },
+      { upsert: true },
     );
 
-    listings = sortListings(
-      resp.results.map((job, i) =>
-        jobToListingResult(job, String(listingIds[i]), cc)
-      ),
-      filters?.sortBy
-    );
-    totalCount = resp.count;
+    listings = sortListings(preferMcfOnDuplicate(mapped), filters?.sortBy);
+    totalCount = Math.max(adzunaCount, listings.length);
   }
 
   // Merge manual listings on page 1
@@ -315,7 +411,7 @@ export async function searchListings(
     const existingIds = new Set(listings.map((l) => l.id));
     const manualFiltered = manual.filter((m) => !existingIds.has(m.id));
     listings = sortListings(
-      [...manualFiltered, ...listings],
+      preferMcfOnDuplicate([...manualFiltered, ...listings]),
       filters?.sortBy
     );
     totalCount += manualFiltered.length;
@@ -330,11 +426,25 @@ export async function getListingById(
 ): Promise<ListingResult | null> {
   await connectDB();
   const objId = parseObjectId(id);
-  if (objId) {
-    const doc = await Listing.findById(objId).lean();
-    if (doc) return docToListingResult(doc);
+  if (!objId) return null;
+  const doc = await Listing.findById(objId);
+  if (!doc) return null;
+
+  if (doc.source === "mcf") {
+    const desc = (doc.description ?? "").trim();
+    if (desc.length < 200) {
+      const uuidMatch = doc.sourceUrl?.match(/\/job\/([^/?#]+)/i);
+      const uuid = uuidMatch?.[1] ?? doc.sourceId;
+      const hydrated = await fetchMcfJobByUuid(uuid);
+      if (hydrated?.description) {
+        doc.description = hydrated.description;
+        if (hydrated.sourceUrl) doc.sourceUrl = hydrated.sourceUrl;
+        await doc.save();
+      }
+    }
   }
-  return null;
+
+  return docToListingResult(doc.toObject());
 }
 
 /** Returns listings for the given ids, in order; skips missing ids. */
@@ -382,7 +492,7 @@ export async function createListing(
     description: body.description,
     country: body.country ?? "sg",
     sourceUrl: body.sourceUrl,
-    source: "adzuna",
+    source: "manual",
     sourceId,
     expiresAt,
   });
