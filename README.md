@@ -2,16 +2,20 @@
 
 ![App Screenshot](image/app-screenshot.png)
 
-AI-assisted job search built with Next.js. Browse listings from the Adzuna API, save jobs,
-compare up to 3 roles side by side, and generate AI summaries powered by Gemini.
-Admins manage users, listings, and summaries from a dedicated dashboard.
+AI-assisted job search built with Next.js. Browse listings from Adzuna and MyCareersFuture (Singapore),
+save jobs, compare roles, parse a master profile from your resume, and tailor a resume to a JD with Gemini.
+New accounts start in preview mode; AI is unlocked with an access code.
+
+**Live:** [https://mk-jobfinder.vercel.app](https://mk-jobfinder.vercel.app)
 
 **✨ Core features**
 
-- **Browse & search** — Job listings from the Adzuna API (20+ countries); keyword search, filters, trending and recommended sections
+- **Browse & search** — Job listings from Adzuna (20+ countries) plus MyCareersFuture for Singapore; keyword search, filters, trending and recommended sections
 - **Compare jobs** — Select 2–3 roles and get a unified AI comparison (similarities, differences, recommendation, match scores)
 - **AI summaries** — Gemini-powered TL;DR, key responsibilities, requirements, and optional JD–skillset match per listing
-- **Profile & skills** — Store skills and job titles; AI skill suggestions and resume parsing (PDF/DOCX) to prefill your profile
+- **Resume tailor** — Expand a parsed resume into an editable master profile, then generate a JD-specific resume + cover letter (DOCX/PDF)
+- **Profile & skills** — Store skills and a structured career history; AI skill suggestions and resume parsing (PDF/DOCX)
+- **Preview mode** — Anyone can sign up and browse; Gemini stays locked until a user enters your `AI_ACCESS_SECRET`
 - **Admin dashboard** — Manage users, listings, and summaries; stream AI dashboard summary; admin-only settings
 
 ## 📑 Table of contents
@@ -33,6 +37,7 @@ Admins manage users, listings, and summaries from a dedicated dashboard.
 - [Cache Duration](#-cache-duration)
 - [Getting Started](#-getting-started)
 - [Next Steps](#-next-steps)
+- [Vercel](#-vercel)
 
 ## 🛠️ Tech Stack
 
@@ -79,12 +84,15 @@ All routes are under `/api/v1/`. Protected routes require a Bearer token; admin 
 | `/auth/refresh`                   | POST               | Cookie    | Rotate access + refresh tokens                                                      |
 | `/auth/logout`                    | POST               | —         | Clear refresh cookie                                                                |
 | `/auth/admin/register`            | POST               | Admin     | Create admin user                                                                   |
+| `/auth/unlock-ai`                 | POST               | Auth      | Unlock Gemini features with `AI_ACCESS_SECRET`                                      |
 | `/users`                          | GET                | Admin     | List users                                                                          |
 | `/users/me`                       | GET                | Auth      | Current user                                                                        |
 | `/users/:id`                      | GET, PATCH, DELETE | Auth      | User by ID (own or admin); DELETE = delete own account                              |
 | `/profile`                        | GET, PUT           | Auth      | User profile (skills, job titles, resume summary)                                   |
 | `/profile/suggest-skills`         | POST               | Auth      | AI skill suggestions from role                                                      |
-| `/resume/parse`                   | POST               | Auth      | Parse resume (PDF, DOCX, or text) via AI                                            |
+| `/resume/parse`                   | POST               | Auth+AI   | Parse resume (PDF, DOCX, or text) via AI                                            |
+| `/resume/tailor`                  | POST               | Auth+AI   | Tailor master profile to a listing JD                                               |
+| `/resume/tailor/:id/file`         | GET                | Auth      | Download tailored resume or cover letter (`kind`, `format`)                         |
 | `/listings`                       | GET, POST          | — / Admin | Search listings; POST = create listing (admin only)                                 |
 | `/listings/:id`                   | GET, PATCH, DELETE | — / Admin | Single listing; PATCH/DELETE = update/delete (admin)                                |
 | `/listings/:id/view`              | POST               | —         | Record a view                                                                       |
@@ -240,6 +248,9 @@ All keys are configured in `next-app/.env.local` (copy from `next-app/.env.examp
 | **JOB_SEARCH_CACHE_TTL**         | No       | `604800` | Job search (Adzuna) cache TTL in **seconds** (default 7 days).                                                                                                     |
 | **AI_SUMMARY_CACHE_TTL**         | No       | `604800` | AI summary cache TTL in **seconds** (default 7 days) per `inputTextHash`.                                                                                          |
 | **ADMIN_REGISTER_SECRET**        | No       | —        | If set, allows creating an admin via `POST /api/v1/auth/admin/register`; if unset, that endpoint returns 403.                                                      |
+| **AI_ACCESS_SECRET**             | No       | —        | Master password a user enters in Settings to unlock Gemini. If unset, only admins have AI access.                                                                  |
+| **AI_DAILY_LIMIT**               | No       | `30`     | Max Gemini calls per user per UTC day (excludes cache hits).                                                                                                       |
+| **AI_TAILOR_DAILY_LIMIT**        | No       | `10`     | Max resume-tailor Gemini calls per user per UTC day.                                                                                                               |
 | **NEXT_PUBLIC_API_URL**          | No       | —        | Backend API base URL (e.g. `http://localhost:3000/api/v1`). Used by the client; same-origin if omitted.                                                            |
 | **NODE_ENV**                     | No       | —        | Node environment (`development` / `production`); used by Next.js and cookie `secure` flag. Not validated in `env.ts`.                                              |
 
@@ -277,6 +288,15 @@ JWT access and refresh tokens have their own expiry (see env vars above); they a
 
 ## 📌 Next Steps
 
-- Consider deploying app on Vercel in accordance to API guidelines
-- Add EventBrite API to discover networking events or career fairs
 - Job alerts via email
+- Himalayas remote-jobs API as an extra source
+
+## ☁️ Vercel
+
+**Deployed:** [https://mk-jobfinder.vercel.app](https://mk-jobfinder.vercel.app)
+
+Link the existing `mk-jobfinder` project with **Root Directory** `next-app` (pnpm workspace). Set the env vars from the table above in the Vercel dashboard, including `AI_ACCESS_SECRET`. MongoDB Atlas must allow Vercel IPs (often `0.0.0.0/0` with a strong URI).
+
+Do **not** enable Deployment Protection — signup must stay public. Preview accounts cannot call Gemini until they unlock.
+
+On Pro, add WAF rate-limit rules on `/api/v1/auth/unlock-ai`, `/api/v1/resume/*`, `/api/v1/summaries*`, and `/api/v1/profile/suggest-skills` (IP, ~20 req/min). Hobby still includes platform DDoS mitigation.
