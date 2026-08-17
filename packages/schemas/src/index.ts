@@ -8,3 +8,4 @@ export * from "./schemas/ai-summary";
 export * from "./schemas/saved-listing";
 export * from "./schemas/admin-dashboard";
 export * from "./schemas/user-profile";
+export * from "./schemas/tailored-resume";

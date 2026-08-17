@@ -13,6 +13,7 @@ import {
   BookmarkSimpleIcon,
   SparkleIcon,
   ArrowsLeftRightIcon,
+  FileTextIcon,
 } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -22,6 +23,7 @@ import { Button, Card, CardContent } from "@ui/components";
 import { cn } from "@ui/components/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatPostedDate, formatSalaryRange } from "@/lib/format";
+import { listingSourceLabel } from "@/lib/listing-source";
 import { fetchListing, recordListingView } from "@/lib/api/listings";
 import { fetchProfile } from "@/lib/api/profile";
 import {
@@ -49,6 +51,10 @@ import { CARD_PADDING_DEFAULT_RESPONSIVE, GAP_LG } from "@/lib/layout";
 import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
 import { InlineError, PageLoadingSkeleton } from "@/components/page-state";
 import { AISummaryCard } from "@/components/ai-summary-card";
+import { AiLockedNotice } from "@/components/ai-locked-notice";
+import { userHasAiAccess } from "@/lib/ai-access";
+import { tailorResume, downloadTailoredFile } from "@/lib/api/tailor";
+import type { TailoredResumeResult } from "@schemas";
 
 export interface JobDetailPanelProps {
   /** Listing ID to show. */
@@ -104,7 +110,7 @@ export function JobDetailPanel({
   const { data: cachedSummary } = useQuery({
     queryKey: summaryKeys(listingId),
     queryFn: () => getSummaryForListing(listingId),
-    enabled: !!user && !!listingId,
+    enabled: !!user && !!listingId && userHasAiAccess(user),
   });
 
   const queryClient = useQueryClient();
@@ -125,6 +131,10 @@ export function JobDetailPanel({
     streamForCurrent?.summary ?? cachedSummary ?? null;
   const summaryError = streamForCurrent?.error ?? null;
   const isSummarizing = streamForCurrent?.inProgress ?? false;
+
+  const [tailorResult, setTailorResult] = useState<TailoredResumeResult | null>(null);
+  const [tailorError, setTailorError] = useState<string | null>(null);
+  const [isTailoring, setIsTailoring] = useState(false);
 
   /** Triggers streaming AI summary generation for the current listing. */
   const handleSummarize = useCallback(async () => {
@@ -176,6 +186,25 @@ export function JobDetailPanel({
       }
     }
   }, [listingId, queryClient]);
+
+  const handleTailor = useCallback(async () => {
+    setTailorError(null);
+    setIsTailoring(true);
+    try {
+      const data = await tailorResume(listingId);
+      setTailorResult(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to tailor resume";
+      setTailorError(message);
+      if (isRateLimitMessage(message)) {
+        toast.error(
+          "AI tailoring is temporarily unavailable due to rate limits. Please try again in a few minutes.",
+        );
+      }
+    } finally {
+      setIsTailoring(false);
+    }
+  }, [listingId]);
 
   useEffect(() => {
     if (listingId)
@@ -375,6 +404,11 @@ export function JobDetailPanel({
               {listing.country.toUpperCase()}
             </span>
           )}
+          {listing.source && listingSourceLabel(listing.source) && (
+            <span className={cn("mt-2 ml-2 inline-block", BADGE_MUTED)}>
+              {listingSourceLabel(listing.source)}
+            </span>
+          )}
           {(() => {
             const posted = formatPostedDate(listing.postedAt);
             return posted ? (
@@ -393,7 +427,7 @@ export function JobDetailPanel({
                 summary={summary as SummaryWithId}
                 hasSkills={profile !== undefined ? (profile?.skills?.length ?? 0) > 0 : undefined}
               />
-            ) : user ? (
+            ) : userHasAiAccess(user) ? (
               <>
                 <Button onClick={handleSummarize} disabled={isSummarizing}>
                   {isSummarizing ? (
@@ -407,6 +441,8 @@ export function JobDetailPanel({
                 </Button>
                 {summaryError && <InlineError message={summaryError} />}
               </>
+            ) : user ? (
+              <AiLockedNotice feature="AI summaries" />
             ) : (
               <Button asChild variant="default" size="sm">
                 <AuthModalLink
@@ -414,6 +450,103 @@ export function JobDetailPanel({
                   redirect={listingId ? `/browse/${listingId}` : undefined}
                 >
                   Log in to get AI summaries
+                </AuthModalLink>
+              </Button>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className={EYEBROW_CLASS}>Tailor resume</h2>
+            {tailorResult && tailorResult.listingId === listingId && tailorResult.content ? (
+              <Card variant="elevated">
+                <CardContent className="space-y-3 p-4 text-sm">
+                  <p className="font-medium text-foreground">
+                    Match score {tailorResult.content.matchScore}%
+                    {tailorResult.listingTitle
+                      ? ` for ${tailorResult.listingTitle}`
+                      : ""}
+                  </p>
+                  {tailorResult.content.warnings.length > 0 && (
+                    <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-destructive">
+                      <p className="font-medium">Review before sending</p>
+                      <ul className="mt-1 list-disc pl-5">
+                        {tailorResult.content.warnings.map((w) => (
+                          <li key={w}>{w}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {tailorResult.content.gaps.length > 0 && (
+                    <div>
+                      <p className={cn(EYEBROW_CLASS, EYEBROW_MB)}>Gaps</p>
+                      <ul className="list-disc pl-5 text-foreground">
+                        {tailorResult.content.gaps.map((g) => (
+                          <li key={g}>{g}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <p className="text-foreground">{tailorResult.content.summary}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        downloadTailoredFile(tailorResult.id, "resume", "docx")
+                      }
+                    >
+                      <FileTextIcon size={16} className="mr-1" />
+                      Resume DOCX
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        downloadTailoredFile(tailorResult.id, "resume", "pdf")
+                      }
+                    >
+                      Resume PDF
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        downloadTailoredFile(tailorResult.id, "cover", "docx")
+                      }
+                    >
+                      Cover letter DOCX
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        downloadTailoredFile(tailorResult.id, "cover", "pdf")
+                      }
+                    >
+                      Cover letter PDF
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : userHasAiAccess(user) ? (
+              <>
+                <Button onClick={handleTailor} disabled={isTailoring}>
+                  {isTailoring ? "Tailoring…" : "Tailor resume to this JD"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Rewrites bullets from your master profile only. Add experience on Profile first.
+                </p>
+                {tailorError && <InlineError message={tailorError} />}
+              </>
+            ) : user ? (
+              <AiLockedNotice feature="Resume tailoring" />
+            ) : (
+              <Button asChild variant="outline" size="sm">
+                <AuthModalLink
+                  auth="login"
+                  redirect={listingId ? `/browse/${listingId}` : undefined}
+                >
+                  Log in to tailor your resume
                 </AuthModalLink>
               </Button>
             )}

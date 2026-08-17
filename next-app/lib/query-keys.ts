@@ -36,6 +36,10 @@ export function summaryKeys(listingId: string): readonly [string, string] {
   return ["summary", listingId];
 }
 
+export function tailorKeys(listingId: string): readonly [string, string] {
+  return ["tailor", listingId];
+}
+
 export const trendingKeys = { all: ["trending"] as const };
 export const recommendedKeys = { all: ["recommended"] as const };
 
