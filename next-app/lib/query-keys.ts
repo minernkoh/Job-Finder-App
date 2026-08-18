@@ -42,6 +42,7 @@ export function tailorKeys(listingId: string): readonly [string, string] {
 
 export const trendingKeys = { all: ["trending"] as const };
 export const recommendedKeys = { all: ["recommended"] as const };
+export const guestAiQuotaKeys = { all: ["guestAiQuota"] as const };
 
 export function adminListingsKeys(page: number, limit: number): readonly [string, string, number, number] {
   return ["admin", "listings", page, limit];

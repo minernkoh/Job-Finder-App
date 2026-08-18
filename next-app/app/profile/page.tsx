@@ -22,7 +22,7 @@ import {
   parseResumeFile,
 } from "@/lib/api/profile";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { profileKeys } from "@/lib/query-keys";
+import { profileKeys, guestAiQuotaKeys } from "@/lib/query-keys";
 import {
   CARD_PADDING_COMPACT,
   CONTENT_MAX_W,
@@ -39,12 +39,18 @@ import { TrashIcon, XIcon } from "@phosphor-icons/react";
 import { cn } from "@ui/components/lib/utils";
 import { dedupeSkills } from "@/lib/skills";
 import { userHasAiAccess } from "@/lib/ai-access";
+import { useGuestAiQuota } from "@/hooks/useGuestAiQuota";
 
 const YEARS_OF_EXPERIENCE_MAX = 70;
 
 /** Inner content: header, compare bar, resume/skills left, saved listings right (two columns on lg). */
 function ProfileContent() {
-  const { user, logout } = useAuth();
+  const { user, logout, isDemo } = useAuth();
+  const {
+    remaining: guestAiRemaining,
+    limit: guestAiLimit,
+    exhausted: guestAiExhausted,
+  } = useGuestAiQuota();
   const { savedListings, isLoadingSaved, unsaveMutation } = useSavedListings();
   const { compareSet, addToCompare, isInCompareSet } = useCompare();
   const queryClient = useQueryClient();
@@ -151,6 +157,9 @@ function ProfileContent() {
       if (data?.yearsOfExperience != null)
         setDraftYears(String(data.yearsOfExperience));
       queryClient.invalidateQueries({ queryKey: profileKeys.all });
+      if (isDemo) {
+        queryClient.invalidateQueries({ queryKey: guestAiQuotaKeys.all });
+      }
       toast.success("Resume parsed");
     },
   });
@@ -406,6 +415,10 @@ function ProfileContent() {
                   hideSuggestedSkillsPills
                   idPrefix="profile"
                   aiLocked={!userHasAiAccess(user)}
+                  showGuestAiQuota={isDemo}
+                  guestAiRemaining={guestAiRemaining}
+                  guestAiLimit={guestAiLimit}
+                  guestAiExhausted={guestAiExhausted}
                   introText="Generate skill suggestions from current role"
                   yearsValue={yearsDisplayValue}
                   onYearsChange={setDraftYears}
@@ -585,6 +598,10 @@ function ProfileContent() {
                     hideSuggestedSkillsPills
                     idPrefix="profile"
                     aiLocked={!userHasAiAccess(user)}
+                    showGuestAiQuota={isDemo}
+                    guestAiRemaining={guestAiRemaining}
+                    guestAiLimit={guestAiLimit}
+                    guestAiExhausted={guestAiExhausted}
                     introText="Generate skill suggestions from current role"
                     yearsValue={yearsDisplayValue}
                     onYearsChange={setDraftYears}

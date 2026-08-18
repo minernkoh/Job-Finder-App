@@ -4,7 +4,7 @@
 
 AI-assisted job search built with Next.js. Browse listings from Adzuna and MyCareersFuture (Singapore),
 save jobs, compare roles, parse a master profile from your resume, and tailor a resume to a JD with Gemini.
-New accounts start in preview mode; AI is unlocked with an access code.
+First-time visitors auto-enter **guest preview mode** (live job search, sample profile, 3 real AI parse/tailor tries per day, canned summaries). Registered accounts start with Gemini locked until an access code is entered.
 
 **Live:** [https://mk-jobfinder.vercel.app](https://mk-jobfinder.vercel.app)
 
@@ -15,7 +15,8 @@ New accounts start in preview mode; AI is unlocked with an access code.
 - **AI summaries** — Gemini-powered TL;DR, key responsibilities, requirements, and optional JD–skillset match per listing
 - **Resume tailor** — Expand a parsed resume into an editable master profile, then generate a JD-specific resume + cover letter (DOCX/PDF)
 - **Profile & skills** — Store skills and a structured career history; AI skill suggestions and resume parsing (PDF/DOCX)
-- **Preview mode** — Anyone can sign up and browse; Gemini stays locked until a user enters your `AI_ACCESS_SECRET`
+- **Guest preview** — No sign-up required: auto-enter on first visit with live Adzuna/MCF listings, a sample profile, local saves, 3 real Gemini parse/tailor tries per day (IP cap), and example AI summaries (stored in this browser only)
+- **Registered preview** — New accounts keep Gemini locked until a user enters your `AI_ACCESS_SECRET` in Settings
 - **Admin dashboard** — Manage users, listings, and summaries; stream AI dashboard summary; admin-only settings
 
 ## 📑 Table of contents
@@ -93,6 +94,9 @@ All routes are under `/api/v1/`. Protected routes require a Bearer token; admin 
 | `/resume/parse`                   | POST               | Auth+AI   | Parse resume (PDF, DOCX, or text) via AI                                            |
 | `/resume/tailor`                  | POST               | Auth+AI   | Tailor master profile to a listing JD                                               |
 | `/resume/tailor/:id/file`         | GET                | Auth      | Download tailored resume or cover letter (`kind`, `format`)                         |
+| `/demo/ai-quota`                  | GET                | —         | Guest preview: remaining parse+tailor Gemini calls for this IP today                |
+| `/demo/resume/parse`              | POST               | —         | Guest preview: parse resume via Gemini (IP quota; no account upsert)                |
+| `/demo/resume/tailor`             | POST               | —         | Guest preview: tailor profile to listing via Gemini (IP quota)                      |
 | `/listings`                       | GET, POST          | — / Admin | Search listings; POST = create listing (admin only)                                 |
 | `/listings/:id`                   | GET, PATCH, DELETE | — / Admin | Single listing; PATCH/DELETE = update/delete (admin)                                |
 | `/listings/:id/view`              | POST               | —         | Record a view                                                                       |
@@ -251,6 +255,7 @@ All keys are configured in `next-app/.env.local` (copy from `next-app/.env.examp
 | **AI_ACCESS_SECRET**             | No       | —        | Master password a user enters in Settings to unlock Gemini. If unset, only admins have AI access.                                                                  |
 | **AI_DAILY_LIMIT**               | No       | `30`     | Max Gemini calls per user per UTC day (excludes cache hits).                                                                                                       |
 | **AI_TAILOR_DAILY_LIMIT**        | No       | `10`     | Max resume-tailor Gemini calls per user per UTC day.                                                                                                               |
+| **AI_GUEST_DAILY_LIMIT**         | No       | `3`      | Max guest preview Gemini parse+tailor calls per IP per UTC day.                                                                                                    |
 | **NEXT_PUBLIC_API_URL**          | No       | —        | Backend API base URL (e.g. `http://localhost:3000/api/v1`). Used by the client; same-origin if omitted.                                                            |
 | **NODE_ENV**                     | No       | —        | Node environment (`development` / `production`); used by Next.js and cookie `secure` flag. Not validated in `env.ts`.                                              |
 

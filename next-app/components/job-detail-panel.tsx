@@ -34,6 +34,7 @@ import {
 import type { SummaryWithId } from "@/lib/api/summaries";
 import {
   isRateLimitMessage,
+  isGuestAiQuotaMessage,
   isSummaryNotConfiguredMessage,
   SUMMARY_NOT_AVAILABLE_UI_MESSAGE,
 } from "@/lib/api/errors";
@@ -45,6 +46,7 @@ import {
   profileKeys,
   summaryKeys,
   trendingKeys,
+  guestAiQuotaKeys,
 } from "@/lib/query-keys";
 import { BADGE_MUTED } from "@/lib/badges";
 import { CARD_PADDING_DEFAULT_RESPONSIVE, GAP_LG } from "@/lib/layout";
@@ -52,8 +54,10 @@ import { EYEBROW_CLASS, EYEBROW_MB } from "@/lib/styles";
 import { InlineError, PageLoadingSkeleton } from "@/components/page-state";
 import { AISummaryCard } from "@/components/ai-summary-card";
 import { AiLockedNotice } from "@/components/ai-locked-notice";
+import { GuestAiQuotaNotice } from "@/components/guest-ai-quota-notice";
 import { userHasAiAccess } from "@/lib/ai-access";
 import { tailorResume, downloadTailoredFile } from "@/lib/api/tailor";
+import { useGuestAiQuota } from "@/hooks/useGuestAiQuota";
 import type { TailoredResumeResult } from "@schemas";
 
 export interface JobDetailPanelProps {
@@ -88,8 +92,13 @@ export function JobDetailPanel({
 }: JobDetailPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, isDemo } = useAuth();
   const isMd = useIsMdViewport();
+  const {
+    remaining: guestAiRemaining,
+    limit: guestAiLimit,
+    exhausted: guestAiExhausted,
+  } = useGuestAiQuota();
 
   const {
     data: listing,
@@ -193,9 +202,15 @@ export function JobDetailPanel({
     try {
       const data = await tailorResume(listingId);
       setTailorResult(data);
+      if (isDemo) {
+        queryClient.invalidateQueries({ queryKey: guestAiQuotaKeys.all });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to tailor resume";
       setTailorError(message);
+      if (isDemo && isGuestAiQuotaMessage(message)) {
+        queryClient.invalidateQueries({ queryKey: guestAiQuotaKeys.all });
+      }
       if (isRateLimitMessage(message)) {
         toast.error(
           "AI tailoring is temporarily unavailable due to rate limits. Please try again in a few minutes.",
@@ -204,7 +219,7 @@ export function JobDetailPanel({
     } finally {
       setIsTailoring(false);
     }
-  }, [listingId]);
+  }, [listingId, isDemo, queryClient]);
 
   useEffect(() => {
     if (listingId)
@@ -530,7 +545,16 @@ export function JobDetailPanel({
               </Card>
             ) : userHasAiAccess(user) ? (
               <>
-                <Button onClick={handleTailor} disabled={isTailoring}>
+                {isDemo && (
+                  <GuestAiQuotaNotice
+                    remaining={guestAiRemaining}
+                    limit={guestAiLimit}
+                  />
+                )}
+                <Button
+                  onClick={handleTailor}
+                  disabled={isTailoring || (isDemo && guestAiExhausted)}
+                >
                   {isTailoring ? "Tailoring…" : "Tailor resume to this JD"}
                 </Button>
                 <p className="text-xs text-muted-foreground">

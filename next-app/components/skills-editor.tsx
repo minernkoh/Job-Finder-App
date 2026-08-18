@@ -15,6 +15,7 @@ import {
 import { cn } from "@ui/components/lib/utils";
 import { InlineError } from "@/components/page-state";
 import { AiLockedNotice } from "@/components/ai-locked-notice";
+import { GuestAiQuotaNotice } from "@/components/guest-ai-quota-notice";
 import { CARD_PADDING_COMPACT, GAP_LG, GAP_MD, TEXTAREA_BASE_CLASS } from "@/lib/layout";
 import { EYEBROW_CLASS } from "@/lib/styles";
 
@@ -94,6 +95,11 @@ export interface SkillsEditorProps {
   hideSuggestedSkillsPills?: boolean;
   /** When true, AI parse/suggest controls are hidden (preview account). */
   aiLocked?: boolean;
+  /** Guest preview: show remaining parse quota and disable parse when exhausted. */
+  showGuestAiQuota?: boolean;
+  guestAiRemaining?: number;
+  guestAiLimit?: number;
+  guestAiExhausted?: boolean;
 }
 
 /** Renders role input, suggest pills, custom skill, optional resume block, and skills list with optional save. */
@@ -133,6 +139,10 @@ export function SkillsEditor({
   hideYourSkillsBlock = false,
   hideSuggestedSkillsPills = false,
   aiLocked = false,
+  showGuestAiQuota = false,
+  guestAiRemaining = 0,
+  guestAiLimit = 3,
+  guestAiExhausted = false,
 }: SkillsEditorProps) {
   const fileInputId = `${idPrefix}-resume-file`;
   const yearsId = yearsInputId ?? `${idPrefix}-years`;
@@ -360,6 +370,12 @@ export function SkillsEditor({
         {showResumeBlock && resumeProps && !aiLocked && (
           <section className={cn(GAP_MD, "border-t border-border pt-4")}>
             <p className={EYEBROW_CLASS}>Scan resume</p>
+            {showGuestAiQuota && (
+              <GuestAiQuotaNotice
+                remaining={guestAiRemaining}
+                limit={guestAiLimit}
+              />
+            )}
             <div className="space-y-3">
               <input
                 id={fileInputId}
@@ -446,6 +462,7 @@ export function SkillsEditor({
                 variant="secondary"
                 size="sm"
                 disabled={
+                  guestAiExhausted ||
                   !(
                     resumeProps.selectedFile != null ||
                     resumeProps.resumeText.trim().length > 0
