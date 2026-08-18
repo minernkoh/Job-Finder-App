@@ -30,6 +30,8 @@ const envSchema = z.object({
   AI_DAILY_LIMIT: z.coerce.number().int().min(1).default(30),
   /** Max resume-tailor Gemini calls per user per UTC day. Default 10. */
   AI_TAILOR_DAILY_LIMIT: z.coerce.number().int().min(1).default(10),
+  /** Max Gemini parse+tailor calls per preview IP per UTC day. Default 3. */
+  AI_GUEST_DAILY_LIMIT: z.coerce.number().int().min(1).default(3),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -51,6 +53,7 @@ function validateEnv(): Env {
     AI_ACCESS_SECRET: process.env.AI_ACCESS_SECRET?.trim() || undefined,
     AI_DAILY_LIMIT: process.env.AI_DAILY_LIMIT,
     AI_TAILOR_DAILY_LIMIT: process.env.AI_TAILOR_DAILY_LIMIT,
+    AI_GUEST_DAILY_LIMIT: process.env.AI_GUEST_DAILY_LIMIT,
   });
   if (!parsed.success) {
     throw new Error(

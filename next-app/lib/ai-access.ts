@@ -9,6 +9,12 @@ export const AI_LOCKED_MESSAGE =
 export const AI_QUOTA_MESSAGE =
   "Daily AI quota reached. Try again tomorrow, or reuse a cached result.";
 
+/** Default preview Gemini cap (parse + tailor combined) per IP per UTC day. */
+export const GUEST_AI_DAILY_LIMIT = 3;
+
+export const GUEST_AI_QUOTA_MESSAGE =
+  "Preview limit reached (3 AI calls per day). Sign up for a full quota.";
+
 /** Returns true when the user may call Gemini-backed features. Admins are always unlocked. */
 export function userHasAiAccess(
   user: { role: string; aiEnabled?: boolean } | null | undefined,

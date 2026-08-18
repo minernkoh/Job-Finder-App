@@ -9,6 +9,7 @@ import {
   ProfileContactSchema,
   ProjectEntrySchema,
   SkillGroupSchema,
+  UserProfileSchema,
 } from "./user-profile";
 
 export const TailorResumeBodySchema = z.object({
@@ -16,6 +17,14 @@ export const TailorResumeBodySchema = z.object({
   forceRegenerate: z.boolean().optional(),
 });
 export type TailorResumeBody = z.infer<typeof TailorResumeBodySchema>;
+
+/** POST /api/v1/demo/resume/tailor: listing plus the browser-only preview profile. */
+export const DemoTailorBodySchema = z.object({
+  listingId: z.string().min(1, "listingId is required"),
+  forceRegenerate: z.boolean().optional(),
+  profile: UserProfileSchema,
+});
+export type DemoTailorBody = z.infer<typeof DemoTailorBodySchema>;
 
 /** Subset Gemini is allowed to rewrite. Name, contacts, projects, education stay from the master profile. */
 export const TailorLlmResultSchema = z.object({

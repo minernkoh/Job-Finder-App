@@ -6,7 +6,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type { z } from "zod";
 import { isValidObjectId } from "@/lib/objectid";
-import { AI_LOCKED_CODE, AI_LOCKED_MESSAGE, AI_QUOTA_MESSAGE } from "@/lib/ai-access";
+import {
+  AI_LOCKED_CODE,
+  AI_LOCKED_MESSAGE,
+  AI_QUOTA_MESSAGE,
+  GUEST_AI_QUOTA_MESSAGE,
+} from "@/lib/ai-access";
 
 /**
  * Extracts a user-facing error message from an unknown error. Checks response?.data?.message or
@@ -27,6 +32,7 @@ export function getErrorMessage(err: unknown, fallback: string): string {
  * Safe for client use; no server-only imports.
  */
 export function isRateLimitMessage(message: string): boolean {
+  if (message === GUEST_AI_QUOTA_MESSAGE) return false;
   const m = message.toUpperCase();
   return (
     m.includes("429") ||
@@ -34,6 +40,11 @@ export function isRateLimitMessage(message: string): boolean {
     m.includes("QUOTA") ||
     message === AI_QUOTA_MESSAGE
   );
+}
+
+/** Returns true when the guest preview daily Gemini cap was hit. */
+export function isGuestAiQuotaMessage(message: string): boolean {
+  return message === GUEST_AI_QUOTA_MESSAGE;
 }
 
 /** 403 payload when a preview user hits a Gemini route. */
@@ -51,7 +62,12 @@ export function aiQuotaResponse(err?: unknown): NextResponse {
   return NextResponse.json({ success: false, message }, { status: 429 });
 }
 
-export { AI_LOCKED_CODE, AI_LOCKED_MESSAGE, AI_QUOTA_MESSAGE };
+export {
+  AI_LOCKED_CODE,
+  AI_LOCKED_MESSAGE,
+  AI_QUOTA_MESSAGE,
+  GUEST_AI_QUOTA_MESSAGE,
+};
 
 /**
  * Returns true if the error (Axios or message string) is an AI_LOCKED 403.

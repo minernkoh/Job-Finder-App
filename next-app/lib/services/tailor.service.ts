@@ -8,6 +8,7 @@ import { generateObject } from "ai";
 import {
   TailorLlmResultSchema,
   TailoredResumeContentSchema,
+  type ListingResult,
   type TailoredResumeContent,
   type TailoredResumeResult,
   type UserProfile,
@@ -76,17 +77,9 @@ function periodForCompany(profile: UserProfile, company: string): string | undef
   return undefined;
 }
 
-export async function tailorResumeForListing(
-  userId: string,
-  listingId: string,
-  forceRegenerate = false,
-): Promise<TailoredResumeResult> {
-  if (!isValidObjectId(userId) || !isValidObjectId(listingId)) {
-    throw new Error("Invalid id");
-  }
-  await connectDB();
-  const profile = await getProfileByUserId(userId);
-  if (!profile || !(profile.experience?.length)) {
+/** Throws when the master profile is missing name or work experience required to tailor. */
+export function assertProfileReadyForTailor(profile: UserProfile): void {
+  if (!profile.experience?.length) {
     throw new Error(
       "Add work experience to your master profile before tailoring a resume.",
     );
@@ -94,38 +87,20 @@ export async function tailorResumeForListing(
   if (!profile.name?.trim()) {
     throw new Error("Add your name to the master profile before tailoring.");
   }
+}
 
-  const listing = await getListingById(listingId);
-  if (!listing) throw new Error("Listing not found");
-
-  const profileHash = hashMasterProfile(profile);
-  const uid = new mongoose.Types.ObjectId(userId);
-  const lid = new mongoose.Types.ObjectId(listingId);
-
-  if (!forceRegenerate) {
-    const cached = await TailoredResume.findOne({
-      userId: uid,
-      listingId: lid,
-      profileHash,
-    }).lean();
-    if (cached) {
-      return {
-        id: String(cached._id),
-        listingId,
-        listingTitle: cached.listingTitle,
-        listingCompany: cached.listingCompany,
-        content: cached.content,
-        createdAt: cached.createdAt,
-      };
-    }
-  }
-
+/**
+ * Gemini rewrite of a master profile against one listing. Does not consume quota or persist.
+ * Callers must consume quota immediately before this on a cache miss.
+ */
+export async function generateTailoredContent(
+  profile: UserProfile,
+  listing: Pick<ListingResult, "title" | "company" | "description">,
+): Promise<TailoredResumeContent> {
   const jd = stripHtmlToText(listing.description ?? "").slice(0, 6000);
   if (!jd.trim()) {
     throw new Error("This listing has no job description to tailor against.");
   }
-
-  await consumeAiQuota(userId, "tailor");
 
   const skillGroupNames = (profile.skillGroups ?? []).map((g) => g.name);
   const profileJson = JSON.stringify(profile, null, 2);
@@ -178,7 +153,7 @@ ${jd}`;
   const skillGroups = order.map((n) => groupByName.get(n)!).filter(Boolean);
 
   const contentDraft: TailoredResumeContent = {
-    name: profile.name,
+    name: profile.name ?? "",
     headline: profile.headline,
     contacts: profile.contacts,
     summary: object.summary,
@@ -202,9 +177,78 @@ ${jd}`;
     ...contentDraft,
     warnings: verifyTruthful(profile, contentDraft),
   });
-  const content = parsed.success
+  return parsed.success
     ? parsed.data
     : { ...contentDraft, warnings: ["Model output failed schema checks; review carefully."] };
+}
+
+/** Guest tailor: generate against a listing without a Mongo user or TailoredResume row. */
+export async function tailorResumeForGuest(
+  profile: UserProfile,
+  listingId: string,
+): Promise<TailoredResumeResult> {
+  assertProfileReadyForTailor(profile);
+  if (!isValidObjectId(listingId)) {
+    throw new Error("Invalid id");
+  }
+  const listing = await getListingById(listingId);
+  if (!listing) throw new Error("Listing not found");
+
+  const content = await generateTailoredContent(profile, listing);
+  return {
+    id: `demo-tailor-${listingId}-${hashMasterProfile(profile)}`,
+    listingId,
+    listingTitle: listing.title,
+    listingCompany: listing.company,
+    content,
+    createdAt: new Date(),
+  };
+}
+
+export async function tailorResumeForListing(
+  userId: string,
+  listingId: string,
+  forceRegenerate = false,
+): Promise<TailoredResumeResult> {
+  if (!isValidObjectId(userId) || !isValidObjectId(listingId)) {
+    throw new Error("Invalid id");
+  }
+  await connectDB();
+  const profile = await getProfileByUserId(userId);
+  if (!profile) {
+    throw new Error(
+      "Add work experience to your master profile before tailoring a resume.",
+    );
+  }
+  assertProfileReadyForTailor(profile);
+
+  const listing = await getListingById(listingId);
+  if (!listing) throw new Error("Listing not found");
+
+  const profileHash = hashMasterProfile(profile);
+  const uid = new mongoose.Types.ObjectId(userId);
+  const lid = new mongoose.Types.ObjectId(listingId);
+
+  if (!forceRegenerate) {
+    const cached = await TailoredResume.findOne({
+      userId: uid,
+      listingId: lid,
+      profileHash,
+    }).lean();
+    if (cached) {
+      return {
+        id: String(cached._id),
+        listingId,
+        listingTitle: cached.listingTitle,
+        listingCompany: cached.listingCompany,
+        content: cached.content,
+        createdAt: cached.createdAt,
+      };
+    }
+  }
+
+  await consumeAiQuota(userId, "tailor");
+  const content = await generateTailoredContent(profile, listing);
 
   const doc = await TailoredResume.findOneAndUpdate(
     { userId: uid, listingId: lid, profileHash },
