@@ -18,12 +18,14 @@ interface AuthModalLinkProps {
   redirect?: string;
   /** Passed to the underlying Link. */
   className?: string;
+  /** Called when the link is clicked (e.g. to close a menu). */
+  onClick?: () => void;
   /** Link content. */
   children: ReactNode;
 }
 
 /** Builds href for current path + existing params + auth (and optional redirect) for modal overlay. */
-export function AuthModalLink({ auth, redirect, className, children }: AuthModalLinkProps) {
+export function AuthModalLink({ auth, redirect, className, onClick, children }: AuthModalLinkProps) {
   const pathname = usePathname() ?? "/";
   const searchParams = useSearchParams();
   const next = new URLSearchParams(searchParams);
@@ -41,7 +43,7 @@ export function AuthModalLink({ auth, redirect, className, children }: AuthModal
   const query = next.toString();
   const href = query ? `${pathname}?${query}` : `${pathname}?auth=${auth}`;
   return (
-    <Link href={href} className={className}>
+    <Link href={href} className={className} onClick={onClick}>
       {children}
     </Link>
   );

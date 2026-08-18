@@ -21,7 +21,7 @@ import { UnlockAiForm } from "@/components/unlock-ai-form";
 
 /** Settings page content: header, compare bar, Account section, and Delete account section. */
 function SettingsContent() {
-  const { user, logout, setUser } = useAuth();
+  const { user, logout, setUser, isDemo } = useAuth();
   const router = useRouter();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -60,6 +60,15 @@ function SettingsContent() {
 
       <main id="main-content" className={cn("mx-auto flex-1 w-full py-8", CONTENT_MAX_W, SECTION_GAP, PAGE_PX)}>
         <PageShell title="Settings">
+          {isDemo && (
+            <p className="mb-6 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
+              <strong className="text-foreground">Preview mode</strong> — this
+              isn&apos;t a real account. Sign up to save your profile and unlock
+              real AI features.
+            </p>
+          )}
+
+          {!isDemo && (
           <section aria-label="Account" className="space-y-3">
             <h2 className={EYEBROW_CLASS}>Account</h2>
             <AccountSettingsForm
@@ -68,12 +77,16 @@ function SettingsContent() {
               idPrefix="settings"
             />
           </section>
+          )}
 
+          {!isDemo && (
           <section aria-label="AI features" className="mt-8 space-y-3">
             <h2 className={EYEBROW_CLASS}>AI features</h2>
             <UnlockAiForm />
           </section>
+          )}
 
+          {!isDemo && (
           <section aria-label="Delete account" className="mt-8 space-y-3">
             <h2 className={cn(EYEBROW_CLASS, "text-destructive")}>Danger zone</h2>
             <Card variant="default" className="border-border border-destructive/50">
@@ -124,6 +137,7 @@ function SettingsContent() {
               </CardContent>
             </Card>
           </section>
+          )}
         </PageShell>
       </main>
     </div>

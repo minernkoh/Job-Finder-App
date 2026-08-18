@@ -3,7 +3,12 @@
  */
 
 import type { AISummary, ComparisonSummary, CreateSummaryBody } from "@schemas";
-import { apiClient, buildAuthHeaders, refreshAccessToken } from "./client";
+import { apiClient, buildAuthHeaders, isDemoMode, refreshAccessToken } from "./client";
+import {
+  handleDemoComparisonStreamFetch,
+  handleDemoSummaryFetch,
+  handleDemoSummaryStreamFetch,
+} from "@/lib/demo/adapter";
 import { consumeNdjsonStream } from "./stream";
 import type { ApiResponse } from "./types";
 
@@ -45,6 +50,12 @@ export async function createComparisonSummaryStream(
     listingIds,
     forceRegenerate: options?.forceRegenerate,
   };
+
+  if (isDemoMode()) {
+    const res = await handleDemoComparisonStreamFetch(body);
+    return await processComparisonResponse(res);
+  }
+
   const doFetch = (headers: Record<string, string>) =>
     fetch("/api/v1/summaries/compare/stream", {
       method: "POST",
@@ -131,6 +142,14 @@ export type StreamSummaryResult =
 export async function getSummaryForListing(
   listingId: string,
 ): Promise<SummaryWithId | null> {
+  if (isDemoMode()) {
+    const res = await handleDemoSummaryFetch(listingId);
+    if (!res.ok) return null;
+    const json = (await res.json()) as ApiResponse<SummaryWithId>;
+    if (!json.success || !json.data) return null;
+    return json.data;
+  }
+
   const res = await fetch(
     `/api/v1/summaries?listingId=${encodeURIComponent(listingId)}`,
     { headers: buildAuthHeaders(), credentials: "include" },
@@ -148,6 +167,27 @@ export async function getSummaryForListing(
 export async function createSummaryStream(
   body: CreateSummaryBody,
 ): Promise<StreamSummaryResult> {
+  if (isDemoMode()) {
+    const res = await handleDemoSummaryStreamFetch(body);
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      const message =
+        (errBody as { message?: string } | null)?.message ??
+        `Request failed (${res.status})`;
+      throw new Error(message);
+    }
+    const contentType = res.headers.get("Content-Type") ?? "";
+    if (contentType.includes("application/json")) {
+      const json = (await res.json()) as ApiResponse<SummaryWithId>;
+      if (!json.success || !json.data) {
+        throw new Error(json.message ?? "Failed to create summary");
+      }
+      return { stream: false, data: json.data };
+    }
+    if (!res.body) throw new Error("No response body for stream");
+    return { stream: true, reader: res.body.getReader() };
+  }
+
   const res = await fetch("/api/v1/summaries/stream", {
     method: "POST",
     headers: buildAuthHeaders(),

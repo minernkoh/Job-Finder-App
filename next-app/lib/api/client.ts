@@ -2,7 +2,12 @@
  * Axios client for API calls: sends cookies (withCredentials), adds Bearer token from auth, and retries on 401 by refreshing the token.
  */
 
-import axios, { type AxiosError } from "axios";
+import axios, { type AxiosError, type AxiosResponse } from "axios";
+import {
+  handleDemoAxiosRequest,
+  isDemoInterceptUrl,
+  DemoHttpError,
+} from "@/lib/demo/adapter";
 
 const baseURL =
   typeof window !== "undefined"
@@ -16,6 +21,16 @@ export const apiClient = axios.create({
 });
 
 let getAccessToken: (() => string | null) | null = null;
+let getDemoMode: (() => boolean) | null = null;
+
+/** Registers whether guest preview mode is active (local sandbox, no real JWT). */
+export function setDemoModeGetter(getter: () => boolean) {
+  getDemoMode = getter;
+}
+
+export function isDemoMode(): boolean {
+  return getDemoMode?.() ?? false;
+}
 
 /** Registers how to get the current access token so every request can add Authorization: Bearer. */
 export function setAccessTokenGetter(getter: () => string | null) {
@@ -37,7 +52,7 @@ export function buildAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-apiClient.interceptors.request.use((config) => {
+apiClient.interceptors.request.use(async (config) => {
   const token = getAccessToken?.() ?? null;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -46,6 +61,36 @@ apiClient.interceptors.request.use((config) => {
   if (config.data instanceof FormData) {
     delete config.headers["Content-Type"];
   }
+
+  if (isDemoMode()) {
+    const path = config.url ?? "";
+    if (isDemoInterceptUrl(path)) {
+      config.adapter = async (cfg) => {
+        try {
+          const data = await handleDemoAxiosRequest(cfg);
+          return {
+            data,
+            status: 200,
+            statusText: "OK",
+            headers: {},
+            config: cfg,
+          } as AxiosResponse;
+        } catch (err) {
+          if (err instanceof DemoHttpError) {
+            return {
+              data: err.body,
+              status: err.status,
+              statusText: "Error",
+              headers: {},
+              config: cfg,
+            } as AxiosResponse;
+          }
+          throw err;
+        }
+      };
+    }
+  }
+
   return config;
 });
 
@@ -93,6 +138,9 @@ export async function refreshAccessToken(): Promise<string | null> {
 apiClient.interceptors.response.use(
   (res) => res,
   async (err: AxiosError) => {
+    if (isDemoMode()) {
+      return Promise.reject(err);
+    }
     const originalRequest = err.config;
     if (!originalRequest || err.response?.status !== 401) {
       return Promise.reject(err);

@@ -3,7 +3,8 @@
  */
 
 import type { TailoredResumeResult } from "@schemas";
-import { apiClient } from "./client";
+import { apiClient, isDemoMode } from "./client";
+import { downloadDemoTailoredFile } from "@/lib/demo/download";
 import { assertApiSuccess, getErrorMessage } from "./errors";
 import type { ApiResponse } from "./types";
 
@@ -28,6 +29,11 @@ export async function downloadTailoredFile(
   kind: "resume" | "cover",
   format: "docx" | "pdf",
 ): Promise<void> {
+  if (isDemoMode()) {
+    await downloadDemoTailoredFile(tailorId, kind, format);
+    return;
+  }
+
   const res = await apiClient.get<Blob>(
     `/api/v1/resume/tailor/${tailorId}/file?kind=${kind}&format=${format}`,
     { responseType: "blob" },

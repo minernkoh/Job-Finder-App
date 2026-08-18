@@ -10,6 +10,8 @@ import { Button } from "@ui/components";
 import { Logo } from "@/components/logo";
 import { UserMenu } from "@/components/user-menu";
 import { AuthModalLink } from "@/components/auth-modal-link";
+import { PreviewModeBanner } from "@/components/preview-mode-banner";
+import { useAuth } from "@/contexts/AuthContext";
 import { BADGE_PILL_ROLE } from "@/lib/badges";
 import { CONTENT_MAX_W, PAGE_PX } from "@/lib/layout";
 import { cn } from "@ui/components/lib/utils";
@@ -34,6 +36,7 @@ export interface AppHeaderProps {
 /** Renders the app nav bar: logo left; when signed in, Browse Jobs and Profile; Sign in or UserMenu right. Active nav link is highlighted. */
 export function AppHeader({ user, onLogout, className }: AppHeaderProps) {
   const pathname = usePathname() ?? "";
+  const { isDemo, enterDemo, exitDemo } = useAuth();
   const isAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
   const isCompare = pathname.startsWith("/browse/compare");
   const isBrowse =
@@ -49,67 +52,94 @@ export function AppHeader({ user, onLogout, className }: AppHeaderProps) {
     );
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-50 border-b border-border/80 nav-glass",
-        PAGE_PX,
-        "py-4",
-        className,
-      )}
-    >
-      <div
+    <>
+      <header
         className={cn(
-          "mx-auto flex w-full flex-wrap items-center justify-between gap-2",
-          CONTENT_MAX_W,
+          "sticky top-0 z-50 border-b border-border/80 nav-glass",
+          PAGE_PX,
+          "py-4",
+          className,
         )}
       >
-        <div className="flex shrink-0 items-center gap-2">
-          <Logo className="shrink-0" />
-          {isAdmin && user?.role === "admin" && (
-            <span
-              className={BADGE_PILL_ROLE}
-              aria-label="Admin mode"
-            >
-              Admin
-            </span>
+        <div
+          className={cn(
+            "mx-auto flex w-full flex-wrap items-center justify-between gap-2",
+            CONTENT_MAX_W,
           )}
-        </div>
-        <nav className="flex shrink-0 items-center gap-2">
-          {user &&
-            isAdmin &&
-            adminNavItems.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={navLinkClass(pathname === href)}
+        >
+          <div className="flex shrink-0 items-center gap-2">
+            <Logo className="shrink-0" />
+            {isDemo && (
+              <span
+                className={BADGE_PILL_ROLE}
+                aria-label="Preview mode"
               >
-                {label}
+                Preview mode
+              </span>
+            )}
+            {isAdmin && user?.role === "admin" && (
+              <span
+                className={BADGE_PILL_ROLE}
+                aria-label="Admin mode"
+              >
+                Admin
+              </span>
+            )}
+          </div>
+          <nav className="flex shrink-0 items-center gap-2">
+            {user &&
+              isAdmin &&
+              adminNavItems.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={navLinkClass(pathname === href)}
+                >
+                  {label}
+                </Link>
+              ))}
+            {user && !isAdmin && (
+              <Link href="/browse" className={navLinkClass(isBrowse)}>
+                Browse Jobs
               </Link>
-            ))}
-          {user && !isAdmin && (
-            <Link href="/browse" className={navLinkClass(isBrowse)}>
-              Browse Jobs
-            </Link>
-          )}
-          {user && !isAdmin && (
-            <Link href="/profile" className={navLinkClass(isProfile)}>
-              My Profile
-            </Link>
-          )}
-          {user ? (
-            <UserMenu user={user} onLogout={onLogout} />
-          ) : (
-            <Button
-              asChild
-              variant="default"
-              size="xs"
-              className="rounded-xl px-4 text-sm"
-            >
-              <AuthModalLink auth="login">Sign In</AuthModalLink>
-            </Button>
-          )}
-        </nav>
-      </div>
-    </header>
+            )}
+            {user && !isAdmin && (
+              <Link href="/profile" className={navLinkClass(isProfile)}>
+                My Profile
+              </Link>
+            )}
+            {user ? (
+              <UserMenu
+                user={user}
+                onLogout={onLogout}
+                isDemo={isDemo}
+                onExitPreview={exitDemo}
+              />
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="rounded-xl px-3 text-sm text-muted-foreground"
+                  onClick={enterDemo}
+                >
+                  Try preview
+                </Button>
+                <Button
+                  asChild
+                  variant="default"
+                  size="xs"
+                  className="rounded-xl px-4 text-sm"
+                >
+                  <AuthModalLink auth="login">Sign In</AuthModalLink>
+                </Button>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+      <PreviewModeBanner />
+    </>
   );
 }

@@ -7,11 +7,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@ui/components";
+import { AuthModalLink } from "@/components/auth-modal-link";
 import type { AuthUser } from "@/contexts/AuthContext";
 
 interface UserMenuProps {
   user: AuthUser;
   onLogout: () => void;
+  /** Guest preview: show sign up / sign in / exit preview instead of logout. */
+  isDemo?: boolean;
+  onExitPreview?: () => void;
 }
 
 /** Derives the first letter to show in the avatar (username, then email, else '?'). */
@@ -24,7 +28,12 @@ function getInitial(user: AuthUser): string {
 }
 
 /** Renders a circular avatar; click opens dropdown with Logout. Escape or click outside closes; aria-expanded reflects open state. */
-export function UserMenu({ user, onLogout }: UserMenuProps) {
+export function UserMenu({
+  user,
+  onLogout,
+  isDemo = false,
+  onExitPreview,
+}: UserMenuProps) {
   const initial = getInitial(user);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,6 +66,11 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
     onLogout();
   }, [close, onLogout]);
 
+  const handleExitPreview = useCallback(() => {
+    close();
+    onExitPreview?.();
+  }, [close, onExitPreview]);
+
   return (
     <div
       ref={containerRef}
@@ -75,31 +89,86 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
         {initial}
       </button>
       <div
-        className={`absolute right-0 top-full z-50 min-w-[120px] rounded-xl border border-border bg-card py-1 shadow-lg [top:calc(100%+4px)] transition-opacity ${
+        className={`absolute right-0 top-full z-50 min-w-[160px] rounded-xl border border-border bg-card py-1 shadow-lg [top:calc(100%+4px)] transition-opacity ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         role="menu"
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start rounded-lg px-3 font-normal"
-          asChild
-          role="menuitem"
-        >
-          <Link href={user.role === "admin" ? "/admin/settings" : "/profile/settings"} onClick={close}>
-            Settings
-          </Link>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start rounded-lg px-3 font-normal"
-          onClick={handleLogout}
-          role="menuitem"
-        >
-          Logout
-        </Button>
+        {isDemo && (
+          <p className="px-3 py-2 text-xs text-muted-foreground" role="presentation">
+            Preview mode
+          </p>
+        )}
+        {!isDemo && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start rounded-lg px-3 font-normal"
+            asChild
+            role="menuitem"
+          >
+            <Link href={user.role === "admin" ? "/admin/settings" : "/profile/settings"} onClick={close}>
+              Settings
+            </Link>
+          </Button>
+        )}
+        {isDemo && (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start rounded-lg px-3 font-normal"
+              asChild
+              role="menuitem"
+            >
+              <AuthModalLink auth="signup" onClick={close}>
+                Sign up
+              </AuthModalLink>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start rounded-lg px-3 font-normal"
+              asChild
+              role="menuitem"
+            >
+              <AuthModalLink auth="login" onClick={close}>
+                Sign in
+              </AuthModalLink>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start rounded-lg px-3 font-normal"
+              asChild
+              role="menuitem"
+            >
+              <Link href="/profile/settings" onClick={close}>
+                Settings
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start rounded-lg px-3 font-normal"
+              onClick={handleExitPreview}
+              role="menuitem"
+            >
+              Exit preview
+            </Button>
+          </>
+        )}
+        {!isDemo && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start rounded-lg px-3 font-normal"
+            onClick={handleLogout}
+            role="menuitem"
+          >
+            Logout
+          </Button>
+        )}
       </div>
     </div>
   );
